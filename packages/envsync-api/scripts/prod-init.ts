@@ -44,6 +44,33 @@ function optionalEnv(key: string, fallback = ""): string {
 	return process.env[key] || fallback;
 }
 
+function zitadelInternalUrl(): string {
+	return (process.env.ZITADEL_INTERNAL_URL || process.env.ZITADEL_URL || "").replace(/\/$/, "");
+}
+
+function zitadelExternalUrl(): string {
+	return (process.env.ZITADEL_EXTERNAL_URL || "").replace(/\/$/, "");
+}
+
+function zitadelRequestHeaders(pat: string): Record<string, string> {
+	const headers: Record<string, string> = {
+		Authorization: `Bearer ${pat}`,
+		"Content-Type": "application/json",
+	};
+
+	const externalUrl = zitadelExternalUrl();
+	if (!externalUrl) {
+		return headers;
+	}
+
+	const external = new URL(externalUrl);
+	headers.Host = external.host;
+	headers.Origin = external.origin;
+	headers["X-Forwarded-Host"] = external.host;
+	headers["X-Forwarded-Proto"] = external.protocol.replace(":", "");
+	return headers;
+}
+
 // ── Wait-for utilities ──────────────────────────────────────────────
 
 async function waitFor(
@@ -117,7 +144,7 @@ interface ZitadelResult {
 }
 
 async function initZitadel(): Promise<ZitadelResult | null> {
-	const zitadelUrl = requireEnv("ZITADEL_URL").replace(/\/$/, "");
+	const zitadelUrl = zitadelInternalUrl() || requireEnv("ZITADEL_URL").replace(/\/$/, "");
 
 	console.log(`\n=== Zitadel (${zitadelUrl}) ===`);
 
@@ -137,10 +164,7 @@ async function initZitadel(): Promise<ZitadelResult | null> {
 		return null;
 	}
 
-	const headers = {
-		Authorization: `Bearer ${pat}`,
-		"Content-Type": "application/json",
-	};
+	const headers = zitadelRequestHeaders(pat);
 
 	// Get or create project
 	const projectName = "EnvSync";
@@ -216,12 +240,18 @@ async function initZitadel(): Promise<ZitadelResult | null> {
 	const apiRedirect = requireEnv("ZITADEL_API_REDIRECT_URI");
 
 	const web = await createApp("EnvSync Web", [webRedirect], "OIDC_APP_TYPE_WEB", "OIDC_AUTH_METHOD_TYPE_POST", [webLogout]);
+	if (!web.clientSecret) {
+		throw new Error("Zitadel CreateApplication 'EnvSync Web' did not return a clientSecret");
+	}
 	console.log(`  Web app created: ${web.clientId}`);
 
 	const cli = await createApp("EnvSync CLI", ["http://localhost:8081/callback"], "OIDC_APP_TYPE_NATIVE", "OIDC_AUTH_METHOD_TYPE_NONE");
 	console.log(`  CLI app created: ${cli.clientId}`);
 
 	const api = await createApp("EnvSync API", [apiRedirect], "OIDC_APP_TYPE_WEB", "OIDC_AUTH_METHOD_TYPE_POST");
+	if (!api.clientSecret) {
+		throw new Error("Zitadel CreateApplication 'EnvSync API' did not return a clientSecret");
+	}
 	console.log(`  API app created: ${api.clientId}`);
 
 	return {
@@ -424,9 +454,9 @@ async function main() {
 		waits.push(waitForHttp("OpenFGA", `${openfgaUrl}/healthz`, [200]));
 	}
 
-	const zitadelUrl = optionalEnv("ZITADEL_URL")?.replace(/\/$/, "");
+	const zitadelUrl = zitadelInternalUrl();
 	if (zitadelUrl) {
-		waits.push(waitForHttp("Zitadel", `${zitadelUrl}/.well-known/openid-configuration`, [200]));
+		waits.push(waitForHttp("Zitadel", `${zitadelUrl}/debug/ready`, [200]));
 	}
 
 	if (waits.length === 0) {
@@ -436,16 +466,16 @@ async function main() {
 
 	// ── Service steps ────────────────────────────────────────────────
 
-	await step("Zitadel", ["ZITADEL_URL"], initZitadel, zitadel =>
+	await step("Zitadel", ["ZITADEL_INTERNAL_URL"], initZitadel, zitadel =>
 		zitadel
 			? {
-					ZITADEL_PAT: zitadel.pat ?? "",
-					ZITADEL_WEB_CLIENT_ID: zitadel.webClientId ?? "",
-					ZITADEL_WEB_CLIENT_SECRET: zitadel.webClientSecret ?? "",
-					ZITADEL_CLI_CLIENT_ID: zitadel.cliClientId ?? "",
-					ZITADEL_CLI_CLIENT_SECRET: zitadel.cliClientSecret ?? "",
-					ZITADEL_API_CLIENT_ID: zitadel.apiClientId ?? "",
-					ZITADEL_API_CLIENT_SECRET: zitadel.apiClientSecret ?? "",
+					ZITADEL_PAT: zitadel.pat,
+					ZITADEL_WEB_CLIENT_ID: zitadel.webClientId,
+					ZITADEL_WEB_CLIENT_SECRET: zitadel.webClientSecret,
+					ZITADEL_CLI_CLIENT_ID: zitadel.cliClientId,
+					ZITADEL_CLI_CLIENT_SECRET: zitadel.cliClientSecret,
+					ZITADEL_API_CLIENT_ID: zitadel.apiClientId,
+					ZITADEL_API_CLIENT_SECRET: zitadel.apiClientSecret,
 				} as Record<string, string>
 			: {},
 	);
@@ -465,9 +495,8 @@ async function main() {
 
 	await step(
 		"HyperDX",
-		[],
+		["HDX_PORT"],
 		async () => {
-			const hdxPort = optionalEnv("HDX_PORT", "8800");
 			const hdxUrl = `http://hdx:8080`;
 
 			console.log(`\n=== HyperDX ===`);

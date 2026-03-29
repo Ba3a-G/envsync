@@ -47,6 +47,29 @@ spec:
                 echo "Waiting for database ${DB_NAME}..."
                 sleep 5
               done
+        - name: migrate
+          image: "{{ .Values.bootstrap.dbSetup.image.repository }}:{{ .Values.bootstrap.dbSetup.image.tag }}"
+          imagePullPolicy: {{ .Values.bootstrap.dbSetup.image.pullPolicy }}
+          env:
+            - name: PGPASSWORD
+              value: {{ include "envsync.minikmsDbPassword" . | quote }}
+            - name: DB_HOST
+              value: {{ include "envsync.postgresqlHost" . | quote }}
+            - name: DB_PORT
+              value: {{ include "envsync.postgresqlPort" . | quote }}
+            - name: DB_USER
+              value: {{ include "envsync.minikmsDbUser" . | quote }}
+            - name: DB_NAME
+              value: {{ include "envsync.minikmsDbName" . | quote }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f /migrations/001_initial_schema.sql
+              psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f /migrations/002_vault_storage.sql
+          volumeMounts:
+            - name: minikms-migrations
+              mountPath: /migrations
       containers:
         - name: minikms
           image: "{{ .Values.minikms.image.repository }}:{{ .Values.minikms.image.tag }}"
@@ -77,3 +100,7 @@ spec:
             periodSeconds: 20
           resources:
             {{- toYaml .Values.minikms.resources | nindent 12 }}
+      volumes:
+        - name: minikms-migrations
+          configMap:
+            name: {{ include "envsync.fullname" . }}-minikms-migrations

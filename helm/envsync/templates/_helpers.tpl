@@ -52,11 +52,15 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 
 {{- define "envsync.dashboardHost" -}}
-{{- printf "app.%s" (include "envsync.domain" .) -}}
+{{- default (printf "app.%s" (include "envsync.domain" .)) .Values.web.host -}}
+{{- end -}}
+
+{{- define "envsync.landingHost" -}}
+{{- default (include "envsync.domain" .) .Values.landing.host -}}
 {{- end -}}
 
 {{- define "envsync.landingUrl" -}}
-{{- default (printf "%s://%s" (include "envsync.publicScheme" .) (include "envsync.domain" .)) .Values.urls.landing -}}
+{{- default (printf "%s://%s" (include "envsync.publicScheme" .) (include "envsync.landingHost" .)) .Values.urls.landing -}}
 {{- end -}}
 
 {{- define "envsync.dashboardUrl" -}}

@@ -13,3 +13,6 @@ rules:
     resources: ["configmaps"]
     resourceNames: ["{{ include "envsync.bootstrapLockName" . }}"]
     verbs: ["get", "update", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch"]

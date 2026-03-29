@@ -1,0 +1,70 @@
+global:
+  environment: production
+  publicScheme: https
+
+api:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  resources:
+    requests:
+      cpu: 300m
+      memory: 384Mi
+    limits:
+      cpu: "1"
+      memory: 768Mi
+
+postgresql:
+  architecture: standalone
+  primary:
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+    persistence:
+      enabled: true
+      size: 20Gi
+  readReplicas:
+    replicaCount: 0
+
+redis:
+  architecture: standalone
+  auth:
+    enabled: true
+  master:
+    persistence:
+      enabled: true
+      size: 4Gi
+
+ingress:
+  enabled: true
+  className: nginx
+  tls:
+    enabled: true
+    secretName: envsync-tls
+
+bootstrap:
+  waitTimeoutSeconds: 900
+  init:
+    activeDeadlineSeconds: 1800
+  migrate:
+    activeDeadlineSeconds: 1200
+
+zitadel:
+  persistence:
+    size: 4Gi
+
+rustfs:
+  persistence:
+    size: 20Gi
+
+web:
+  enabled: true
+  replicaCount: 1
+
+landing:
+  enabled: true
+  replicaCount: 1

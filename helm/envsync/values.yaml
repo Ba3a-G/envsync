@@ -10,7 +10,7 @@ global:
 api:
   image:
     repository: ghcr.io/envsync-cloud/envsync-api
-    tag: latest
+    tag: "0.4.0"
     pullPolicy: IfNotPresent
   replicaCount: 2
   service:
@@ -42,8 +42,9 @@ api:
 bootstrap:
   kubectlImage:
     repository: bitnami/kubectl
-    tag: latest
+    tag: "latest"
     pullPolicy: IfNotPresent
+  waitTimeoutSeconds: 900
   dbSetup:
     enabled: true
     image:
@@ -157,11 +158,14 @@ ingress:
   enabled: true
   className: ""
   annotations: {}
+  clusterIssuer: ""
   hosts:
     api: ""
     auth: ""
+    web: ""
+    landing: ""
   tls:
-    enabled: false
+    enabled: true
     secretName: ""
 
 zitadel:
@@ -227,7 +231,7 @@ rustfs:
   enabled: true
   image:
     repository: rustfs/rustfs
-    tag: latest
+    tag: "latest"
     pullPolicy: IfNotPresent
   service:
     port: 9000
@@ -245,3 +249,41 @@ rustfs:
     limits:
       cpu: 500m
       memory: 512Mi
+
+web:
+  enabled: true
+  image:
+    repository: ghcr.io/envsync-cloud/envsync-web
+    tag: "0.4.0"
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  host: ""
+  service:
+    type: ClusterIP
+    port: 80
+  resources:
+    requests:
+      cpu: 50m
+      memory: 96Mi
+    limits:
+      cpu: 300m
+      memory: 256Mi
+
+landing:
+  enabled: true
+  image:
+    repository: ghcr.io/envsync-cloud/envsync-landing
+    tag: "0.4.0"
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  host: ""
+  service:
+    type: ClusterIP
+    port: 80
+  resources:
+    requests:
+      cpu: 50m
+      memory: 96Mi
+    limits:
+      cpu: 300m
+      memory: 256Mi

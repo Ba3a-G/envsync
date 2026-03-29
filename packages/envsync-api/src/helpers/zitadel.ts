@@ -1,10 +1,24 @@
 import { config } from "@/utils/env";
 
-const base = () => config.ZITADEL_URL.replace(/\/$/, "");
+const connectBase = () => (config.ZITADEL_CONNECT_URL ?? config.ZITADEL_URL).replace(/\/$/, "");
 const mgmt = () => `${base()}/management/v1`;
 const v2 = () => `${base()}/v2`;
 
-export const getZitadelIssuer = () => base();
+export const getZitadelIssuer = () => (config.ZITADEL_EXTERNAL_URL ?? config.ZITADEL_URL).replace(/\/$/, "");
+export const getZitadelConnectBase = () => connectBase();
+export const getZitadelJwksUrl = () => `${connectBase()}/oauth/v2/keys`;
+
+const base = () => connectBase();
+
+export function getZitadelRequestHeaders(headers: Record<string, string> = {}): Record<string, string> {
+	if (config.ZITADEL_REQUEST_HOST && !headers.Host && !headers.host) {
+		return {
+			...headers,
+			Host: config.ZITADEL_REQUEST_HOST,
+		};
+	}
+	return headers;
+}
 
 function getPat(): string {
 	const pat = config.ZITADEL_PAT;
@@ -21,7 +35,7 @@ async function mgmtFetch(path: string, options: RequestInit = {}) {
 		headers: {
 			Authorization: `Bearer ${getPat()}`,
 			"Content-Type": "application/json",
-			...(options.headers as Record<string, string>),
+			...getZitadelRequestHeaders(options.headers as Record<string, string>),
 		},
 		signal: options.signal ?? AbortSignal.timeout(10_000),
 	});
@@ -36,7 +50,7 @@ async function v2Fetch(path: string, options: RequestInit = {}) {
 		headers: {
 			Authorization: `Bearer ${getPat()}`,
 			"Content-Type": "application/json",
-			...(options.headers as Record<string, string>),
+			...getZitadelRequestHeaders(options.headers as Record<string, string>),
 		},
 		signal: options.signal ?? AbortSignal.timeout(10_000),
 	});
@@ -140,7 +154,7 @@ export async function zitadelTokenExchange(
 ): Promise<{ id_token?: string; access_token: string }> {
 	const res = await fetch(`${base()}/oauth/v2/token`, {
 		method: "POST",
-		headers: { "Content-Type": "application/x-www-form-urlencoded" },
+		headers: getZitadelRequestHeaders({ "Content-Type": "application/x-www-form-urlencoded" }),
 		body: new URLSearchParams({
 			grant_type: "authorization_code",
 			code,

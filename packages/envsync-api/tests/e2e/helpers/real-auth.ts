@@ -42,6 +42,17 @@ let zitadelCreds: {
 	clientSecret: string;
 } | null = null;
 
+function withZitadelRequestHeaders(headers: Record<string, string> = {}): Record<string, string> {
+	const requestHost = process.env.ZITADEL_REQUEST_HOST?.trim();
+	if (requestHost && !headers.Host && !headers.host) {
+		return {
+			...headers,
+			Host: requestHost,
+		};
+	}
+	return headers;
+}
+
 function initZitadelCredentials(): typeof zitadelCreds & {} {
 	if (zitadelCreds) return zitadelCreds;
 
@@ -323,6 +334,7 @@ export async function checkServiceHealth(): Promise<void> {
 			check: async () => {
 				const url = (process.env.ZITADEL_URL ?? "http://localhost:8080").replace(/\/$/, "");
 				const res = await fetch(`${url}/.well-known/openid-configuration`, {
+					headers: withZitadelRequestHeaders(),
 					signal: AbortSignal.timeout(5000),
 				});
 				if (!res.ok) throw new Error(`HTTP ${res.status}`);

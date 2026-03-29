@@ -11,10 +11,21 @@ import crypto from "node:crypto";
 // ── Admin PAT helpers ───────────────────────────────────────────────
 
 function adminHeaders(pat: string): Record<string, string> {
-	return {
+	return withZitadelRequestHeaders({
 		Authorization: `Bearer ${pat}`,
 		"Content-Type": "application/json",
-	};
+	});
+}
+
+function withZitadelRequestHeaders(headers: Record<string, string> = {}): Record<string, string> {
+	const requestHost = process.env.ZITADEL_REQUEST_HOST?.trim();
+	if (requestHost && !headers.Host && !headers.host) {
+		return {
+			...headers,
+			Host: requestHost,
+		};
+	}
+	return headers;
 }
 
 // ── Bootstrap project + OIDC app ────────────────────────────────────
@@ -148,10 +159,10 @@ export async function getZitadelAccessToken(
 	// 1. Create authenticated session
 	const sessionRes = await fetch(`${base}/v2/sessions`, {
 		method: "POST",
-		headers: {
+		headers: withZitadelRequestHeaders({
 			Authorization: `Bearer ${pat}`,
 			"Content-Type": "application/json",
-		},
+		}),
 		body: JSON.stringify({
 			checks: {
 				user: { loginName },
@@ -185,9 +196,9 @@ export async function getZitadelAccessToken(
 	});
 
 	const authorizeRes = await fetch(`${base}/oauth/v2/authorize?${authorizeParams.toString()}`, {
-		headers: {
+		headers: withZitadelRequestHeaders({
 			"x-zitadel-login-client": clientId,
-		},
+		}),
 		redirect: "manual",
 	});
 
@@ -235,10 +246,10 @@ export async function getZitadelAccessToken(
 	for (const candidate of authRequestCandidates) {
 		const probeRes = await fetch(`${base}/v2/oidc/auth_requests/${encodeURIComponent(candidate)}`, {
 			method: "GET",
-			headers: {
+			headers: withZitadelRequestHeaders({
 				Authorization: `Bearer ${pat}`,
 				"x-zitadel-login-client": clientId,
-			},
+			}),
 		});
 		preflightStatuses.push(`${candidate}:${probeRes.status}`);
 		if (probeRes.ok) {
@@ -290,11 +301,11 @@ export async function getZitadelAccessToken(
 	for (const attempt of finalizeAttempts) {
 		const finalizeRes = await fetch(attempt.url, {
 			method: "POST",
-			headers: {
+			headers: withZitadelRequestHeaders({
 				Authorization: `Bearer ${pat}`,
 				"Content-Type": "application/json",
 				"x-zitadel-login-client": clientId,
-			},
+			}),
 			body: JSON.stringify(attempt.body),
 		});
 		if (finalizeRes.ok) {
@@ -319,7 +330,7 @@ export async function getZitadelAccessToken(
 	// 6. Exchange code for JWT
 	const tokenRes = await fetch(`${base}/oauth/v2/token`, {
 		method: "POST",
-		headers: { "Content-Type": "application/x-www-form-urlencoded" },
+		headers: withZitadelRequestHeaders({ "Content-Type": "application/x-www-form-urlencoded" }),
 		body: new URLSearchParams({
 			grant_type: "authorization_code",
 			code,

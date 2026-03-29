@@ -72,11 +72,15 @@ spec:
                 exit 0
               fi
 
-              bun run scripts/prod-init.ts | tee /shared/prod-init.log
-              grep -E '^[A-Z0-9_]+=' /shared/prod-init.log > /shared/bootstrap.env
-              if [ ! -s /shared/bootstrap.env ]; then
-                echo "No bootstrap credentials were produced."
-                exit 1
+              if bun run scripts/prod-init.ts | tee /shared/prod-init.log; then
+                grep -E '^[A-Z0-9_]+=' /shared/prod-init.log > /shared/bootstrap.env || true
+                if [ ! -s /shared/bootstrap.env ]; then
+                  echo "No bootstrap credentials were produced." > /shared/bootstrap.error
+                  touch /shared/bootstrap.failed
+                fi
+              else
+                tail -n 20 /shared/prod-init.log | tr '\n' ' ' | sed 's/"/\\"/g' > /shared/bootstrap.error
+                touch /shared/bootstrap.failed
               fi
           env:
             - name: ZITADEL_PAT_FILE
@@ -96,6 +100,14 @@ spec:
                 exit 0
               fi
 
+              if [ -f /shared/bootstrap.failed ]; then
+                message="$(cat /shared/bootstrap.error 2>/dev/null || echo "Platform bootstrap failed")"
+                kubectl patch configmap {{ include "envsync.bootstrapLockName" . }} \
+                  --type merge \
+                  -p '{"data":{"status":"failed","phase":"platform-init","message":"'"$$message"'"}}'
+                exit 1
+              fi
+
               kubectl create secret generic {{ include "envsync.bootstrapSecretName" . }} \
                 --dry-run=client \
                 --from-env-file=/shared/bootstrap.env \
@@ -103,7 +115,7 @@ spec:
 
               kubectl patch configmap {{ include "envsync.bootstrapLockName" . }} \
                 --type merge \
-                -p '{"data":{"status":"complete","completedAt":"'"$(date -u +"%Y-%m-%dT%H:%M:%SZ")"'"}}'
+                -p '{"data":{"status":"complete","phase":"api-rollout","message":"Platform bootstrap completed","completedAt":"'"$(date -u +"%Y-%m-%dT%H:%M:%SZ")"'"}}'
       containers:
         - name: done
           image: "{{ .Values.bootstrap.kubectlImage.repository }}:{{ .Values.bootstrap.kubectlImage.tag }}"

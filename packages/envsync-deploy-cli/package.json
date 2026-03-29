@@ -1,0 +1,26 @@
+{
+  "name": "@envsync-cloud/deploy-cli",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/cli.js",
+  "bin": {
+    "envsync-deploy": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "scripts",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "bun build ./src/index.ts --outfile ./dist/cli.js --target bun",
+    "dev": "bun run ./src/index.ts",
+    "start": "bun run ./dist/cli.js",
+    "pack:check": "npm pack --dry-run"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}

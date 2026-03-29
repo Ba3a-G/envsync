@@ -13,3 +13,4 @@ Public hosts:
   API:    {{ include "envsync.publicScheme" . }}://{{ include "envsync.apiHost" . }}
   Auth:   {{ include "envsync.publicScheme" . }}://{{ include "envsync.authHost" . }}
   App:    {{ include "envsync.dashboardUrl" . }}
+  Landing: {{ include "envsync.landingUrl" . }}

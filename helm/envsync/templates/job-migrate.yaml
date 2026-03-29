@@ -6,8 +6,8 @@ metadata:
   labels:
     {{- include "envsync.labels" . | nindent 4 }}
   annotations:
-    "helm.sh/hook": pre-upgrade
-    "helm.sh/hook-weight": "0"
+    "helm.sh/hook": post-install,pre-upgrade
+    "helm.sh/hook-weight": "30"
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 spec:
   backoffLimit: {{ .Values.bootstrap.migrate.backoffLimit }}
@@ -31,10 +31,15 @@ spec:
         - name: migrate
           image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
           imagePullPolicy: {{ .Values.api.image.pullPolicy }}
-          command: ["bun", "run", "scripts/migrate.ts", "latest"]
+          command:
+            - /bin/sh
+            - -ec
+            - bun run scripts/migrate.ts latest
           envFrom:
             - configMapRef:
                 name: {{ include "envsync.apiConfigMapName" . }}
             - secretRef:
                 name: {{ include "envsync.apiSecretName" . }}
+            - secretRef:
+                name: {{ include "envsync.bootstrapSecretName" . }}
 {{- end }}

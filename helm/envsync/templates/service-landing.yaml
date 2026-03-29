@@ -1,0 +1,17 @@
+{{- if .Values.landing.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "envsync.fullname" . }}-landing
+  labels:
+    {{- include "envsync.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.landing.service.type }}
+  selector:
+    {{- include "envsync.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: landing
+  ports:
+    - name: http
+      port: {{ .Values.landing.service.port }}
+      targetPort: http
+{{- end }}

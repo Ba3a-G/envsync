@@ -5,10 +5,13 @@ metadata:
   name: {{ include "envsync.fullname" . }}
   labels:
     {{- include "envsync.labels" . | nindent 4 }}
-  {{- with .Values.ingress.annotations }}
   annotations:
+    {{- if .Values.ingress.clusterIssuer }}
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer | quote }}
+    {{- end }}
+    {{- with .Values.ingress.annotations }}
     {{- toYaml . | nindent 4 }}
-  {{- end }}
+    {{- end }}
 spec:
   {{- with .Values.ingress.className }}
   ingressClassName: {{ . | quote }}
@@ -34,11 +37,41 @@ spec:
                 name: {{ include "envsync.fullname" . }}-zitadel
                 port:
                   number: {{ .Values.zitadel.service.port }}
+    {{- if .Values.web.enabled }}
+    - host: {{ include "envsync.dashboardHost" . | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "envsync.fullname" . }}-web
+                port:
+                  number: {{ .Values.web.service.port }}
+    {{- end }}
+    {{- if .Values.landing.enabled }}
+    - host: {{ include "envsync.landingHost" . | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "envsync.fullname" . }}-landing
+                port:
+                  number: {{ .Values.landing.service.port }}
+    {{- end }}
   {{- if .Values.ingress.tls.enabled }}
   tls:
     - hosts:
         - {{ include "envsync.apiHost" . | quote }}
         - {{ include "envsync.authHost" . | quote }}
+        {{- if .Values.web.enabled }}
+        - {{ include "envsync.dashboardHost" . | quote }}
+        {{- end }}
+        {{- if .Values.landing.enabled }}
+        - {{ include "envsync.landingHost" . | quote }}
+        {{- end }}
       secretName: {{ default (printf "%s-tls" (include "envsync.fullname" .)) .Values.ingress.tls.secretName }}
   {{- end }}
 {{- end }}

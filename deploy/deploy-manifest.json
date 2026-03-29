@@ -1,0 +1,58 @@
+{
+  "version": "0.1.0",
+  "chartVersion": "0.1.0",
+  "compatibleFrom": [
+    "0.1.0"
+  ],
+  "requiredMigrations": [
+    "latest"
+  ],
+  "backupSchemaVersion": "1",
+  "restoreHooksVersion": "1",
+  "images": {
+    "api": "ghcr.io/envsync-cloud/envsync-api:0.4.0",
+    "web": "ghcr.io/envsync-cloud/envsync-web:0.4.0",
+    "landing": "ghcr.io/envsync-cloud/envsync-landing:0.4.0",
+    "zitadel": "ghcr.io/zitadel/zitadel:v2.71.6",
+    "openfga": "openfga/openfga:v1.12.0",
+    "minikms": "ghcr.io/envsync-cloud/minikms:sha-735dfe8",
+    "rustfs": "rustfs/rustfs:0.8.3"
+  },
+  "dependencyUpgradePlan": [
+    {
+      "name": "redis",
+      "type": "stateful",
+      "order": 10
+    },
+    {
+      "name": "rustfs",
+      "type": "stateful",
+      "order": 20
+    },
+    {
+      "name": "zitadel",
+      "type": "service",
+      "order": 30
+    },
+    {
+      "name": "openfga",
+      "type": "service",
+      "order": 40
+    },
+    {
+      "name": "minikms",
+      "type": "service",
+      "order": 50
+    },
+    {
+      "name": "dashboard",
+      "type": "frontend",
+      "order": 60
+    },
+    {
+      "name": "landing",
+      "type": "frontend",
+      "order": 70
+    }
+  ]
+}

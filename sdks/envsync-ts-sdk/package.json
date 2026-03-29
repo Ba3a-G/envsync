@@ -22,8 +22,9 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "openapi": "openapi",
-    "generate": "bun run generate:local && bun run build && bun publish",
-    "generate:local": "bun run scripts/gen.ts"
+    "generate": "bun run generate:local && bun run build",
+    "generate:local": "bun run scripts/gen.ts",
+    "pack:check": "npm pack --dry-run"
   },
   "devDependencies": {
     "@types/bun": "latest",

@@ -10,7 +10,10 @@ export enum LogTypes {
 	CUSTOMOBJ = "customObj",
 }
 
-const LOGS_DIR = join(resolve(import.meta.dir, "../../../../.."), "logs");
+const LOGS_DIR = process.env.LOG_DIR?.trim()
+	|| (process.env.NODE_ENV === "production"
+		? "/tmp/envsync-logs"
+		: join(resolve(import.meta.dir, "../../../../.."), "logs"));
 try { mkdirSync(LOGS_DIR, { recursive: true }); } catch {}
 
 // Singleton Pino instance with trace context mixin for OTEL log-trace correlation

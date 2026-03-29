@@ -1,0 +1,51 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "envsync.fullname" . }}-dependency-ready
+  labels:
+    {{- include "envsync.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,pre-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 900
+  template:
+    metadata:
+      labels:
+        {{- include "envsync.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: dependency-ready
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "envsync.bootstrapServiceAccountName" . }}
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: dependency-ready
+          image: "{{ .Values.bootstrap.kubectlImage.repository }}:{{ .Values.bootstrap.kubectlImage.tag }}"
+          imagePullPolicy: {{ .Values.bootstrap.kubectlImage.pullPolicy }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              kubectl patch configmap {{ include "envsync.bootstrapLockName" . }} \
+                --type merge \
+                -p '{"data":{"phase":"dependency-ready","message":"Waiting for platform dependencies to respond"}}'
+
+              kubectl rollout status deployment/{{ include "envsync.fullname" . }}-zitadel --timeout=10m
+              kubectl rollout status deployment/{{ include "envsync.fullname" . }}-openfga --timeout=10m
+              kubectl rollout status deployment/{{ include "envsync.fullname" . }}-minikms --timeout=10m
+              kubectl rollout status deployment/{{ include "envsync.fullname" . }}-rustfs --timeout=10m
+              {{- if .Values.web.enabled }}
+              kubectl rollout status deployment/{{ include "envsync.fullname" . }}-web --timeout=10m
+              {{- end }}
+              {{- if .Values.landing.enabled }}
+              kubectl rollout status deployment/{{ include "envsync.fullname" . }}-landing --timeout=10m
+              {{- end }}
+
+              kubectl patch configmap {{ include "envsync.bootstrapLockName" . }} \
+                --type merge \
+                -p '{"data":{"phase":"platform-init","message":"Dependencies are ready; platform bootstrap may proceed"}}'

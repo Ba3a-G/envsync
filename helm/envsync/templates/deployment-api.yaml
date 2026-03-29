@@ -42,7 +42,15 @@ spec:
             - /bin/sh
             - -ec
             - |
+              max_attempts=$(({{ .Values.bootstrap.waitTimeoutSeconds }} / 5))
+              attempts=0
               until [ "$(kubectl get configmap {{ include "envsync.bootstrapLockName" . }} -o jsonpath='{.data.status}' 2>/dev/null || true)" = "complete" ]; do
+                attempts=$((attempts + 1))
+                if [ "$attempts" -ge "$max_attempts" ]; then
+                  echo "Bootstrap did not reach complete state before timeout."
+                  kubectl get configmap {{ include "envsync.bootstrapLockName" . }} -o yaml || true
+                  exit 1
+                fi
                 echo "Waiting for bootstrap lock to reach complete..."
                 sleep 5
               done

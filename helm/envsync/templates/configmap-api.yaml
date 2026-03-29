@@ -24,6 +24,8 @@ data:
   SMTP_SECURE: {{ printf "%v" .Values.smtp.secure | quote }}
   SMTP_FROM: {{ .Values.smtp.from | quote }}
   ZITADEL_URL: {{ include "envsync.zitadelInternalUrl" . | quote }}
+  ZITADEL_INTERNAL_URL: {{ include "envsync.zitadelInternalUrl" . | quote }}
+  ZITADEL_EXTERNAL_URL: {{ printf "%s://%s" (include "envsync.publicScheme" .) (include "envsync.authHost" .) | quote }}
   ZITADEL_WEB_REDIRECT_URI: {{ printf "%s://%s/api/access/web/callback" (include "envsync.publicScheme" .) (include "envsync.apiHost" .) | quote }}
   ZITADEL_WEB_CALLBACK_URL: {{ printf "%s/auth/callback" (include "envsync.dashboardUrl" .) | quote }}
   ZITADEL_API_REDIRECT_URI: {{ printf "%s://%s/api/access/api/callback" (include "envsync.publicScheme" .) (include "envsync.apiHost" .) | quote }}

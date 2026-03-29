@@ -52,6 +52,7 @@ spec:
           image: "{{ .Values.zitadel.image.repository }}:{{ .Values.zitadel.image.tag }}"
           imagePullPolicy: {{ .Values.zitadel.image.pullPolicy }}
           command:
+            - /app/zitadel
             - start-from-init
             - --masterkey
             - {{ required "zitadel.masterkey is required" .Values.zitadel.masterkey | quote }}

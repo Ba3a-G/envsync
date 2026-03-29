@@ -35,6 +35,10 @@ export const env = z.object({
 	SMTP_FROM: z.string(),
 	// Zitadel configuration
 	ZITADEL_URL: z.string(),
+	ZITADEL_CONNECT_URL: z.string().optional(),
+	ZITADEL_REQUEST_HOST: z.string().optional(),
+	ZITADEL_INTERNAL_URL: z.string().optional(),
+	ZITADEL_EXTERNAL_URL: z.string().optional(),
 	ZITADEL_PAT: z.string().optional(),
 	ZITADEL_WEB_CLIENT_ID: z.string(),
 	ZITADEL_WEB_CLIENT_SECRET: z.string(),

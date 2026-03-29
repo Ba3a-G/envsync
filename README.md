@@ -82,6 +82,37 @@ Usage:
 bun run cli <command> [options]
 ```
 
+## Self-Hosted Deploy CLI
+
+Single-node self-hosted deployments now have a dedicated Bun-based deploy CLI:
+
+```bash
+bun run deploy --help
+# or, once published
+bunx @envsync-cloud/deploy-cli --help
+```
+
+Primary commands:
+
+- `preinstall` installs `k3s`, `kubectl`, and `helm`
+- `setup` creates `/opt/envsync` config, secrets, and runtime values
+- `deploy` installs ingress, cert-manager, and the EnvSync Helm stack
+- `health`, `upgrade`, `upgrade-deps`, `backup`, and `restore` manage lifecycle operations
+
+The single-node production profile lives in `helm/envsync/values-selfhosted-single-node.yaml`. `kind` remains a local validation path only.
+
+Release surfaces:
+
+- npm: `bunx @envsync-cloud/deploy-cli`
+- OCI: `docker run --rm ghcr.io/envsync-cloud/deploy-cli:<version> --help`
+- TS SDK: `npm install @envsync-cloud/envsync-ts-sdk`
+
+Local chart smoke test:
+
+```bash
+make kind-smoke-test
+```
+
 The API package also exposes its own CLI for init/bucket/Zitadel from the API context:
 
 ```bash
@@ -199,6 +230,21 @@ In this repo, the Zitadel container is configured to create the machine user and
 3. Commit your changes (`git commit -m 'Add amazing feature'`)  
 4. Push to the branch (`git push origin feature/amazing-feature`)  
 5. Open a Pull Request  
+
+## Releases
+
+Tag-based releases drive all published artifacts. Pushing a tag like `v0.4.1` triggers:
+
+- Go CLI GitHub release artifacts
+- API image release to GHCR
+- npm publish for `@envsync-cloud/deploy-cli`
+- GHCR publish for `ghcr.io/envsync-cloud/deploy-cli`
+- npm publish for `@envsync-cloud/envsync-ts-sdk`
+
+Release requirements:
+
+- `NPM_TOKEN` GitHub secret for npmjs.org publishing
+- existing `GITHUB_TOKEN` for GitHub release and GHCR pushes
 
 ---
 
