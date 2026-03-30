@@ -4,13 +4,16 @@
  * Uses Bun.serve on a random port so the Go CLI binary can make
  * real HTTP requests against a live API server.
  */
-import { app } from "@/app";
+import { ensureE2EEnv } from "./bootstrap-env";
+
+ensureE2EEnv();
 
 export async function startTestServer(): Promise<{
 	url: string;
 	port: number;
 	stop: () => void;
 }> {
+	const { app } = await import("@/app");
 	const server = Bun.serve({
 		port: 0,
 		fetch: app.fetch.bind(app),

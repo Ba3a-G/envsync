@@ -35,6 +35,12 @@ export class DB {
 		return PostgresDB.availableConnections;
 	}
 
+	static async destroy() {
+		await PostgresDB.destroy();
+		this.kysely = undefined;
+		this.kysely_migration = undefined;
+	}
+
 	static async migrate(kysely: Kysely<Database>, auto_migrate: boolean) {
 		if (!auto_migrate) {
 			return;

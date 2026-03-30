@@ -24,7 +24,7 @@ EnvSync keeps your `.env` files, configuration secrets, and environment variable
 - **ESBuild** - Ultra-fast bundler
 - **PostgreSQL** - Reliable relational database
 - **Kysely** - Type-safe SQL query builder
-- **Zitadel** - Authentication and authorization (OIDC)
+- **Keycloak** - Authentication and authorization (OIDC)
 - **Redis** - Caching and session storage
 - **S3-compatible storage (RustFS)** - File storage
 - **SMTP** - Email services
@@ -68,7 +68,7 @@ Configure your environment variables:
 ```env
 # Application
 NODE_ENV=development
-PORT=3000
+PORT=4000
 DB_LOGGING=false
 DB_AUTO_MIGRATE=false
 DATABASE_SSL=false
@@ -100,18 +100,19 @@ SMTP_USER=
 SMTP_PASS=
 SMTP_FROM=noreply@envsync.cloud
 
-# Zitadel configuration (create OIDC apps in Zitadel console)
-ZITADEL_URL=http://localhost:8080
-ZITADEL_PAT=
-ZITADEL_WEB_CLIENT_ID=
-ZITADEL_WEB_CLIENT_SECRET=
-ZITADEL_CLI_CLIENT_ID=
-ZITADEL_CLI_CLIENT_SECRET=
-ZITADEL_API_CLIENT_ID=
-ZITADEL_API_CLIENT_SECRET=
-ZITADEL_WEB_REDIRECT_URI=http://localhost:8081/callback
-ZITADEL_WEB_CALLBACK_URL=http://localhost:8081/callback
-ZITADEL_API_REDIRECT_URI=http://localhost:3001/callback
+# Keycloak configuration
+KEYCLOAK_URL=http://localhost:8080
+KEYCLOAK_REALM=envsync
+KEYCLOAK_ADMIN_USER=admin
+KEYCLOAK_ADMIN_PASSWORD=admin
+KEYCLOAK_WEB_CLIENT_ID=envsync-web
+KEYCLOAK_WEB_CLIENT_SECRET=
+KEYCLOAK_CLI_CLIENT_ID=envsync-cli
+KEYCLOAK_API_CLIENT_ID=envsync-api
+KEYCLOAK_API_CLIENT_SECRET=
+KEYCLOAK_WEB_REDIRECT_URI=http://localhost:4000/api/access/web/callback
+KEYCLOAK_WEB_CALLBACK_URL=http://localhost:8001/auth/callback
+KEYCLOAK_API_REDIRECT_URI=http://localhost:4000/api/access/api/callback
 ```
 
 ### Development with Docker Compose
@@ -134,7 +135,7 @@ This will start:
 bun run dev
 ```
 
-The API will be available at `http://localhost:3000` 🎉
+The API will be available at `http://localhost:4000` 🎉
 
 ## 📝 Available Scripts
 
@@ -151,7 +152,7 @@ bun start
 # Run database migrations
 bun db
 
-# Init RustFS bucket (from monorepo root or packages/envsync-api; create Zitadel apps in console)
+# Init RustFS bucket and Keycloak clients
 bun run scripts/cli.ts init
 ```
 
@@ -188,8 +189,8 @@ envsync-api/
 | **S3**       | `S3_ACCESS_KEY`     | AWS access key       |
 | **S3**       | `S3_SECRET_KEY`     | AWS secret key       |
 | **Redis**    | `REDIS_URL`         | Redis connection URL |
-| **Zitadel**   | `ZITADEL_URL`       | Zitadel server URL   |
-| **Zitadel**   | `ZITADEL_PAT`       | Personal access token (Management API, optional) |
+| **Keycloak** | `KEYCLOAK_URL`      | Keycloak base URL    |
+| **Keycloak** | `KEYCLOAK_REALM`    | Realm used by EnvSync |
 | **SMTP**     | `SMTP_HOST`         | SMTP server host     |
 | **SMTP**     | `SMTP_FROM`         | Email sender address |
 
@@ -203,7 +204,7 @@ docker-compose -f docker-compose.yml up -d
 
 ## 🔒 Authentication
 
-This API uses **Zitadel** for authentication and authorization:
+This API uses **Keycloak** for authentication and authorization:
 
 - 🔑 **JWT tokens** for API access
 - 👥 **Role-based access control** (RBAC)

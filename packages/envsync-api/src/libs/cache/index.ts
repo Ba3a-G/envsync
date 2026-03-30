@@ -1,4 +1,5 @@
 import NodeCache from "node-cache";
+import { SpanKind } from "@opentelemetry/api";
 import * as redis from "redis";
 
 import infoLogs, { LogTypes } from "@/libs/logger";
@@ -67,10 +68,18 @@ export class CacheClient {
 	 * @param ttl Time to live in seconds (0 = no expiry)
 	 */
 	static async set(key: string, value: string, ttl?: number) {
+		const redisUrl = config.REDIS_URL ? new URL(config.REDIS_URL) : undefined;
+		const isRedis = this._clientMode === "production";
 		return withSpan("cache SET", {
-			"db.system": this._clientMode === "production" ? "redis" : "node-cache",
+			"db.system": isRedis ? "redis" : "node-cache",
 			"db.operation.name": "SET",
 			"cache.key": key,
+			...(isRedis ? {
+				"peer.service": "redis",
+				"server.address": redisUrl?.hostname ?? "redis",
+				"server.port": Number(redisUrl?.port || "6379"),
+				"network.peer.address": redisUrl?.hostname ?? "redis",
+			} : {}),
 		}, async () => {
 			cacheOperations.add(1, { "db.operation.name": "SET" });
 			if (this._clientMode === "production") {
@@ -82,7 +91,7 @@ export class CacheClient {
 			} else {
 				this._nodeClient.set(key, value, ttl ?? 0);
 			}
-		});
+		}, isRedis ? SpanKind.CLIENT : SpanKind.INTERNAL);
 	}
 
 	/**
@@ -91,16 +100,24 @@ export class CacheClient {
 	 * @returns Value of the key
 	 */
 	static async get(key: string): Promise<string | null> {
+		const redisUrl = config.REDIS_URL ? new URL(config.REDIS_URL) : undefined;
+		const isRedis = this._clientMode === "production";
 		return withSpan("cache GET", {
-			"db.system": this._clientMode === "production" ? "redis" : "node-cache",
+			"db.system": isRedis ? "redis" : "node-cache",
 			"db.operation.name": "GET",
 			"cache.key": key,
+			...(isRedis ? {
+				"peer.service": "redis",
+				"server.address": redisUrl?.hostname ?? "redis",
+				"server.port": Number(redisUrl?.port || "6379"),
+				"network.peer.address": redisUrl?.hostname ?? "redis",
+			} : {}),
 		}, async () => {
 			cacheOperations.add(1, { "db.operation.name": "GET" });
 			return this._clientMode === "production"
 				? await this._redisClient.get(key)
 				: (this._nodeClient.get(key) as string) || null;
-		});
+		}, isRedis ? SpanKind.CLIENT : SpanKind.INTERNAL);
 	}
 
 	/**
@@ -108,10 +125,18 @@ export class CacheClient {
 	 * @param key Key to delete
 	 */
 	static async del(key: string): Promise<void> {
+		const redisUrl = config.REDIS_URL ? new URL(config.REDIS_URL) : undefined;
+		const isRedis = this._clientMode === "production";
 		return withSpan("cache DEL", {
-			"db.system": this._clientMode === "production" ? "redis" : "node-cache",
+			"db.system": isRedis ? "redis" : "node-cache",
 			"db.operation.name": "DEL",
 			"cache.key": key,
+			...(isRedis ? {
+				"peer.service": "redis",
+				"server.address": redisUrl?.hostname ?? "redis",
+				"server.port": Number(redisUrl?.port || "6379"),
+				"network.peer.address": redisUrl?.hostname ?? "redis",
+			} : {}),
 		}, async () => {
 			cacheOperations.add(1, { "db.operation.name": "DEL" });
 			if (this._clientMode === "production") {
@@ -119,7 +144,7 @@ export class CacheClient {
 			} else {
 				this._nodeClient.del(key);
 			}
-		});
+		}, isRedis ? SpanKind.CLIENT : SpanKind.INTERNAL);
 	}
 
 	/**
@@ -127,10 +152,18 @@ export class CacheClient {
 	 * @param pattern Glob pattern (e.g. "es:org:123:*")
 	 */
 	static async delByPattern(pattern: string): Promise<void> {
+		const redisUrl = config.REDIS_URL ? new URL(config.REDIS_URL) : undefined;
+		const isRedis = this._clientMode === "production";
 		return withSpan("cache DEL_PATTERN", {
-			"db.system": this._clientMode === "production" ? "redis" : "node-cache",
+			"db.system": isRedis ? "redis" : "node-cache",
 			"db.operation.name": "DEL_PATTERN",
 			"cache.key": pattern,
+			...(isRedis ? {
+				"peer.service": "redis",
+				"server.address": redisUrl?.hostname ?? "redis",
+				"server.port": Number(redisUrl?.port || "6379"),
+				"network.peer.address": redisUrl?.hostname ?? "redis",
+			} : {}),
 		}, async () => {
 			cacheOperations.add(1, { "db.operation.name": "DEL_PATTERN" });
 			if (this._clientMode === "production") {
@@ -150,7 +183,7 @@ export class CacheClient {
 					this._nodeClient.del(matching);
 				}
 			}
-		});
+		}, isRedis ? SpanKind.CLIENT : SpanKind.INTERNAL);
 	}
 
 	/**
@@ -160,11 +193,19 @@ export class CacheClient {
 	 */
 	static async mget(keys: string[]): Promise<(string | null)[]> {
 		if (keys.length === 0) return [];
+		const redisUrl = config.REDIS_URL ? new URL(config.REDIS_URL) : undefined;
+		const isRedis = this._clientMode === "production";
 
 		return withSpan("cache MGET", {
-			"db.system": this._clientMode === "production" ? "redis" : "node-cache",
+			"db.system": isRedis ? "redis" : "node-cache",
 			"db.operation.name": "MGET",
 			"cache.key": keys.join(","),
+			...(isRedis ? {
+				"peer.service": "redis",
+				"server.address": redisUrl?.hostname ?? "redis",
+				"server.port": Number(redisUrl?.port || "6379"),
+				"network.peer.address": redisUrl?.hostname ?? "redis",
+			} : {}),
 		}, async () => {
 			cacheOperations.add(1, { "db.operation.name": "MGET" });
 			if (this._clientMode === "production") {
@@ -173,7 +214,7 @@ export class CacheClient {
 			} else {
 				return keys.map(k => (this._nodeClient.get(k) as string) || null);
 			}
-		});
+		}, isRedis ? SpanKind.CLIENT : SpanKind.INTERNAL);
 	}
 
 	/**
@@ -182,10 +223,18 @@ export class CacheClient {
 	 * @returns true if the key exists
 	 */
 	static async exists(key: string): Promise<boolean> {
+		const redisUrl = config.REDIS_URL ? new URL(config.REDIS_URL) : undefined;
+		const isRedis = this._clientMode === "production";
 		return withSpan("cache EXISTS", {
-			"db.system": this._clientMode === "production" ? "redis" : "node-cache",
+			"db.system": isRedis ? "redis" : "node-cache",
 			"db.operation.name": "EXISTS",
 			"cache.key": key,
+			...(isRedis ? {
+				"peer.service": "redis",
+				"server.address": redisUrl?.hostname ?? "redis",
+				"server.port": Number(redisUrl?.port || "6379"),
+				"network.peer.address": redisUrl?.hostname ?? "redis",
+			} : {}),
 		}, async () => {
 			cacheOperations.add(1, { "db.operation.name": "EXISTS" });
 			if (this._clientMode === "production") {
@@ -194,6 +243,6 @@ export class CacheClient {
 			} else {
 				return this._nodeClient.has(key);
 			}
-		});
+		}, isRedis ? SpanKind.CLIENT : SpanKind.INTERNAL);
 	}
 }

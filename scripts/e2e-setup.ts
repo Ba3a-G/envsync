@@ -23,13 +23,10 @@ import {
 	waitForPostgres,
 	waitForOpenFGA,
 	waitForMailpit,
-	waitForZitadel,
+	waitForKeycloak,
 	waitForMiniKMS,
-	waitForGrafana,
-	readPatFromVolume,
-	readLoginPatFromVolume,
 } from "./lib/services";
-import { bootstrapZitadelProject } from "../packages/envsync-api/tests/e2e/helpers/zitadel-bootstrap";
+import { bootstrapKeycloakClient } from "../packages/envsync-api/tests/e2e/helpers/keycloak-bootstrap";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
@@ -37,10 +34,12 @@ const apiDir = path.join(rootDir, "packages/envsync-api");
 const envE2EPath = path.join(apiDir, ".env.e2e.test");
 
 const E2E_DB_NAME = "envsync_e2e_test";
+const E2E_MINIKMS_ROOT_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 // ── Docker Compose helpers ──────────────────────────────────────────
 
 function dockerComposeUp(): void {
+	process.env.MINIKMS_ROOT_KEY ||= E2E_MINIKMS_ROOT_KEY;
 	console.log("\nStarting Docker Compose services for E2E...");
 	const result = spawnSync(
 		"docker",
@@ -54,20 +53,103 @@ function dockerComposeUp(): void {
 			"openfga_migrate",
 			"openfga",
 			"mailpit",
-			"zitadel_db",
-			"zitadel",
+			"keycloak_db",
+			"keycloak",
 			"minikms_db",
 			"minikms_migrate",
 			"minikms",
-			"tempo",
-			"loki",
-			"prometheus",
-			"otel-collector",
-			"grafana",
+			"clickstack",
+			"otel-agent",
 		],
 		{ cwd: rootDir, stdio: "inherit", env: process.env },
 	);
 	if (result.status !== 0) throw new Error("Docker Compose up failed.");
+}
+
+function ensureKeycloakHttpAdminSupport(adminUser: string, adminPassword: string): void {
+	console.log("\nConfiguring Keycloak admin realm for local HTTP...");
+	const login = spawnSync(
+		"docker",
+		[
+			"exec",
+			"monorepo-keycloak-1",
+			"/opt/keycloak/bin/kcadm.sh",
+			"config",
+			"credentials",
+			"--server",
+			"http://localhost:8080",
+			"--realm",
+			"master",
+			"--user",
+			adminUser,
+			"--password",
+			adminPassword,
+		],
+		{ cwd: rootDir, stdio: "inherit", env: process.env },
+	);
+	if (login.status !== 0) {
+		throw new Error("Failed to authenticate to Keycloak via kcadm.");
+	}
+
+	const update = spawnSync(
+		"docker",
+		[
+			"exec",
+			"monorepo-keycloak-1",
+			"/opt/keycloak/bin/kcadm.sh",
+			"update",
+			"realms/master",
+			"-s",
+			"sslRequired=NONE",
+		],
+		{ cwd: rootDir, stdio: "inherit", env: process.env },
+	);
+	if (update.status !== 0) {
+		throw new Error("Failed to relax Keycloak master realm SSL requirement for local E2E.");
+	}
+}
+
+function ensureMiniKmsSchema(): void {
+	console.log("\nEnsuring miniKMS schema...");
+
+	const check = spawnSync(
+		"docker",
+		[
+			"exec",
+			"monorepo-minikms_db-1",
+			"psql",
+			"-U",
+			process.env.MINIKMS_DB_USER ?? "postgres",
+			"-d",
+			"minikms",
+			"-tAc",
+			"SELECT to_regclass('public.certificates') IS NOT NULL",
+		],
+		{ cwd: rootDir, encoding: "utf8", env: process.env },
+	);
+
+	if (check.status === 0 && check.stdout.trim() === "t") {
+		console.log("  miniKMS schema already present.");
+		return;
+	}
+
+	const migrate = spawnSync(
+		"docker",
+		["compose", "run", "--rm", "minikms_migrate"],
+		{ cwd: rootDir, stdio: "inherit", env: process.env },
+	);
+	if (migrate.status !== 0) {
+		throw new Error("miniKMS migration failed.");
+	}
+
+	const restart = spawnSync("docker", ["restart", "monorepo-minikms-1"], {
+		cwd: rootDir,
+		stdio: "inherit",
+		env: process.env,
+	});
+	if (restart.status !== 0) {
+		throw new Error("Failed to restart miniKMS after migration.");
+	}
 }
 
 // ── Database helpers ────────────────────────────────────────────────
@@ -131,6 +213,7 @@ async function init(): Promise<void> {
 	if (fs.existsSync(rootEnvPath)) {
 		loadEnvFile(rootEnvPath);
 	}
+	process.env.MINIKMS_ROOT_KEY ||= E2E_MINIKMS_ROOT_KEY;
 
 	// Start docker services
 	dockerComposeUp();
@@ -141,27 +224,25 @@ async function init(): Promise<void> {
 	await waitForPostgres();
 	await waitForOpenFGA();
 	await waitForMailpit();
-	await waitForZitadel();
+	await waitForKeycloak();
 	await waitForMiniKMS();
-	await waitForGrafana();
 
-	// Read Zitadel PATs
-	const zitadelUrl = "http://localhost:8080";
-	const adminPatFromVolume = await readPatFromVolume(rootDir);
-	if (!adminPatFromVolume) {
-		throw new Error("Failed to read Zitadel admin PAT from Docker volume. Is Zitadel running?");
-	}
-	const loginPatFromVolume = await readLoginPatFromVolume(rootDir);
-	const effectiveLoginPat = loginPatFromVolume || adminPatFromVolume;
-	if (!loginPatFromVolume) {
-		console.log("Zitadel: login-client.pat not found; falling back to admin PAT for login flow.");
-	}
-	console.log("Zitadel: PAT(s) read from docker volume.");
+	const keycloakUrl = process.env.KEYCLOAK_URL ?? "http://localhost:8080";
+	const keycloakRealm = process.env.KEYCLOAK_REALM ?? "envsync";
+	const keycloakAdminUser = process.env.KEYCLOAK_ADMIN_USER ?? "admin";
+	const keycloakAdminPassword = process.env.KEYCLOAK_ADMIN_PASSWORD ?? "admin";
 
-	// Bootstrap Zitadel project + OIDC app for E2E
-	console.log("\nBootstrapping Zitadel project + OIDC app for E2E...");
-	const zitadelApp = await bootstrapZitadelProject(zitadelUrl, adminPatFromVolume);
-	console.log(`  Project: ${zitadelApp.projectId}, Client: ${zitadelApp.appClientId}`);
+	ensureKeycloakHttpAdminSupport(keycloakAdminUser, keycloakAdminPassword);
+	ensureMiniKmsSchema();
+
+	console.log("\nBootstrapping Keycloak client for E2E...");
+	const keycloakClient = await bootstrapKeycloakClient(
+		keycloakUrl,
+		keycloakRealm,
+		keycloakAdminUser,
+		keycloakAdminPassword,
+	);
+	console.log(`  Client: ${keycloakClient.clientId}`);
 
 	// Create E2E database
 	createE2EDatabase();
@@ -173,15 +254,17 @@ async function init(): Promise<void> {
 
 	// Write .env.e2e.test
 	const e2eEnv: Record<string, string> = {
+		MINIKMS_ROOT_KEY: process.env.MINIKMS_ROOT_KEY,
 		MINIKMS_GRPC_ADDR: "localhost:50051",
 		MINIKMS_TLS_ENABLED: "false",
 		OPENFGA_API_URL: openfgaUrl,
-		ZITADEL_URL: zitadelUrl,
-		ZITADEL_PAT: adminPatFromVolume,
-		ZITADEL_LOGIN_PAT: effectiveLoginPat,
-		ZITADEL_E2E_CLIENT_ID: zitadelApp.appClientId,
-		ZITADEL_E2E_CLIENT_SECRET: zitadelApp.appClientSecret,
-		OTEL_EXPORTER_OTLP_ENDPOINT: "http://localhost:4318",
+		KEYCLOAK_URL: keycloakUrl,
+		KEYCLOAK_REALM: keycloakRealm,
+		KEYCLOAK_ADMIN_USER: keycloakAdminUser,
+		KEYCLOAK_ADMIN_PASSWORD: keycloakAdminPassword,
+		KEYCLOAK_E2E_CLIENT_ID: keycloakClient.clientId,
+		KEYCLOAK_E2E_CLIENT_SECRET: keycloakClient.clientSecret,
+		OTEL_EXPORTER_OTLP_ENDPOINT: "http://localhost:14318",
 		OTEL_SERVICE_NAME: "envsync-api",
 	};
 

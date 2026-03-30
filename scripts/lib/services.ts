@@ -4,10 +4,8 @@
  * Extracted to avoid duplication of service health checks and env file parsing.
  */
 
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
-import path from "node:path";
 
 // ── Env file utilities ──────────────────────────────────────────────
 
@@ -166,38 +164,17 @@ export async function waitForMiniKMS(host?: string, port?: number): Promise<void
 	);
 }
 
-// ── Grafana helpers ─────────────────────────────────────────────────
+// ── Keycloak helpers ────────────────────────────────────────────────
 
-export async function waitForGrafana(grafanaUrl?: string): Promise<void> {
-	const url = (grafanaUrl ?? `http://localhost:${process.env.GRAFANA_PORT ?? "3302"}`).replace(/\/$/, "");
+export async function waitForKeycloak(url?: string, realm?: string): Promise<void> {
+	const base = (url ?? process.env.KEYCLOAK_URL ?? "http://localhost:8080").replace(/\/$/, "");
+	const keycloakRealm = realm ?? process.env.KEYCLOAK_REALM ?? "envsync";
+	const checkUrl = base.includes("keycloak:") ? "http://localhost:8080" : base;
 	await waitFor(
-		"Grafana",
+		"Keycloak",
 		async () => {
 			try {
-				const res = await fetch(`${url}/api/health`, {
-					signal: AbortSignal.timeout(3000),
-				});
-				return res.ok;
-			} catch {
-				return false;
-			}
-		},
-		3000,
-		30,
-	);
-}
-
-// ── Zitadel helpers ─────────────────────────────────────────────────
-
-export async function waitForZitadel(url?: string): Promise<void> {
-	const base = (url ?? process.env.ZITADEL_URL ?? "http://localhost:8080").replace(/\/$/, "");
-	// When running from host, ZITADEL_URL in .env might be http://zitadel:8080; try localhost for port check
-	const checkUrl = base.includes("zitadel:") ? "http://localhost:8080" : base;
-	await waitFor(
-		"Zitadel",
-		async () => {
-			try {
-				const res = await fetch(`${checkUrl}/.well-known/openid-configuration`, {
+				const res = await fetch(`${checkUrl}/realms/${keycloakRealm}/.well-known/openid-configuration`, {
 					signal: AbortSignal.timeout(5000),
 				});
 				return res.ok;
@@ -210,37 +187,6 @@ export async function waitForZitadel(url?: string): Promise<void> {
 	);
 }
 
-async function readFileFromZitadelVolume(rootDir: string, fileName: string): Promise<string | null> {
-	const projectName = process.env.COMPOSE_PROJECT_NAME ?? path.basename(rootDir);
-	const volumeName = `${projectName}_zitadel_data`;
-	const maxAttempts = 5;
-	const delayMs = 4000;
-	for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-		const result = spawnSync(
-			"docker",
-			["run", "--rm", "-v", `${volumeName}:/data:ro`, "alpine", "cat", `/data/${fileName}`],
-			{ cwd: rootDir, encoding: "utf8", env: process.env },
-		);
-		if (result.status === 0 && result.stdout?.trim()) {
-			return result.stdout.trim();
-		}
-		if (attempt < maxAttempts) {
-			console.log(
-				`Zitadel: ${fileName} not ready yet (attempt ${attempt}/${maxAttempts}), retrying in ${delayMs / 1000}s...`,
-			);
-			await new Promise(r => setTimeout(r, delayMs));
-		}
-	}
-	return null;
+export async function waitForZitadel(url?: string): Promise<void> {
+	return waitForKeycloak(url, process.env.KEYCLOAK_REALM ?? "envsync");
 }
-
-/** Read Zitadel admin PAT from the zitadel_data Docker volume (admin.pat from first-instance machine user). */
-export async function readPatFromVolume(rootDir: string): Promise<string | null> {
-	return readFileFromZitadelVolume(rootDir, "admin.pat");
-}
-
-/** Read Zitadel login-client PAT from the zitadel_data Docker volume (login-client.pat). */
-export async function readLoginPatFromVolume(rootDir: string): Promise<string | null> {
-	return readFileFromZitadelVolume(rootDir, "login-client.pat");
-}
-

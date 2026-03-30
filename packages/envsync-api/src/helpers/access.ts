@@ -17,8 +17,17 @@ export const validateAccess = async ({
 		if (type === "JWT") {
 			const decoded = await verifyJWTToken(token);
 			const idpSub = decoded.sub as string;
-
-			const user = await UserService.getUserByIdpId(idpSub);
+			if (!idpSub) {
+				throw new Error("JWT subject claim is missing");
+			}
+			let user;
+			try {
+				user = await UserService.getUserByIdpId(idpSub);
+			} catch (error) {
+				throw new Error(
+					`User not found for Keycloak subject ${idpSub}: ${error instanceof Error ? error.message : String(error)}`,
+				);
+			}
 			userId = user.id;
 		} else if (type === "API_KEY") {
 			const apiKey = await ApiKeyService.getKeyByCreds(token);

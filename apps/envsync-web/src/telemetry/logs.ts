@@ -13,14 +13,28 @@ export function initLogs(config: TelemetryConfig): LoggerProvider {
     [ATTR_SERVICE_NAME]: config.serviceName,
   });
 
-  const exporter = new OTLPLogExporter({
-    url: `${config.endpoint}/v1/logs`,
-  });
+  const processor = new BatchLogRecordProcessor(
+    new OTLPLogExporter({
+      url: `${config.endpoint}/v1/logs`,
+      headers: config.apiKey ? { Authorization: config.apiKey } : undefined,
+    }),
+  );
 
   const provider = new LoggerProvider({
     resource,
-  });
-  (provider as any).addLogRecordProcessor(new BatchLogRecordProcessor(exporter));
+    // Some browser builds of the OTel logs SDK expect processors in the constructor,
+    // while older builds require addLogRecordProcessor() after construction.
+    processors: [processor],
+  } as LoggerProvider & { processors?: BatchLogRecordProcessor[] });
+
+  const sharedState = (provider as { _sharedState?: { registeredLogRecordProcessors?: unknown[] } })._sharedState;
+  if ((sharedState?.registeredLogRecordProcessors?.length ?? 0) === 0) {
+    const addProcessor = (provider as { addLogRecordProcessor?: (p: BatchLogRecordProcessor) => void }).addLogRecordProcessor;
+    if (typeof addProcessor === "function") {
+      addProcessor.call(provider, processor);
+    }
+  }
+
   loggerProvider = provider;
 
   interceptConsoleErrors();

@@ -83,7 +83,13 @@ const infoLogs = (msg: string | Bindings, logType: LogTypes, generated_by: strin
 		emitOtelLog(msg, SeverityNumber.ERROR, "ERROR", generated_by);
 		return logger.error(msg);
 	}
-	return logger.child(msg as Bindings);
+	if (logType === LogTypes.CUSTOMOBJ) {
+		if (typeof msg === "string") {
+			return logger.info({ generated_by }, msg);
+		}
+		return logger.info(generated_by ? { generated_by, ...msg } : msg);
+	}
+	return logger.info(generated_by ? { generated_by, payload: msg } : { payload: msg });
 };
 
 export default infoLogs;

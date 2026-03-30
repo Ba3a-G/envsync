@@ -2,7 +2,7 @@ import { v4 as uuidv4 } from "uuid";
 
 import { cacheAside, invalidateCache } from "@/helpers/cache";
 import { CacheKeys, CacheTTL } from "@/helpers/cache-keys";
-import { createZitadelUser } from "@/helpers/zitadel";
+import { createKeycloakUser } from "@/helpers/keycloak";
 import { DB } from "@/libs/db";
 import { orNotFound } from "@/libs/errors";
 import { runSaga } from "@/helpers/saga";
@@ -25,7 +25,7 @@ export class UserService {
 					const firstName = parts[0]?.slice(0, 200) ?? "User";
 					const lastName = parts.slice(1).join(" ").slice(0, 200) || "-";
 
-					const zUser = await createZitadelUser({
+					const zUser = await createKeycloakUser({
 						userName: data.email,
 						email: data.email,
 						firstName,
@@ -195,6 +195,16 @@ export class UserService {
 	public static getUserByKeycloakId = async (auth_service_id: string) => {
 		return cacheAside(CacheKeys.userByIdp(auth_service_id), CacheTTL.SHORT, async () => {
 			const db = await DB.getInstance();
+			if (process.env.E2E_DEBUG_AUTH === "1") {
+				const direct = await db
+					.selectFrom("users")
+					.select(["id", "auth_service_id", "org_id", "role_id"])
+					.where("auth_service_id", "=", auth_service_id)
+					.executeTakeFirst();
+				console.log(
+					`[AUTH DEBUG] lookup db=${process.env.DATABASE_NAME} auth_service_id=${auth_service_id} found=${direct ? "yes" : "no"} user_id=${direct?.id ?? ""}`,
+				);
+			}
 			const user = await orNotFound(
 				db
 					.selectFrom("users")

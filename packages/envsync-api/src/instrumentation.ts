@@ -78,7 +78,7 @@ if (!OTEL_SDK_DISABLED) {
 	diag.setLogger(new DiagConsoleLogger(), diagLevel);
 
 	const serviceName = process.env.OTEL_SERVICE_NAME || "envsync-api";
-	const endpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT || "http://localhost:4318";
+	const endpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT || "http://localhost:14318";
 
 	const resource = new Resource({
 		"service.name": serviceName,

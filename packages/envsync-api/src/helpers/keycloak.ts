@@ -1,0 +1,292 @@
+import { config } from "@/utils/env";
+
+const base = () => config.KEYCLOAK_URL.replace(/\/$/, "");
+const realm = () => config.KEYCLOAK_REALM;
+const issuer = () => `${base()}/realms/${realm()}`;
+const adminRealm = () => "master";
+const adminBase = () => `${base()}/admin/realms/${realm()}`;
+
+export const getKeycloakBaseUrl = () => base();
+export const getKeycloakIssuer = () => issuer();
+export const getKeycloakRealm = () => realm();
+
+let adminTokenCache: { accessToken: string; expiresAt: number } | null = null;
+
+function isLocalHttpAdminFailure(error: unknown) {
+	return error instanceof Error && (
+		error.message.includes("HTTPS required") ||
+		error.message.includes("invalid_request")
+	);
+}
+
+function runLocalKeycloakAdmin(args: string[]) {
+	const shellQuote = (value: string) => `'${value.replace(/'/g, `'\\''`)}'`;
+	const proc = Bun.spawnSync([
+		"docker",
+		"compose",
+		"exec",
+		"-T",
+		"keycloak",
+		"sh",
+		"-lc",
+		[
+			"/opt/keycloak/bin/kcadm.sh config credentials",
+			` --server ${shellQuote(base())}`,
+			" --realm master",
+			` --user ${shellQuote(config.KEYCLOAK_ADMIN_USER)}`,
+			` --password ${shellQuote(config.KEYCLOAK_ADMIN_PASSWORD)}`,
+			" >/dev/null && /opt/keycloak/bin/kcadm.sh ",
+			args.join(" "),
+		].join(""),
+	], {
+		stdout: "pipe",
+		stderr: "pipe",
+	});
+
+	if (proc.exitCode !== 0) {
+		throw new Error(Buffer.from(proc.stderr).toString() || "Local Keycloak admin command failed");
+	}
+
+	return Buffer.from(proc.stdout).toString().trim();
+}
+
+async function getAdminAccessToken(): Promise<string> {
+	if (adminTokenCache && adminTokenCache.expiresAt > Date.now() + 30_000) {
+		return adminTokenCache.accessToken;
+	}
+
+	const res = await fetch(`${base()}/realms/${adminRealm()}/protocol/openid-connect/token`, {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/x-www-form-urlencoded",
+		},
+		body: new URLSearchParams({
+			grant_type: "password",
+			client_id: "admin-cli",
+			username: config.KEYCLOAK_ADMIN_USER,
+			password: config.KEYCLOAK_ADMIN_PASSWORD,
+		}),
+		signal: AbortSignal.timeout(10_000),
+	});
+
+	if (!res.ok) {
+		throw new Error(`Keycloak admin token request failed: ${res.status} ${await res.text()}`);
+	}
+
+	const data = (await res.json()) as { access_token: string; expires_in: number };
+	adminTokenCache = {
+		accessToken: data.access_token,
+		expiresAt: Date.now() + data.expires_in * 1000,
+	};
+
+	return data.access_token;
+}
+
+async function adminFetch(path: string, options: RequestInit = {}) {
+	const token = await getAdminAccessToken();
+	return fetch(`${adminBase()}${path}`, {
+		...options,
+		headers: {
+			Authorization: `Bearer ${token}`,
+			"Content-Type": "application/json",
+			...(options.headers as Record<string, string>),
+		},
+		signal: options.signal ?? AbortSignal.timeout(10_000),
+	});
+}
+
+export interface KeycloakUserCreate {
+	userName: string;
+	email: string;
+	firstName: string;
+	lastName: string;
+	password: string;
+}
+
+function ensureNonEmptyName(value: string, fallback: string): string {
+	const s = String(value ?? "").trim();
+	return s.length > 0 ? s.slice(0, 255) : fallback;
+}
+
+function readIdFromLocationHeader(location: string | null): string | null {
+	if (!location) return null;
+	const match = location.match(/\/([^/]+)$/);
+	return match?.[1] ?? null;
+}
+
+export async function createKeycloakUser(payload: KeycloakUserCreate) {
+	try {
+		const res = await adminFetch("/users", {
+			method: "POST",
+			body: JSON.stringify({
+				username: payload.userName,
+				email: payload.email,
+				emailVerified: true,
+				enabled: true,
+				firstName: ensureNonEmptyName(payload.firstName, "User"),
+				lastName: ensureNonEmptyName(payload.lastName, "-"),
+				credentials: [
+					{
+						type: "password",
+						value: payload.password,
+						temporary: false,
+					},
+				],
+			}),
+		});
+
+		if (!res.ok && res.status !== 201) {
+			throw new Error(`Keycloak create user failed: ${res.status} ${await res.text()}`);
+		}
+
+		const createdId = readIdFromLocationHeader(res.headers.get("location"));
+		if (createdId) return { id: createdId };
+
+		const lookup = await adminFetch(`/users?username=${encodeURIComponent(payload.userName)}&exact=true`);
+		if (!lookup.ok) {
+			throw new Error(`Keycloak user lookup failed after create: ${lookup.status} ${await lookup.text()}`);
+		}
+		const users = (await lookup.json()) as Array<{ id: string }>;
+		const user = users[0];
+		if (!user?.id) throw new Error("Keycloak create user succeeded but no user id could be resolved");
+		return { id: user.id };
+	} catch (error) {
+		if (!isLocalHttpAdminFailure(error)) throw error;
+
+		runLocalKeycloakAdmin([
+			"create users",
+			`-r ${realm()}`,
+			`-s username=${JSON.stringify(payload.userName)}`,
+			`-s email=${JSON.stringify(payload.email)}`,
+			"-s enabled=true",
+			"-s emailVerified=true",
+			`-s firstName=${JSON.stringify(ensureNonEmptyName(payload.firstName, "User"))}`,
+			`-s lastName=${JSON.stringify(ensureNonEmptyName(payload.lastName, "-"))}`,
+		]);
+
+		const userJson = runLocalKeycloakAdmin([
+			"get users",
+			`-r ${realm()}`,
+			`-q username=${JSON.stringify(payload.userName)}`,
+		]);
+		const users = JSON.parse(userJson) as Array<{ id: string; username?: string }>;
+		const user = users.find(candidate => candidate.username === payload.userName) ?? users[0];
+		if (!user?.id) throw new Error("Local Keycloak fallback created user but no user id could be resolved");
+
+		runLocalKeycloakAdmin([
+			"set-password",
+			`-r ${realm()}`,
+			`--userid ${JSON.stringify(user.id)}`,
+			`--new-password ${JSON.stringify(payload.password)}`,
+		]);
+
+		return { id: user.id };
+	}
+}
+
+export async function updateKeycloakUser(
+	userId: string,
+	payload: { firstName?: string; lastName?: string; email?: string },
+) {
+	try {
+		const currentRes = await adminFetch(`/users/${userId}`);
+		if (!currentRes.ok) {
+			throw new Error(`Keycloak read user failed: ${currentRes.status} ${await currentRes.text()}`);
+		}
+		const current = (await currentRes.json()) as {
+			username?: string;
+			firstName?: string;
+			lastName?: string;
+			email?: string;
+			enabled?: boolean;
+		};
+
+		const res = await adminFetch(`/users/${userId}`, {
+			method: "PUT",
+			body: JSON.stringify({
+				username: current.username,
+				enabled: current.enabled ?? true,
+				emailVerified: true,
+				email: payload.email ?? current.email,
+				firstName: ensureNonEmptyName(payload.firstName ?? current.firstName ?? "", "User"),
+				lastName: ensureNonEmptyName(payload.lastName ?? current.lastName ?? "", "-"),
+			}),
+		});
+
+		if (!res.ok && res.status !== 204) {
+			throw new Error(`Keycloak update user failed: ${res.status} ${await res.text()}`);
+		}
+	} catch (error) {
+		if (!isLocalHttpAdminFailure(error)) throw error;
+		runLocalKeycloakAdmin([
+			`update users/${JSON.stringify(userId)} -r ${realm()}`,
+			payload.email ? `-s email=${JSON.stringify(payload.email)}` : "",
+			payload.firstName ? `-s firstName=${JSON.stringify(ensureNonEmptyName(payload.firstName, "User"))}` : "",
+			payload.lastName ? `-s lastName=${JSON.stringify(ensureNonEmptyName(payload.lastName, "-"))}` : "",
+			"-s emailVerified=true",
+			"-s enabled=true",
+		].filter(Boolean));
+	}
+}
+
+export async function deleteKeycloakUser(userId: string) {
+	try {
+		const res = await adminFetch(`/users/${userId}`, { method: "DELETE" });
+		if (!res.ok && res.status !== 204 && res.status !== 404) {
+			throw new Error(`Keycloak delete user failed: ${res.status} ${await res.text()}`);
+		}
+	} catch (error) {
+		if (!isLocalHttpAdminFailure(error)) throw error;
+		runLocalKeycloakAdmin([`delete users/${JSON.stringify(userId)} -r ${realm()}`]);
+	}
+}
+
+export async function sendKeycloakPasswordReset(userId: string) {
+	try {
+		const res = await adminFetch(`/users/${userId}/execute-actions-email`, {
+			method: "PUT",
+			body: JSON.stringify(["UPDATE_PASSWORD"]),
+		});
+		if (!res.ok && res.status !== 204) {
+			throw new Error(`Keycloak password reset failed: ${res.status} ${await res.text()}`);
+		}
+	} catch (error) {
+		if (!isLocalHttpAdminFailure(error)) throw error;
+		runLocalKeycloakAdmin([
+			`update users/${JSON.stringify(userId)} -r ${realm()}`,
+			"-s requiredActions=[\"UPDATE_PASSWORD\"]",
+		]);
+	}
+}
+
+export async function keycloakTokenExchange(
+	code: string,
+	redirectUri: string,
+	clientId: string,
+	clientSecret: string,
+): Promise<{ id_token?: string; access_token: string; scope?: string; expires_in?: number; token_type?: string }> {
+	const res = await fetch(`${issuer()}/protocol/openid-connect/token`, {
+		method: "POST",
+		headers: { "Content-Type": "application/x-www-form-urlencoded" },
+		body: new URLSearchParams({
+			grant_type: "authorization_code",
+			code,
+			redirect_uri: redirectUri,
+			client_id: clientId,
+			client_secret: clientSecret,
+		}),
+		signal: AbortSignal.timeout(10_000),
+	});
+
+	if (!res.ok) {
+		throw new Error(`Keycloak token exchange failed: ${res.status} ${await res.text()}`);
+	}
+
+	return (await res.json()) as {
+		id_token?: string;
+		access_token: string;
+		scope?: string;
+		expires_in?: number;
+		token_type?: string;
+	};
+}

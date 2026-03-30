@@ -1,7 +1,9 @@
 /**
  * Test request wrapper — uses Hono's app.request() for in-process testing.
+ *
+ * Import the app lazily so Bun's preload can populate process.env before the
+ * application's config module parses it.
  */
-import { app } from "@/app";
 
 export interface TestRequestOptions {
 	method?: string;
@@ -24,6 +26,11 @@ export async function testRequest(
 	path: string,
 	options: TestRequestOptions = {},
 ): Promise<TestResponse> {
+	if (process.env.TEST_MODE === "e2e") {
+		const { ensureE2EEnv } = await import("../e2e/helpers/bootstrap-env");
+		ensureE2EEnv();
+	}
+	const { app } = await import("@/app");
 	const { method = "GET", headers = {}, body, token, apiKey, query } = options;
 
 	const reqHeaders: Record<string, string> = { ...headers };

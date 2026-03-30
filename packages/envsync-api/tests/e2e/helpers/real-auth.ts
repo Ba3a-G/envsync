@@ -2,16 +2,14 @@
  * Auth helpers for E2E tests.
  *
  * Uses the same DB seed helpers as mock tests, plus real FGA/KMS clients.
- * Tokens are real JWTs issued by the real Zitadel instance.
+ * Tokens are real JWTs issued by the real Keycloak instance.
  */
 import { v4 as uuidv4 } from "uuid";
 
-import { DB } from "@/libs/db";
-import { KMSClient } from "@/libs/kms/client";
-import { FGAClient } from "@/libs/openfga/index";
-import { CertificateService } from "@/services/certificate.service";
+import { createKeycloakTestUser, getKeycloakAccessToken } from "./keycloak-bootstrap";
+import { ensureE2EEnv } from "./bootstrap-env";
 
-import { createZitadelTestUser, getZitadelAccessToken } from "./zitadel-bootstrap";
+ensureE2EEnv();
 
 export interface E2EUser {
 	id: string;
@@ -32,35 +30,36 @@ export interface E2ESeed {
 	roles: Record<string, { id: string; name: string }>;
 }
 
-// ── Zitadel credentials (cached from env) ───────────────────────────
+// ── Keycloak credentials (cached from env) ──────────────────────────
 
-let zitadelCreds: {
+let keycloakCreds: {
 	url: string;
-	pat: string;
-	loginPat: string;
+	realm: string;
+	adminUser: string;
+	adminPassword: string;
 	clientId: string;
 	clientSecret: string;
 } | null = null;
 
-function initZitadelCredentials(): typeof zitadelCreds & {} {
-	if (zitadelCreds) return zitadelCreds;
+function initKeycloakCredentials(): typeof keycloakCreds & {} {
+	if (keycloakCreds) return keycloakCreds;
 
-	const url = process.env.ZITADEL_URL;
-	const pat = process.env.ZITADEL_PAT;
-	const loginPat = process.env.ZITADEL_LOGIN_PAT || pat;
-	const clientId = process.env.ZITADEL_E2E_CLIENT_ID;
-	const clientSecret = process.env.ZITADEL_E2E_CLIENT_SECRET;
+	const url = process.env.KEYCLOAK_URL;
+	const realm = process.env.KEYCLOAK_REALM;
+	const adminUser = process.env.KEYCLOAK_ADMIN_USER;
+	const adminPassword = process.env.KEYCLOAK_ADMIN_PASSWORD;
+	const clientId = process.env.KEYCLOAK_E2E_CLIENT_ID;
+	const clientSecret = process.env.KEYCLOAK_E2E_CLIENT_SECRET;
 
-	if (!url || !pat || !loginPat || !clientId || !clientSecret) {
+	if (!url || !realm || !adminUser || !adminPassword || !clientId || !clientSecret) {
 		throw new Error(
-			"Missing Zitadel E2E credentials. Ensure ZITADEL_URL, ZITADEL_PAT, " +
-			"ZITADEL_E2E_CLIENT_ID, and ZITADEL_E2E_CLIENT_SECRET are set. " +
+			"Missing Keycloak E2E credentials. Ensure KEYCLOAK_URL, KEYCLOAK_REALM, KEYCLOAK_ADMIN_USER, KEYCLOAK_ADMIN_PASSWORD, KEYCLOAK_E2E_CLIENT_ID, and KEYCLOAK_E2E_CLIENT_SECRET are set. " +
 			"Run 'bun run e2e:init' first.",
 		);
 	}
 
-	zitadelCreds = { url, pat, loginPat, clientId, clientSecret };
-	return zitadelCreds;
+	keycloakCreds = { url, realm, adminUser, adminPassword, clientId, clientSecret };
+	return keycloakCreds;
 }
 
 // ── Seed helpers ────────────────────────────────────────────────────
@@ -70,6 +69,9 @@ function initZitadelCredentials(): typeof zitadelCreds & {} {
  * Uses the real database and writes real FGA tuples.
  */
 export async function seedE2EOrg(): Promise<E2ESeed> {
+	const { DB } = await import("@/libs/db");
+	const { FGAClient } = await import("@/libs/openfga/index");
+	const { CertificateService } = await import("@/services/certificate.service");
 	const db = await DB.getInstance();
 	const orgId = uuidv4();
 	const slug = `e2e-${orgId.slice(0, 8)}`;
@@ -198,34 +200,34 @@ export async function seedE2EOrg(): Promise<E2ESeed> {
 
 /**
  * Create a test user in an org with a given role.
- * Creates a real user in Zitadel and obtains a real JWT.
+ * Creates a real user in Keycloak and obtains a real JWT.
  */
 export async function seedE2EUser(
 	orgId: string,
 	roleId: string,
 ): Promise<E2EUser> {
-	const creds = initZitadelCredentials();
+	const creds = initKeycloakCredentials();
+	const { CertificateService } = await import("@/services/certificate.service");
+	const { DB } = await import("@/libs/db");
 	const db = await DB.getInstance();
 	const id = uuidv4();
 	const email = `e2e-${id.slice(0, 8)}@test.local`;
 	const password = "E2eTest1!strong";
 
-	// 1. Create user in Zitadel
-	const zitadelUser = await createZitadelTestUser(creds.url, creds.pat, {
+	const keycloakUser = await createKeycloakTestUser(creds.url, creds.realm, creds.adminUser, creds.adminPassword, {
 		email,
 		firstName: "E2E",
 		lastName: `User ${id.slice(0, 8)}`,
 		password,
 	});
 
-	// 2. Insert user in DB with auth_service_id = Zitadel user ID
 	await db
 		.insertInto("users")
 		.values({
 			id,
 			email,
 			full_name: `E2E User ${id.slice(0, 8)}`,
-			auth_service_id: zitadelUser.zitadelUserId,
+			auth_service_id: keycloakUser.keycloakUserId,
 			org_id: orgId,
 			role_id: roleId,
 			is_active: true,
@@ -234,12 +236,12 @@ export async function seedE2EUser(
 		})
 		.execute();
 
-	// 3. Get real JWT access token from Zitadel
-	const token = await getZitadelAccessToken(
+	// 3. Get real JWT access token from Keycloak
+	const token = await getKeycloakAccessToken(
 		creds.url,
+		creds.realm,
 		creds.clientId,
 		creds.clientSecret,
-		creds.loginPat,
 		email,
 		password,
 	);
@@ -256,7 +258,7 @@ export async function seedE2EUser(
 		id,
 		token,
 		email,
-		authServiceId: zitadelUser.zitadelUserId,
+		authServiceId: keycloakUser.keycloakUserId,
 	};
 }
 
@@ -276,6 +278,7 @@ export async function setupE2EUserPermissions(
 		have_webhook_access?: boolean;
 	},
 ): Promise<void> {
+	const { FGAClient } = await import("@/libs/openfga/index");
 	const fga = await FGAClient.getInstance();
 	const user = `user:${userId}`;
 	const org = `org:${orgId}`;
@@ -303,6 +306,9 @@ export async function setupE2EUserPermissions(
  * Throws if any required service is unreachable.
  */
 export async function checkServiceHealth(): Promise<void> {
+	const { DB } = await import("@/libs/db");
+	const { FGAClient } = await import("@/libs/openfga/index");
+	const { KMSClient } = await import("@/libs/kms/client");
 	const checks = [
 		{
 			name: "PostgreSQL",
@@ -319,10 +325,11 @@ export async function checkServiceHealth(): Promise<void> {
 			},
 		},
 		{
-			name: "Zitadel",
+			name: "Keycloak",
 			check: async () => {
-				const url = (process.env.ZITADEL_URL ?? "http://localhost:8080").replace(/\/$/, "");
-				const res = await fetch(`${url}/.well-known/openid-configuration`, {
+				const url = (process.env.KEYCLOAK_URL ?? "http://localhost:8080").replace(/\/$/, "");
+				const realm = process.env.KEYCLOAK_REALM ?? "envsync";
+				const res = await fetch(`${url}/realms/${realm}/.well-known/openid-configuration`, {
 					signal: AbortSignal.timeout(5000),
 				});
 				if (!res.ok) throw new Error(`HTTP ${res.status}`);

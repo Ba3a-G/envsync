@@ -59,3 +59,27 @@ Single `.env` file at the repo root. All TS packages read from it via the `load-
 - Path alias `@/*` maps to `src/*` in all TS packages (configured in each `tsconfig.json`)
 - SDKs in `sdks/` are auto-generated — do not hand-edit
 - The TS SDK is consumed by `apps/envsync-web` via workspace link
+
+## Init
+
+Current local bootstrap from scratch is now:
+
+```
+cp .env.example .env
+bun install
+bun run cli init
+bun run clickstack:sync
+bun run dev
+```
+
+For the sim test after local is up:
+```
+cd packages/envsync-api
+bun run scripts/sim.ts
+```
+
+Useful variants:
+```
+SIM_WORKERS=50 bun run scripts/sim.ts
+SIM_WORKERS=200 SIM_DELAY_MS=0 bun run scripts/sim.ts
+```

@@ -1,0 +1,14 @@
+{
+  "name": "@envsync-cloud/deploy-cli",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "envsync-deploy": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "bun run src/index.ts"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

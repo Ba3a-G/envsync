@@ -6,6 +6,7 @@ export function initSessionReplay(): void {
   const apiKey = import.meta.env.VITE_HYPERDX_API_KEY;
   const url = import.meta.env.VITE_HYPERDX_URL;
   const disabled = import.meta.env.VITE_HYPERDX_DISABLED === "true";
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
   if (!apiKey || disabled) return;
 
   HyperDX.init({
@@ -17,7 +18,7 @@ export function initSessionReplay(): void {
     maskAllInputs: true,
     maskClass: "hdx-mask",
     blockClass: "hdx-block",
-    tracePropagationTargets: [/localhost:4000/],
+    tracePropagationTargets: [new RegExp(apiBaseUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))],
   });
   hdxActive = true;
 }

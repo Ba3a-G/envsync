@@ -29,7 +29,7 @@
                     "loginUrl": {
                         "type": "string",
                         "format": "uri",
-                        "example": "https://zitadel.example.com/oauth/v2/authorize?response_type=code"
+                        "example": "https://auth.example.com/realms/envsync/protocol/openid-connect/auth?response_type=code"
                     }
                 },
                 "required": [

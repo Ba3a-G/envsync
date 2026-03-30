@@ -7,9 +7,64 @@
  * When TEST_MODE=e2e, this file is a no-op — E2E tests use their own setup
  * loaded via --preload flag.
  */
+import { spawnSync } from "node:child_process";
+import net from "node:net";
 import { mock } from "bun:test";
 
 const isE2E = process.env.TEST_MODE === "e2e";
+
+function run(cmd: string, args: string[]) {
+	const result = spawnSync(cmd, args, {
+		stdio: "pipe",
+		encoding: "utf8",
+		env: process.env,
+	});
+	if (result.status !== 0) {
+		const stderr = result.stderr?.trim();
+		throw new Error(`Command failed: ${cmd} ${args.join(" ")}${stderr ? `\n${stderr}` : ""}`);
+	}
+	return result.stdout?.trim() ?? "";
+}
+
+async function waitForPort(host: string, port: number, attempts = 30) {
+	for (let attempt = 0; attempt < attempts; attempt++) {
+		const ready = await new Promise<boolean>(resolve => {
+			const socket = net.createConnection(port, host, () => {
+				socket.destroy();
+				resolve(true);
+			});
+			socket.on("error", () => resolve(false));
+			socket.setTimeout(1000, () => {
+				socket.destroy();
+				resolve(false);
+			});
+		});
+		if (ready) return;
+		await Bun.sleep(1000);
+	}
+	throw new Error(`Postgres did not become reachable at ${host}:${port}`);
+}
+
+async function ensureMockPostgres() {
+	run("docker", ["compose", "up", "-d", "postgres"]);
+	await waitForPort(process.env.DATABASE_HOST ?? "localhost", Number(process.env.DATABASE_PORT ?? "5432"));
+	const dbName = process.env.DATABASE_NAME ?? "envsync_test";
+	const dbUser = process.env.DATABASE_USER ?? "postgres";
+	const exists = run("docker", [
+		"compose",
+		"exec",
+		"-T",
+		"postgres",
+		"psql",
+		"-U",
+		dbUser,
+		"-tAc",
+		`SELECT 1 FROM pg_database WHERE datname='${dbName}'`,
+	]);
+	if (exists.trim() !== "1") {
+		run("docker", ["compose", "exec", "-T", "postgres", "createdb", "-U", dbUser, dbName]);
+	}
+}
 
 // ── 1. Set required environment variables ────────────────────────────
 // Must happen before any import of @/utils/env which calls env.parse(process.env)
@@ -20,7 +75,7 @@ if (!isE2E) {
 		DB_LOGGING: "false",
 		DB_AUTO_MIGRATE: "true",
 		DATABASE_SSL: "false",
-		DATABASE_HOST: process.env.DATABASE_HOST ?? "localhost",
+		DATABASE_HOST: process.env.DATABASE_HOST ?? "127.0.0.1",
 		DATABASE_PORT: process.env.DATABASE_PORT ?? "5432",
 		DATABASE_USER: process.env.DATABASE_USER ?? "postgres",
 		DATABASE_PASSWORD: process.env.DATABASE_PASSWORD ?? "postgres",
@@ -39,18 +94,19 @@ if (!isE2E) {
 		SMTP_PORT: "1025",
 		SMTP_SECURE: "false",
 		SMTP_FROM: "test@envsync.local",
-		// Zitadel
-		ZITADEL_URL: "http://localhost:8080",
-		ZITADEL_PAT: "test-pat",
-		ZITADEL_WEB_CLIENT_ID: "test-web-client-id",
-		ZITADEL_WEB_CLIENT_SECRET: "test-web-client-secret",
-		ZITADEL_CLI_CLIENT_ID: "test-cli-client-id",
-		ZITADEL_CLI_CLIENT_SECRET: "test-cli-client-secret",
-		ZITADEL_API_CLIENT_ID: "test-api-client-id",
-		ZITADEL_API_CLIENT_SECRET: "test-api-client-secret",
-		ZITADEL_WEB_REDIRECT_URI: "http://localhost:3000/callback",
-		ZITADEL_WEB_CALLBACK_URL: "http://localhost:3000",
-		ZITADEL_API_REDIRECT_URI: "http://localhost:4000/callback",
+		// Keycloak
+		KEYCLOAK_URL: "http://localhost:8080",
+		KEYCLOAK_REALM: "envsync",
+		KEYCLOAK_ADMIN_USER: "admin",
+		KEYCLOAK_ADMIN_PASSWORD: "admin",
+		KEYCLOAK_WEB_CLIENT_ID: "envsync-web",
+		KEYCLOAK_WEB_CLIENT_SECRET: "test-web-client-secret",
+		KEYCLOAK_CLI_CLIENT_ID: "envsync-cli",
+		KEYCLOAK_API_CLIENT_ID: "envsync-api",
+		KEYCLOAK_API_CLIENT_SECRET: "test-api-client-secret",
+		KEYCLOAK_WEB_REDIRECT_URI: "http://localhost:3000/callback",
+		KEYCLOAK_WEB_CALLBACK_URL: "http://localhost:3000",
+		KEYCLOAK_API_REDIRECT_URI: "http://localhost:4000/callback",
 		// miniKMS
 		MINIKMS_GRPC_ADDR: "localhost:50051",
 		MINIKMS_TLS_ENABLED: "false",
@@ -81,16 +137,16 @@ if (!isE2E) {
 		},
 	}));
 
-	// Mock Zitadel helpers — no-op user management
-	mock.module("@/helpers/zitadel", () => ({
-		getZitadelIssuer: () => "http://localhost:8080",
-		createZitadelUser: async (payload: any) => ({
-			id: `zitadel-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+	// Mock Keycloak helpers — no-op user management
+	mock.module("@/helpers/keycloak", () => ({
+		getKeycloakIssuer: () => "http://localhost:8080/realms/envsync",
+		createKeycloakUser: async () => ({
+			id: `keycloak-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
 		}),
-		updateZitadelUser: async () => {},
-		deleteZitadelUser: async () => {},
-		sendZitadelPasswordReset: async () => {},
-		zitadelTokenExchange: async (code: string) => ({
+		updateKeycloakUser: async () => {},
+		deleteKeycloakUser: async () => {},
+		sendKeycloakPasswordReset: async () => {},
+		keycloakTokenExchange: async (code: string) => ({
 			access_token: `mock-access-token-${code}`,
 			id_token: `mock-id-token-${code}`,
 		}),
@@ -142,8 +198,13 @@ if (!isE2E) {
 	// ── 3. Initialize cache in development mode ──────────────────────────
 	// Use dynamic import to ensure env vars and mocks are registered first
 	// (static imports are hoisted before mock.module and Object.assign calls)
+	await ensureMockPostgres();
+
 	const { CacheClient } = await import("@/libs/cache");
 	CacheClient.init("development");
+
+	const { cleanupDB } = await import("./db");
+	await cleanupDB();
 }
 
 // Captured calls for test assertions (empty in E2E mode)

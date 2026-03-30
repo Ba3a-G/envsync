@@ -89,9 +89,13 @@ export class FGAClient {
 	 * Check if a user has a relation to an object.
 	 */
 	async check(user: string, relation: string, object: string): Promise<boolean> {
+		const apiUrl = new URL(config.OPENFGA_API_URL);
 		return withSpan("openfga check", {
 			"rpc.system": "http",
 			"peer.service": "openfga",
+			"server.address": apiUrl.hostname,
+			"server.port": Number(apiUrl.port || (apiUrl.protocol === "https:" ? "443" : "80")),
+			"network.peer.address": apiUrl.hostname,
 			"fga.relation": relation,
 			"fga.object": object,
 		}, async () => {
@@ -105,9 +109,13 @@ export class FGAClient {
 	 * Batch check multiple permission queries using parallel individual checks.
 	 */
 	async batchCheck(checks: ClientCheckRequest[]): Promise<Map<string, boolean>> {
+		const apiUrl = new URL(config.OPENFGA_API_URL);
 		return withSpan("openfga batchCheck", {
 			"rpc.system": "http",
 			"peer.service": "openfga",
+			"server.address": apiUrl.hostname,
+			"server.port": Number(apiUrl.port || (apiUrl.protocol === "https:" ? "443" : "80")),
+			"network.peer.address": apiUrl.hostname,
 			"fga.batch_size": checks.length,
 		}, async () => {
 			externalServiceCalls.add(1, { "peer.service": "openfga", "rpc.method": "batchCheck" });
@@ -133,9 +141,13 @@ export class FGAClient {
 	 * OpenFGA allows max 10 writes per call; this method handles batching.
 	 */
 	async writeTuples(tuples: TupleKey[]): Promise<void> {
+		const apiUrl = new URL(config.OPENFGA_API_URL);
 		return withSpan("openfga writeTuples", {
 			"rpc.system": "http",
 			"peer.service": "openfga",
+			"server.address": apiUrl.hostname,
+			"server.port": Number(apiUrl.port || (apiUrl.protocol === "https:" ? "443" : "80")),
+			"network.peer.address": apiUrl.hostname,
 			"fga.batch_size": tuples.length,
 		}, async () => {
 			externalServiceCalls.add(1, { "peer.service": "openfga", "rpc.method": "writeTuples" });
@@ -154,9 +166,13 @@ export class FGAClient {
 	 * Delete relationship tuples (revocations).
 	 */
 	async deleteTuples(tuples: TupleKey[]): Promise<void> {
+		const apiUrl = new URL(config.OPENFGA_API_URL);
 		return withSpan("openfga deleteTuples", {
 			"rpc.system": "http",
 			"peer.service": "openfga",
+			"server.address": apiUrl.hostname,
+			"server.port": Number(apiUrl.port || (apiUrl.protocol === "https:" ? "443" : "80")),
+			"network.peer.address": apiUrl.hostname,
 			"fga.batch_size": tuples.length,
 		}, async () => {
 			externalServiceCalls.add(1, { "peer.service": "openfga", "rpc.method": "deleteTuples" });
@@ -182,9 +198,13 @@ export class FGAClient {
 	 * List all objects of a given type that a user has a relation to.
 	 */
 	async listObjects(user: string, relation: string, type: string): Promise<string[]> {
+		const apiUrl = new URL(config.OPENFGA_API_URL);
 		return withSpan("openfga listObjects", {
 			"rpc.system": "http",
 			"peer.service": "openfga",
+			"server.address": apiUrl.hostname,
+			"server.port": Number(apiUrl.port || (apiUrl.protocol === "https:" ? "443" : "80")),
+			"network.peer.address": apiUrl.hostname,
 			"fga.relation": relation,
 			"fga.object": type,
 		}, async () => {
@@ -199,9 +219,13 @@ export class FGAClient {
 	 * Useful for finding all tuples for a user/object.
 	 */
 	async readTuples(tupleKey: Partial<TupleKey>): Promise<TupleKey[]> {
+		const apiUrl = new URL(config.OPENFGA_API_URL);
 		return withSpan("openfga readTuples", {
 			"rpc.system": "http",
 			"peer.service": "openfga",
+			"server.address": apiUrl.hostname,
+			"server.port": Number(apiUrl.port || (apiUrl.protocol === "https:" ? "443" : "80")),
+			"network.peer.address": apiUrl.hostname,
 		}, async () => {
 			externalServiceCalls.add(1, { "peer.service": "openfga", "rpc.method": "readTuples" });
 			const response = await this.client.read(tupleKey as ClientReadRequest);
