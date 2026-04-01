@@ -4,7 +4,7 @@
  *
  * Generates high-volume realistic traffic across all 115+ API endpoints.
  * 18 weighted scenarios simulate real-life user workflows to populate
- * Grafana/Tempo dashboards with meaningful traces and metrics.
+ * ClickStack with meaningful traces, logs, and metrics.
  *
  * Architecture:
  *   - Rotating orgs: new org every 2 minutes, decommissioned after 4 minutes
@@ -25,12 +25,12 @@
  *
  * Prerequisites:
  *   1. Docker services running: `docker compose up -d`
- *   2. E2E init completed: `bun run e2e:init`
+ *   2. E2E init completed: `bun run e2e-setup init`
  *   3. API server running: `bun run dev`
  *
- * Usage: bun run sim
- *        SIM_WORKERS=500 bun run sim    # ~50K RPS
- *        SIM_WORKERS=1000 bun run sim   # ~100K RPS
+ * Usage: bun run scripts/sim.ts
+ *        SIM_WORKERS=500 bun run scripts/sim.ts
+ *        SIM_WORKERS=1000 bun run scripts/sim.ts
  */
 
 import fs from "node:fs";
@@ -50,7 +50,7 @@ if (fs.existsSync(rootEnvPath)) {
 	console.log(`[Sim] Loaded root env from ${rootEnvPath}`);
 }
 
-// Layer E2E-specific credentials (Vault, Zitadel, FGA)
+// Layer E2E-specific credentials (Keycloak, OpenFGA, miniKMS)
 const envE2EPath = path.join(projectRoot, ".env.e2e.test");
 if (fs.existsSync(envE2EPath)) {
 	loadEnvFileSimple(envE2EPath);
@@ -61,7 +61,7 @@ if (fs.existsSync(envE2EPath)) {
 }
 
 // ── 3. Set required environment variables ────────────────────────────
-const zitadelUrl = process.env.ZITADEL_URL ?? "http://localhost:8080";
+const keycloakUrl = process.env.KEYCLOAK_URL ?? "http://localhost:8080";
 
 Object.assign(process.env, {
 	NODE_ENV: "development",
@@ -86,25 +86,25 @@ Object.assign(process.env, {
 	SMTP_PORT: process.env.SMTP_PORT ?? "1025",
 	SMTP_SECURE: "false",
 	SMTP_FROM: "sim@envsync.local",
-	ZITADEL_URL: zitadelUrl,
-	ZITADEL_PAT: process.env.ZITADEL_PAT,
-	ZITADEL_LOGIN_PAT: process.env.ZITADEL_LOGIN_PAT ?? process.env.ZITADEL_PAT,
-	ZITADEL_WEB_CLIENT_ID: process.env.ZITADEL_WEB_CLIENT_ID ?? "test-web-client-id",
-	ZITADEL_WEB_CLIENT_SECRET: process.env.ZITADEL_WEB_CLIENT_SECRET ?? "test-web-client-secret",
-	ZITADEL_CLI_CLIENT_ID: process.env.ZITADEL_CLI_CLIENT_ID ?? "test-cli-client-id",
-	ZITADEL_CLI_CLIENT_SECRET: process.env.ZITADEL_CLI_CLIENT_SECRET ?? "test-cli-client-secret",
-	ZITADEL_API_CLIENT_ID: process.env.ZITADEL_API_CLIENT_ID ?? "test-api-client-id",
-	ZITADEL_API_CLIENT_SECRET: process.env.ZITADEL_API_CLIENT_SECRET ?? "test-api-client-secret",
-	ZITADEL_WEB_REDIRECT_URI: process.env.ZITADEL_WEB_REDIRECT_URI ?? "http://localhost:3000/callback",
-	ZITADEL_WEB_CALLBACK_URL: process.env.ZITADEL_WEB_CALLBACK_URL ?? "http://localhost:3000",
-	ZITADEL_API_REDIRECT_URI: process.env.ZITADEL_API_REDIRECT_URI ?? "http://localhost:4000/callback",
+	KEYCLOAK_URL: keycloakUrl,
+	KEYCLOAK_REALM: process.env.KEYCLOAK_REALM ?? "envsync",
+	KEYCLOAK_ADMIN_USER: process.env.KEYCLOAK_ADMIN_USER ?? "admin",
+	KEYCLOAK_ADMIN_PASSWORD: process.env.KEYCLOAK_ADMIN_PASSWORD ?? "admin",
+	KEYCLOAK_WEB_CLIENT_ID: process.env.KEYCLOAK_WEB_CLIENT_ID ?? "envsync-web",
+	KEYCLOAK_WEB_CLIENT_SECRET: process.env.KEYCLOAK_WEB_CLIENT_SECRET ?? "test-web-client-secret",
+	KEYCLOAK_CLI_CLIENT_ID: process.env.KEYCLOAK_CLI_CLIENT_ID ?? "envsync-cli",
+	KEYCLOAK_API_CLIENT_ID: process.env.KEYCLOAK_API_CLIENT_ID ?? "envsync-api",
+	KEYCLOAK_API_CLIENT_SECRET: process.env.KEYCLOAK_API_CLIENT_SECRET ?? "test-api-client-secret",
+	KEYCLOAK_WEB_REDIRECT_URI: process.env.KEYCLOAK_WEB_REDIRECT_URI ?? "http://api.lvh.me:4000/api/access/web/callback",
+	KEYCLOAK_WEB_CALLBACK_URL: process.env.KEYCLOAK_WEB_CALLBACK_URL ?? "http://app.lvh.me:8001/auth/callback",
+	KEYCLOAK_API_REDIRECT_URI: process.env.KEYCLOAK_API_REDIRECT_URI ?? "http://api.lvh.me:4000/api/access/api/callback",
 	OPENFGA_API_URL: process.env.OPENFGA_API_URL ?? "http://localhost:8090",
 	OPENFGA_STORE_ID: process.env.OPENFGA_STORE_ID ?? "",
 	OPENFGA_MODEL_ID: process.env.OPENFGA_MODEL_ID ?? "",
 	MINIKMS_GRPC_ADDR: process.env.MINIKMS_GRPC_ADDR ?? "localhost:50051",
 	MINIKMS_TLS_ENABLED: "false",
-	LANDING_PAGE_URL: "http://localhost:3000",
-	DASHBOARD_URL: "http://localhost:9090",
+	LANDING_PAGE_URL: process.env.LANDING_PAGE_URL ?? "http://localhost:8002",
+	DASHBOARD_URL: process.env.DASHBOARD_URL ?? "http://app.lvh.me:8001",
 });
 
 // ── 4. Initialize services ───────────────────────────────────────────

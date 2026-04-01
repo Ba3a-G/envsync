@@ -13,6 +13,11 @@ export class PostgresDB {
 	static postgres?: Pool;
 
 	static async getInstance(): Promise<Kysely<Database>> {
+		if (process.env.E2E_DEBUG_AUTH === "1" && !this.postgres) {
+			console.log(
+				`[DB DEBUG] init host=${config.DATABASE_HOST} port=${config.DATABASE_PORT} db=${config.DATABASE_NAME} user=${config.DATABASE_USER}`,
+			);
+		}
 		this.postgres ??= new Pool({
 			database: config.DATABASE_NAME,
 			host: config.DATABASE_HOST,
@@ -41,5 +46,15 @@ export class PostgresDB {
 
 	static get availableConnections() {
 		return this.postgres?.idleCount ?? 0;
+	}
+
+	static async destroy() {
+		if (this.db) {
+			await this.db.destroy();
+		} else if (this.postgres) {
+			await this.postgres.end();
+		}
+		this.db = undefined;
+		this.postgres = undefined;
 	}
 }

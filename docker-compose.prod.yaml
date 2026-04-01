@@ -1,15 +1,10 @@
-# Production Docker Compose for Dokploy / self-hosting
-# Usage: docker compose -f docker-compose.prod.yaml up -d
-# Requires: .env file with production values (see .env.prod.example)
-
 services:
   envsync_api:
     image: ghcr.io/envsync-cloud/envsync-api:latest
-    env_file:
-      - .env
-    ports:
-      - "${PORT:-4000}:${PORT:-4000}"
+    env_file: [.env]
     restart: unless-stopped
+    ports:
+      - "${PORT:-4000}:4000"
     environment:
       NODE_ENV: production
       DATABASE_HOST: postgres
@@ -17,55 +12,40 @@ services:
       S3_ENDPOINT: http://rustfs:9000
       S3_BUCKET_URL: http://rustfs:9000
       OPENFGA_API_URL: http://openfga:8090
-      ZITADEL_URL: http://zitadel:8080
+      KEYCLOAK_URL: http://keycloak:8080
       MINIKMS_GRPC_ADDR: minikms:50051
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-agent:4318
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      rustfs:
-        condition: service_started
-      openfga:
-        condition: service_healthy
-      zitadel:
-        condition: service_healthy
-      minikms:
-        condition: service_started
-    networks:
-      - envsync_network
+      - postgres
+      - redis
+      - rustfs
+      - openfga
+      - keycloak
+      - minikms
+      - clickstack
+    networks: [envsync_network]
 
   envsync_init:
     image: ghcr.io/envsync-cloud/envsync-api:latest
     command: ["bun", "run", "scripts/prod-init.ts"]
-    env_file:
-      - .env
+    env_file: [.env]
     environment:
-      ZITADEL_PAT_FILE: /zitadel-data/admin.pat
-      OPENFGA_API_URL: http://openfga:8090
       DATABASE_HOST: postgres
       S3_ENDPOINT: http://rustfs:9000
-      ZITADEL_URL: http://zitadel:8080
+      OPENFGA_API_URL: http://openfga:8090
+      KEYCLOAK_URL: http://keycloak:8080
       MINIKMS_GRPC_ADDR: minikms:50051
-    volumes:
-      - zitadel_data:/zitadel-data:ro
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-agent:4318
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      openfga:
-        condition: service_healthy
-      zitadel:
-        condition: service_healthy
-      rustfs:
-        condition: service_started
-      minikms:
-        condition: service_started
+      - postgres
+      - redis
+      - rustfs
+      - openfga
+      - keycloak
+      - minikms
+      - clickstack
     restart: "no"
-    networks:
-      - envsync_network
+    networks: [envsync_network]
 
   postgres:
     image: postgres:17
@@ -79,14 +59,12 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    networks:
-      - envsync_network
+    networks: [envsync_network]
 
   redis:
-    image: redis:latest
+    image: redis:7
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -95,8 +73,7 @@ services:
       retries: 5
     volumes:
       - redis_data:/data
-    networks:
-      - envsync_network
+    networks: [envsync_network]
 
   rustfs:
     image: rustfs/rustfs:latest
@@ -105,79 +82,47 @@ services:
       RUSTFS_DATA_DIR: /data
       RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-rustfsadmin}
       RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:-rustfsadmin}
-      RUSTFS_CONSOLE_ENABLE: "false"
+      RUSTFS_CONSOLE_ENABLE: "true"
     volumes:
       - rustfs_data:/data
-    networks:
-      - envsync_network
+    networks: [envsync_network]
 
-  zitadel_db:
+  keycloak_db:
     image: postgres:17
     restart: unless-stopped
     environment:
-      PGUSER: ${ZITADEL_DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${ZITADEL_DB_PASSWORD:-postgres}
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${ZITADEL_DB_USER:-postgres}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      POSTGRES_DB: keycloak
     volumes:
-      - zitadel_db_data:/var/lib/postgresql/data
-    networks:
-      - envsync_network
+      - keycloak_db_data:/var/lib/postgresql/data
+    networks: [envsync_network]
 
-  zitadel:
-    image: ghcr.io/zitadel/zitadel:latest
+  keycloak:
+    image: envsync-keycloak:${KEYCLOAK_IMAGE_TAG:-local}
     restart: unless-stopped
-    command: start-from-init --masterkey "${ZITADEL_MASTERKEY:-MasterkeyNeedsToHave32Characters}"
-    user: "0"
-    environment:
-      ZITADEL_EXTERNALDOMAIN: ${ZITADEL_EXTERNALDOMAIN:-localhost}
-      ZITADEL_EXTERNALSECURE: ${ZITADEL_EXTERNALSECURE:-false}
-      ZITADEL_TLS_ENABLED: ${ZITADEL_TLS_ENABLED:-false}
-      ZITADEL_DATABASE_POSTGRES_HOST: zitadel_db
-      ZITADEL_DATABASE_POSTGRES_PORT: "5432"
-      ZITADEL_DATABASE_POSTGRES_DATABASE: zitadel
-      ZITADEL_DATABASE_POSTGRES_ADMIN_USERNAME: ${ZITADEL_DB_USER:-postgres}
-      ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD: ${ZITADEL_DB_PASSWORD:-postgres}
-      ZITADEL_DATABASE_POSTGRES_ADMIN_SSL_MODE: disable
-      ZITADEL_DATABASE_POSTGRES_USER_USERNAME: zitadel
-      ZITADEL_DATABASE_POSTGRES_USER_PASSWORD: zitadel
-      ZITADEL_DATABASE_POSTGRES_USER_SSL_MODE: disable
-      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORDCHANGEREQUIRED: "false"
-      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME: ${ZITADEL_ADMIN_USERNAME:-zitadel-admin}
-      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD: ${ZITADEL_ADMIN_PASSWORD:-Password1!}
-      ZITADEL_FIRSTINSTANCE_ORG_NAME: EnvSync
-      ZITADEL_FIRSTINSTANCE_PATPATH: /current-dir/admin.pat
-      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_USERNAME: admin
-      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_NAME: EnvSync IAM Owner
-      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_PAT_EXPIRATIONDATE: ${ZITADEL_MACHINE_PAT_EXPIRATIONDATE:-2029-01-01T00:00:00Z}
-      # Keep login-v2 optional for API-first bootstrap; avoids startup loops
-      # when no dedicated login UI is configured yet.
-      ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_REQUIRED: "false"
-      # Also emit a login-client PAT for flows that require IAM_LOGIN_CLIENT.
-      ZITADEL_FIRSTINSTANCE_LOGINCLIENTPATPATH: /current-dir/login-client.pat
-      ZITADEL_FIRSTINSTANCE_ORG_LOGINCLIENT_MACHINE_USERNAME: login-client
-      ZITADEL_FIRSTINSTANCE_ORG_LOGINCLIENT_MACHINE_NAME: Automatically Initialized IAM_LOGIN_CLIENT
-      ZITADEL_FIRSTINSTANCE_ORG_LOGINCLIENT_PAT_EXPIRATIONDATE: ${ZITADEL_LOGINCLIENT_PAT_EXPIRATIONDATE:-2029-01-01T00:00:00Z}
+    entrypoint: ["/bin/sh", "-lc"]
+    command:
+      [
+        "/opt/keycloak/bin/kc.sh import --dir /opt/keycloak/data/import --override true && exec /opt/keycloak/bin/kc.sh start-dev"
+      ]
     ports:
-      - "${ZITADEL_PORT:-8080}:8080"
-    healthcheck:
-      test: ["CMD", "/app/zitadel", "ready"]
-      interval: 10s
-      timeout: 60s
-      retries: 30
-      # First boot (DB init, migrations, first-instance setup) can take a few minutes.
-      start_period: 120s
+      - "8080:8080"
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak_db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HOSTNAME_STRICT: "false"
     volumes:
-      - zitadel_data:/current-dir
+      - ./docker/keycloak/realm-import:/opt/keycloak/data/import:ro
     depends_on:
-      zitadel_db:
-        condition: service_healthy
-    networks:
-      - envsync_network
+      - keycloak_db
+    networks: [envsync_network]
 
   openfga_db:
     image: postgres:17
@@ -186,27 +131,19 @@ services:
       POSTGRES_USER: openfga
       POSTGRES_PASSWORD: ${OPENFGA_DB_PASSWORD:-openfga}
       POSTGRES_DB: openfga
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U openfga"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
     volumes:
       - openfga_db_data:/var/lib/postgresql/data
-    networks:
-      - envsync_network
+    networks: [envsync_network]
 
   openfga_migrate:
     image: openfga/openfga:v1.12.0
     command: migrate
     environment:
       OPENFGA_DATASTORE_ENGINE: postgres
-      OPENFGA_DATASTORE_URI: "postgres://openfga:${OPENFGA_DB_PASSWORD:-openfga}@openfga_db:5432/openfga?sslmode=disable"
+      OPENFGA_DATASTORE_URI: postgres://openfga:${OPENFGA_DB_PASSWORD:-openfga}@openfga_db:5432/openfga?sslmode=disable
     depends_on:
-      openfga_db:
-        condition: service_healthy
-    networks:
-      - envsync_network
+      - openfga_db
+    networks: [envsync_network]
     restart: "no"
 
   openfga:
@@ -215,21 +152,12 @@ services:
     command: run
     environment:
       OPENFGA_DATASTORE_ENGINE: postgres
-      OPENFGA_DATASTORE_URI: "postgres://openfga:${OPENFGA_DB_PASSWORD:-openfga}@openfga_db:5432/openfga?sslmode=disable"
-      OPENFGA_PLAYGROUND_ENABLED: "false"
+      OPENFGA_DATASTORE_URI: postgres://openfga:${OPENFGA_DB_PASSWORD:-openfga}@openfga_db:5432/openfga?sslmode=disable
       OPENFGA_HTTP_ADDR: 0.0.0.0:8090
       OPENFGA_GRPC_ADDR: 0.0.0.0:8091
     depends_on:
-      openfga_migrate:
-        condition: service_completed_successfully
-    healthcheck:
-      # OpenFGA gRPC listener is configured on 8091 above.
-      test: ["CMD", "/usr/local/bin/grpc_health_probe", "-addr=:8091"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    networks:
-      - envsync_network
+      - openfga_migrate
+    networks: [envsync_network]
 
   minikms_db:
     image: postgres:17
@@ -238,160 +166,60 @@ services:
       POSTGRES_USER: ${MINIKMS_DB_USER:-postgres}
       POSTGRES_PASSWORD: ${MINIKMS_DB_PASSWORD:-postgres}
       POSTGRES_DB: minikms
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${MINIKMS_DB_USER:-postgres}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
     volumes:
       - minikms_db_data:/var/lib/postgresql/data
-    networks:
-      - envsync_network
+    networks: [envsync_network]
+
+  minikms_migrate:
+    image: postgres:17
+    command: ["sh", "-c", "psql -h minikms_db -U ${MINIKMS_DB_USER:-postgres} -d minikms -f /migrations/001_initial_schema.sql && psql -h minikms_db -U ${MINIKMS_DB_USER:-postgres} -d minikms -f /migrations/002_vault_storage.sql"]
+    environment:
+      PGPASSWORD: ${MINIKMS_DB_PASSWORD:-postgres}
+    volumes:
+      - ./docker/minikms/migrations:/migrations:ro
+    depends_on:
+      - minikms_db
+    networks: [envsync_network]
+    restart: "no"
 
   minikms:
     image: ghcr.io/envsync-cloud/minikms:sha-735dfe8
     restart: unless-stopped
     environment:
       MINIKMS_ROOT_KEY: ${MINIKMS_ROOT_KEY}
-      MINIKMS_DB_URL: "postgres://${MINIKMS_DB_USER:-postgres}:${MINIKMS_DB_PASSWORD:-postgres}@minikms_db:5432/minikms?sslmode=disable"
+      MINIKMS_DB_URL: postgres://${MINIKMS_DB_USER:-postgres}:${MINIKMS_DB_PASSWORD:-postgres}@minikms_db:5432/minikms?sslmode=disable
       MINIKMS_REDIS_URL: redis://redis:6379
       MINIKMS_TLS_ENABLED: ${MINIKMS_TLS_ENABLED:-false}
     depends_on:
-      minikms_db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - envsync_network
+      - minikms_migrate
+      - redis
+    networks: [envsync_network]
 
-  # --- Observability Stack (Grafana LGTM) ---
-  tempo:
-    image: grafana/tempo:2.6.1
-    restart: unless-stopped
-    command: ["-config.file=/etc/tempo.yaml"]
-    volumes:
-      - ./docker/otel/tempo-config.yaml:/etc/tempo.yaml:ro
-      - tempo_data:/var/tempo
-    networks:
-      - envsync_network
-
-  loki:
-    image: grafana/loki:3
-    restart: unless-stopped
-    command: ["-config.file=/etc/loki/local-config.yaml"]
-    volumes:
-      - ./docker/otel/loki-config.yaml:/etc/loki/local-config.yaml:ro
-      - loki_data:/loki
-    networks:
-      - envsync_network
-
-  prometheus:
-    image: prom/prometheus:latest
-    restart: unless-stopped
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.path=/prometheus"
-      - "--web.enable-remote-write-receiver"
-    volumes:
-      - ./docker/otel/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
-      - prometheus_data:/prometheus
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - envsync_network
-
-  otel-collector:
-    image: otel/opentelemetry-collector-contrib:latest
-    restart: unless-stopped
-    command: ["--config=/etc/otel-collector-config.yaml"]
-    volumes:
-      - ./docker/otel/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: "2"
-        reservations:
-          memory: 256M
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:13133"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    depends_on:
-      tempo:
-        condition: service_started
-      loki:
-        condition: service_started
-      prometheus:
-        condition: service_healthy
-    networks:
-      - envsync_network
-
-  promtail:
-    image: grafana/promtail:3
-    restart: unless-stopped
-    command: ["-config.file=/etc/promtail/config.yaml"]
-    volumes:
-      - ./docker/otel/promtail-config.yaml:/etc/promtail/config.yaml:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-    depends_on:
-      loki:
-        condition: service_started
-    networks:
-      - envsync_network
-
-  grafana:
-    image: grafana/grafana:latest
-    restart: unless-stopped
-    ports:
-      - "${GRAFANA_PORT:-3302}:3000"
-    environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-EnvSync@2024!}
-      GF_AUTH_ANONYMOUS_ENABLED: "true"
-      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./docker/otel/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./docker/otel/dashboards:/var/lib/grafana/dashboards:ro
-    depends_on:
-      prometheus:
-        condition: service_healthy
-      tempo:
-        condition: service_started
-      loki:
-        condition: service_started
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - envsync_network
-
-  # --- HyperDX (Session Replay + Observability) ---
-  hdx:
+  clickstack:
     image: clickhouse/clickstack-all-in-one:latest
     restart: unless-stopped
-    volumes:
-      - hdx_data:/data/db
-      - hdx_ch_data:/var/lib/clickhouse
-      - hdx_ch_logs:/var/log/clickhouse-server
-    environment:
-      - OTEL_AGENT_FEATURE_GATE_ARG='--feature-gates=clickhouse.json'
-      - BETA_CH_OTEL_JSON_SCHEMA_ENABLED=true
     ports:
-      - "${HDX_PORT:-8800}:8080"
-      - "${HDX_OTEL_GRPC_PORT:-4316}:4317"
-      - "${HDX_OTEL_PORT:-4319}:4318"
-    networks:
-      - envsync_network
+      - "${CLICKSTACK_PORT:-8800}:8080"
+      - "${CLICKSTACK_OTEL_GRPC_PORT:-4317}:4317"
+      - "${CLICKSTACK_OTEL_HTTP_PORT:-4318}:4318"
+    volumes:
+      - clickstack_data:/data/db
+      - clickstack_ch_data:/var/lib/clickhouse
+      - clickstack_ch_logs:/var/log/clickhouse-server
+    networks: [envsync_network]
+
+  otel-agent:
+    image: otel/opentelemetry-collector-contrib:0.111.0
+    restart: unless-stopped
+    command: ["--config=/etc/otel-agent.yaml"]
+    volumes:
+      - ./docker/otel-agent/otel-agent-config.yaml:/etc/otel-agent.yaml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /:/hostfs:ro
+    depends_on:
+      - clickstack
+    networks: [envsync_network]
 
 networks:
   envsync_network:
@@ -401,14 +229,9 @@ volumes:
   postgres_data:
   redis_data:
   rustfs_data:
-  zitadel_db_data:
-  zitadel_data:
+  keycloak_db_data:
   openfga_db_data:
   minikms_db_data:
-  tempo_data:
-  loki_data:
-  prometheus_data:
-  grafana_data:
-  hdx_data:
-  hdx_ch_data:
-  hdx_ch_logs:
+  clickstack_data:
+  clickstack_ch_data:
+  clickstack_ch_logs:

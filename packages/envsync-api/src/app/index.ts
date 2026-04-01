@@ -117,7 +117,7 @@ app.use(async (ctx, next) => {
 						"http.status_code": status,
 					});
 
-					// Emit structured HTTP request log to Loki via OTel
+					// Emit structured HTTP request logs through OTel for ClickStack ingestion.
 					const otelLogger = logs.getLogger("envsync-api");
 					otelLogger.emit({
 						severityNumber: status >= 500 ? SeverityNumber.ERROR : status >= 400 ? SeverityNumber.WARN : SeverityNumber.INFO,

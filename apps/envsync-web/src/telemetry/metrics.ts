@@ -14,6 +14,7 @@ export function initMetrics(config: TelemetryConfig): MeterProvider {
 
   const exporter = new OTLPMetricExporter({
     url: `${config.endpoint}/v1/metrics`,
+    headers: config.apiKey ? { Authorization: config.apiKey } : undefined,
   });
 
   meterProvider = new MeterProvider({

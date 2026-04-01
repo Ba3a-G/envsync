@@ -6,8 +6,9 @@ See the [README](README.md) and per-package `AGENTS.md` files for full architect
 
 - **Bun 1.3+**, **Go 1.21+**, **Docker**
 - `bun install` — install all JS/TS dependencies
-- `docker compose up -d` — start Postgres, Vault, OpenFGA, Zitadel, Mailpit
-- `bun run cli init` — bootstrap Vault and OpenFGA
+- `docker compose up -d` — start Postgres, miniKMS, OpenFGA, Keycloak, Mailpit
+- Keycloak is built locally from `packages/envsync-keycloak-theme`; no GHCR auth is required for local auth/E2E
+- `bun run cli:init` — bootstrap RustFS and Keycloak clients
 - `bun run cli create-dev-user --seed` — seed a development user
 
 ## Development Workflow
@@ -32,6 +33,8 @@ Run both suites locally before pushing:
 bun run test:mock
 bun run test:e2e
 ```
+
+Use `bun run test:e2e` from the repo root. It runs `e2e-setup init` before invoking the package E2E suite.
 
 ### Adding a new endpoint — checklist
 
@@ -103,7 +106,7 @@ All PRs must pass these GitHub Actions jobs (`.github/workflows/ci.yaml`):
 |-----|-------------|
 | **build** | `bun run build` (all packages) |
 | **test-mock** | Mock/unit tests against a Postgres service container |
-| **test-e2e** | Full integration tests with Postgres, Vault, OpenFGA, Zitadel, Mailpit |
+| **test-e2e** | Full integration tests with Postgres, miniKMS, OpenFGA, Keycloak, Mailpit |
 
 ## Commit Messages
 

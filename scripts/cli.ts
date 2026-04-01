@@ -1,757 +1,112 @@
 #!/usr/bin/env bun
-/**
- * EnvSync CLI – full init from project root.
- * 1. Ensure .env exists (copy from .env.example)
- * 2. Start Docker Compose services (without envsync_api)
- * 3. Wait for postgres, Zitadel, RustFS, miniKMS, OpenFGA
- * 4. Initialize OpenFGA (create store, write authorization model)
- * 5. Run DB migrations
- * 6. Run API init (RustFS bucket; Zitadel apps created in console, secrets in .env)
- *
- * Run from monorepo root: bun run scripts/cli.ts init
- */
 
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
-import net from "node:net";
 import path from "node:path";
-import * as readline from "node:readline";
 import { fileURLToPath } from "node:url";
 
 import { authorizationModelDef } from "../packages/envsync-api/src/libs/openfga/model";
 import {
 	loadEnvFile,
 	updateEnvFile,
-	waitFor,
 	waitForPostgres,
 	waitForOpenFGA,
-	waitForZitadel,
+	waitForKeycloak,
 	waitForMiniKMS,
-	waitForGrafana,
-	readPatFromVolume,
+	waitForMailpit,
 } from "./lib/services";
-import { randomBytes } from "node:crypto";
-import { updateRootEnv } from "../packages/envsync-api/dist/utils/load-root-env";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
 
-/** Update or add keys in the root .env; then reload into process.env. */
-function updateRootEnvAndReload(updates: Record<string, string>): void {
-	const envPath = path.join(rootDir, ".env");
-	updateEnvFile(envPath, updates);
-	loadEnvFile(envPath);
+function run(cmd: string, args: string[], cwd = rootDir) {
+	const result = spawnSync(cmd, args, { cwd, stdio: "inherit", env: process.env });
+	if (result.status !== 0) throw new Error(`Command failed: ${cmd} ${args.join(" ")}`);
 }
 
+function ensureEnv(example = ".env.example") {
+	const target = path.join(rootDir, ".env");
+	if (!fs.existsSync(target)) {
+		fs.copyFileSync(path.join(rootDir, example), target);
+	}
+	loadEnvFile(target);
+}
 
-function askReinitEnv(prompt?: string): Promise<boolean> {
-	return new Promise(resolve => {
-		if (!process.stdin.isTTY) {
-			resolve(false);
-			return;
-		}
-		const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-		rl.question(prompt ?? ".env already exists. Re-initialize? (y)es: delete and recreate, (n)o: skip [N]: ", answer => {
-			rl.close();
-			resolve(/^y(es)?$/i.test(answer.trim()));
-		});
+async function initOpenFGA() {
+	const apiUrl = (process.env.OPENFGA_API_URL ?? "http://localhost:8090").replace(/\/$/, "");
+	const storeRes = await fetch(`${apiUrl}/stores`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ name: "envsync" }),
 	});
-}
-
-async function ensureEnv(): Promise<void> {
-	const envPath = path.join(rootDir, ".env");
-	const examplePath = path.join(rootDir, ".env.example");
-	if (!fs.existsSync(examplePath)) {
-		throw new Error(".env.example not found at repo root.");
-	}
-	if (fs.existsSync(envPath)) {
-		const reinit = await askReinitEnv();
-		if (reinit) {
-			fs.unlinkSync(envPath);
-			fs.copyFileSync(examplePath, envPath);
-			console.log("Recreated .env from .env.example.");
-		} else {
-			console.log(".env already exists, skipping.");
-		}
-		return;
-	}
-	fs.copyFileSync(examplePath, envPath);
-	console.log("Created .env from .env.example.");
-}
-
-async function ensureEnvProd(): Promise<boolean> {
-	const envPath = path.join(rootDir, ".env");
-	const examplePath = path.join(rootDir, ".env.prod.example");
-	if (!fs.existsSync(examplePath)) {
-		throw new Error(".env.prod.example not found at repo root.");
-	}
-	if (fs.existsSync(envPath)) {
-		const reinit = await askReinitEnv(
-			".env already exists. Re-initialize? This will reset .env AND remove all Docker volumes. (y)es / (n)o [N]: ",
-		);
-		if (reinit) {
-			fs.unlinkSync(envPath);
-			fs.copyFileSync(examplePath, envPath);
-			console.log("Recreated .env from .env.prod.example.");
-			return true;
-		}
-		console.log(".env already exists, skipping.");
-		return false;
-	}
-	fs.copyFileSync(examplePath, envPath);
-	console.log("Created .env from .env.prod.example.");
-	return true;
-}
-
-/** Generate a password that satisfies typical complexity policies (upper, lower, digit, special). */
-function generateComplexPassword(length = 24): string {
-	const upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-	const lower = "abcdefghijklmnopqrstuvwxyz";
-	const digits = "0123456789";
-	const special = "!@#%&*";
-	const all = upper + lower + digits + special;
-
-	const randomByte = (): number => randomBytes(1)[0] ?? 0;
-
-	// Guarantee at least one of each category
-	const mandatory = [
-		upper[randomByte() % upper.length],
-		lower[randomByte() % lower.length],
-		digits[randomByte() % digits.length],
-		special[randomByte() % special.length],
-	];
-
-	const rest = Array.from(randomBytes(length - mandatory.length)).map(
-		b => all[b % all.length],
-	);
-
-	// Shuffle all characters together
-	const chars = [...mandatory, ...rest];
-	for (let i = chars.length - 1; i > 0; i--) {
-		const j = randomByte() % (i + 1);
-		[chars[i], chars[j]] = [chars[j], chars[i]];
-	}
-	return chars.join("");
-}
-
-function generateProdSecrets(): void {
-	const envPath = path.join(rootDir, ".env");
-	const content = fs.readFileSync(envPath, "utf8");
-
-	// Collect all CHANGE_ME placeholders grouped by their exact placeholder value
-	const placeholderToKeys = new Map<string, string[]>();
-	for (const line of content.split(/\r?\n/)) {
-		const trimmed = line.trim();
-		if (!trimmed || trimmed.startsWith("#")) continue;
-		const eq = trimmed.indexOf("=");
-		if (eq === -1) continue;
-		const key = trimmed.slice(0, eq).trim();
-		const value = trimmed.slice(eq + 1).trim();
-		if (value.startsWith("CHANGE_ME")) {
-			const existing = placeholderToKeys.get(value) ?? [];
-			existing.push(key);
-			placeholderToKeys.set(value, existing);
-		}
-	}
-
-	if (placeholderToKeys.size === 0) {
-		console.log("No CHANGE_ME placeholders found, skipping secret generation.");
-		return;
-	}
-
-	// Keys whose generated value must satisfy password-complexity policies
-	// (uppercase + lowercase + digit + special character).
-	const complexPasswordKeys = new Set(["ZITADEL_ADMIN_PASSWORD"]);
-
-	const updates: Record<string, string> = {};
-	for (const [placeholder, keys] of placeholderToKeys) {
-		let generated: string;
-		if (keys.some(k => complexPasswordKeys.has(k))) {
-			generated = generateComplexPassword(24);
-		} else if (keys.some(k => k === "MINIKMS_ROOT_KEY")) {
-			generated = randomBytes(32).toString("hex");
-		} else if (keys.some(k => k === "ZITADEL_MASTERKEY")) {
-			generated = randomBytes(16).toString("hex");
-		} else {
-			generated = randomBytes(16).toString("hex");
-		}
-		for (const key of keys) {
-			updates[key] = generated;
-		}
-	}
-
-	updateEnvFile(envPath, updates);
-	console.log(`Generated secrets for ${Object.keys(updates).length} keys (${placeholderToKeys.size} unique values).`);
-}
-
-function dockerDownProdWithVolumes(): void {
-	console.log("\nTearing down prod Docker containers and volumes...");
-	const result = spawnSync(
-		"docker",
-		["compose", "-f", "docker-compose.prod.yaml", "down", "-v", "--remove-orphans"],
-		{ cwd: rootDir, stdio: "inherit", env: process.env },
-	);
-	if (result.status !== 0) {
-		console.warn("Warning: docker compose down -v failed (this is expected on first run).");
-	}
-}
-
-function showContainerLogs(composeFile: string, service: string): void {
-	const result = spawnSync(
-		"docker",
-		["compose", "-f", composeFile, "logs", "--tail", "40", service],
-		{ cwd: rootDir, stdio: "pipe", env: process.env },
-	);
-	const output = result.stdout?.toString() || "";
-	const errOutput = result.stderr?.toString() || "";
-	if (output || errOutput) {
-		console.error(`\n--- Logs for ${service} ---`);
-		if (output) process.stderr.write(output);
-		if (errOutput) process.stderr.write(errOutput);
-		console.error(`--- End logs for ${service} ---\n`);
-	}
-}
-
-function dockerUpProd(): void {
-	console.log("\nStarting prod Docker Compose infrastructure...");
-	const result = spawnSync(
-		"docker",
-		[
-			"compose",
-			"-f",
-			"docker-compose.prod.yaml",
-			"up",
-			"-d",
-			"postgres",
-			"redis",
-			"rustfs",
-			"zitadel_db",
-			"zitadel",
-			"openfga_db",
-			"openfga_migrate",
-			"openfga",
-			"minikms_db",
-			"minikms",
-			"tempo",
-			"loki",
-			"prometheus",
-			"otel-collector",
-			"promtail",
-			"grafana",
-			"hdx",
-		],
-		{ cwd: rootDir, stdio: "inherit", env: process.env },
-	);
-	if (result.status !== 0) {
-		console.error("\nDocker Compose (prod) up failed. Fetching logs from key services...");
-		const debugServices = ["openfga_migrate", "openfga_db", "postgres", "zitadel_db", "minikms_db"];
-		for (const svc of debugServices) {
-			showContainerLogs("docker-compose.prod.yaml", svc);
-		}
-		throw new Error("Docker Compose (prod) up failed.");
-	}
-}
-
-function runProdInit(): Promise<{ stdout: string; exitCode: number }> {
-	return new Promise((resolve, reject) => {
-		const child = spawn(
-			"docker",
-			["compose", "-f", "docker-compose.prod.yaml", "run", "--rm", "envsync_init"],
-			{ cwd: rootDir, stdio: ["inherit", "pipe", "inherit"], env: process.env },
-		);
-
-		let stdout = "";
-		child.stdout.on("data", (chunk: Buffer) => {
-			const text = chunk.toString();
-			stdout += text;
-			process.stdout.write(text);
-		});
-
-		child.on("error", reject);
-		child.on("close", (code) => {
-			resolve({ stdout, exitCode: code ?? 1 });
-		});
-	});
-}
-
-function parseCredentials(output: string): Record<string, string> {
-	const marker = "Init complete! Generated credentials:";
-	const separator = "----";
-	const markerIdx = output.indexOf(marker);
-	if (markerIdx === -1) return {};
-
-	const afterMarker = output.slice(markerIdx + marker.length);
-	const sepIdx = afterMarker.indexOf(separator);
-	const block = sepIdx === -1 ? afterMarker : afterMarker.slice(0, sepIdx);
-
-	const credentials: Record<string, string> = {};
-	for (const line of block.split(/\r?\n/)) {
-		const trimmed = line.trim();
-		if (!trimmed || trimmed.startsWith("#") || trimmed === "(no credentials)" || trimmed.startsWith("=")) continue;
-		const eq = trimmed.indexOf("=");
-		if (eq <= 0) continue;
-		const key = trimmed.slice(0, eq).trim();
-		const value = trimmed.slice(eq + 1).trim();
-		if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) && value) {
-			credentials[key] = value;
-		}
-	}
-	return credentials;
-}
-
-async function initProd(): Promise<void> {
-	console.log("EnvSync production init\n");
-
-	// 1. Create .env from .env.prod.example
-	const envCreated = await ensureEnvProd();
-
-	// 2. Tear down existing Docker volumes when .env was (re)created so that
-	//    PostgreSQL containers start fresh with the new generated passwords.
-	if (envCreated) {
-		dockerDownProdWithVolumes();
-	}
-
-	// 3. Replace CHANGE_ME placeholders with generated secrets
-	generateProdSecrets();
-
-	// 4. Load .env into process.env
-	loadEnvFile(path.join(rootDir, ".env"));
-
-	// 5. Start prod infrastructure services
-	dockerUpProd();
-
-	// 6. Run envsync_init inside Docker (streams + captures output)
-	console.log("\nRunning envsync_init (this may take a few minutes on first run)...\n");
-	const { stdout, exitCode } = await runProdInit();
-
-	// 7. Parse generated credentials from init output (even on partial failure)
-	const credentials = parseCredentials(stdout);
-
-	// 8. Write credentials back to .env
-	if (Object.keys(credentials).length > 0) {
-		const envPath = path.join(rootDir, ".env");
-		updateEnvFile(envPath, credentials);
-		console.log(`\nSaved ${Object.keys(credentials).length} credential(s) to .env.`);
-	} else {
-		console.log("\nNo new credentials to save.");
-	}
-
-	if (exitCode !== 0) {
-		throw new Error(`envsync_init exited with code ${exitCode} (credentials were still saved to .env)`);
-	}
-
-	// 9. Print next steps (services are left running for prod)
-	console.log("\nProduction init complete. Start the API with:");
-	console.log("  docker compose -f docker-compose.prod.yaml up -d envsync_api");
-}
-
-function dockerUp(): void {
-	console.log("\nStarting Docker Compose (postgres, redis, rustfs, mailpit, zitadel, minikms, openfga, otel)...");
-	const result = spawnSync(
-		"docker",
-		[
-			"compose",
-			"up",
-			"-d",
-			"postgres",
-			"redis",
-			"rustfs",
-			"mailpit",
-			"zitadel",
-			"openfga_db",
-			"openfga_migrate",
-			"openfga",
-			"minikms_db",
-			"minikms_migrate",
-			"minikms",
-			"tempo",
-			"loki",
-			"prometheus",
-			"otel-collector",
-			"grafana",
-			"httpbin",
-			"hdx",
-		],
-		{ cwd: rootDir, stdio: "inherit", env: process.env },
-	);
-	if (result.status !== 0) throw new Error("Docker Compose up failed.");
-}
-
-
-
-async function waitForRustfs(): Promise<void> {
-	const endpoint =
-		process.env.S3_ENDPOINT ??
-		`http://localhost:${process.env.RUSTFS_HTTP_PORT ?? process.env.RUSTFS_PORT ?? "19001"}`;
-	let host: string;
-	let port: number;
-	try {
-		const u = new URL(endpoint);
-		host = u.hostname;
-		port = u.port ? parseInt(u.port, 10) : u.protocol === "https:" ? 443 : 80;
-	} catch {
-		return;
-	}
-	await waitFor(
-		"RustFS (S3)",
-		() =>
-			new Promise<boolean>(resolve => {
-				const s = net.createConnection(port, host, () => {
-					s.destroy();
-					resolve(true);
-				});
-				s.on("error", () => resolve(false));
-				s.setTimeout(2000, () => {
-					s.destroy();
-					resolve(false);
-				});
-			}),
-		2000,
-		25,
-	);
-}
-
-
-/**
- * Initialize OpenFGA for EnvSync:
- * 1. Create a store (if OPENFGA_STORE_ID is not already set)
- * 2. Write the authorization model
- * 3. Save OPENFGA_STORE_ID and OPENFGA_MODEL_ID to .env
- */
-async function initOpenFGA(): Promise<void> {
-	const openfgaUrl = (
-		process.env.OPENFGA_API_URL ?? `http://localhost:${process.env.OPENFGA_HTTP_PORT ?? "8090"}`
-	).replace(/\/$/, "");
-
-	console.log(`\nInitializing OpenFGA at ${openfgaUrl}...`);
-
-	// If already configured, skip
-	if (process.env.OPENFGA_STORE_ID && process.env.OPENFGA_MODEL_ID) {
-		console.log(
-			`  OpenFGA already configured (store=${process.env.OPENFGA_STORE_ID}, model=${process.env.OPENFGA_MODEL_ID}). Skipping.`,
-		);
-		return;
-	}
-
-	// ── Step 1: Create store ─────────────────────────────────────────
-	let storeId = process.env.OPENFGA_STORE_ID || "";
-	if (!storeId) {
-		console.log("  Creating OpenFGA store 'envsync'...");
-		const storeRes = await fetch(`${openfgaUrl}/stores`, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ name: "envsync" }),
-			signal: AbortSignal.timeout(10000),
-		});
-		if (!storeRes.ok) {
-			throw new Error(`Failed to create OpenFGA store (${storeRes.status}): ${await storeRes.text()}`);
-		}
-		const storeData = (await storeRes.json()) as { id: string; name: string };
-		storeId = storeData.id;
-		console.log(`  Store created: ${storeId}`);
-	} else {
-		console.log(`  Using existing store: ${storeId}`);
-	}
-
-	// ── Step 2: Write authorization model ────────────────────────────
-	console.log("  Writing authorization model...");
-	const modelRes = await fetch(`${openfgaUrl}/stores/${storeId}/authorization-models`, {
+	if (!storeRes.ok) throw new Error(`OpenFGA store create failed: ${await storeRes.text()}`);
+	const store = (await storeRes.json()) as { id: string };
+	const modelRes = await fetch(`${apiUrl}/stores/${store.id}/authorization-models`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify(authorizationModelDef),
-		signal: AbortSignal.timeout(10000),
 	});
-	if (!modelRes.ok) {
-		throw new Error(
-			`Failed to write OpenFGA authorization model (${modelRes.status}): ${await modelRes.text()}`,
-		);
-	}
-	const modelData = (await modelRes.json()) as { authorization_model_id: string };
-	const modelId = modelData.authorization_model_id;
-	console.log(`  Authorization model written: ${modelId}`);
-
-	// ── Step 3: Save to .env ─────────────────────────────────────────
-	updateRootEnvAndReload({
-		OPENFGA_API_URL: openfgaUrl,
-		OPENFGA_STORE_ID: storeId,
-		OPENFGA_MODEL_ID: modelId,
+	if (!modelRes.ok) throw new Error(`OpenFGA model write failed: ${await modelRes.text()}`);
+	const model = (await modelRes.json()) as { authorization_model_id: string };
+	updateEnvFile(path.join(rootDir, ".env"), {
+		OPENFGA_STORE_ID: store.id,
+		OPENFGA_MODEL_ID: model.authorization_model_id,
 	});
-	console.log("  OpenFGA credentials saved to .env (OPENFGA_API_URL, OPENFGA_STORE_ID, OPENFGA_MODEL_ID).");
 }
 
-function runMigrations(): void {
-	console.log("\nRunning DB migrations...");
-	const result = spawnSync(process.execPath, ["run", "scripts/migrate.ts", "latest"], {
-		cwd: path.join(rootDir, "packages/envsync-api"),
-		stdio: "inherit",
-		env: process.env,
-	});
-	if (result.status !== 0) throw new Error("DB migrations failed.");
-}
-
-function runApiInit(): void {
-	console.log("\nRunning RustFS init (and optional Zitadel app setup)...");
-	const result = spawnSync(process.execPath, ["run", "scripts/cli.ts", "init"], {
-		cwd: path.join(rootDir, "packages/envsync-api"),
-		stdio: "inherit",
-		env: process.env,
-	});
-	if (result.status !== 0) throw new Error("API init failed.");
-}
-
-async function initMiniKMS() {
-	// a 32 byte hex string
-	const rootKey = randomBytes(32).toString("hex");
-	console.log("miniKMS: root key", rootKey);
-
-	updateRootEnv({
-		MINIKMS_ROOT_KEY: rootKey,
-	});
-	console.log("miniKMS: root key written to root .env");
-}
-
-async function init(): Promise<void> {
-	console.log("EnvSync full init (env, Docker, migrations, Zitadel, RustFS, miniKMS, OpenFGA)\n");
-
-	await ensureEnv();
-	// Initialize miniKMS
-	await initMiniKMS();
-
-	loadEnvFile(path.join(rootDir, ".env"));
-
-	dockerUp();
-
-	console.log("\nWaiting for services (Zitadel can take 1–2 min on first start)...");
-	await new Promise(r => setTimeout(r, 10000));
+async function initLocal() {
+	ensureEnv();
+	run("docker", ["compose", "up", "-d", "postgres", "redis", "rustfs", "mailpit", "keycloak_db", "keycloak", "openfga_db", "openfga_migrate", "openfga", "minikms_db", "minikms_migrate", "minikms", "clickstack", "otel-agent"]);
 	await waitForPostgres();
-	await waitForZitadel();
-	await waitForRustfs();
-	await waitForMiniKMS();
 	await waitForOpenFGA();
-
-	const patFromVolume = await readPatFromVolume(rootDir);
-	if (patFromVolume) {
-		updateRootEnvAndReload({ ZITADEL_PAT: patFromVolume });
-		console.log("Zitadel: PAT read from docker volume and saved to .env (continuing with updated env).");
-	}
-
+	await waitForMailpit();
+	await waitForKeycloak();
+	await waitForMiniKMS();
 	await initOpenFGA();
-
-	// Wait for Grafana (dashboards are auto-provisioned)
-	await waitForGrafana();
-
-	runMigrations();
-	runApiInit();
-
-	console.log("\nStopping Docker services...");
-	dockerDown();
-	console.log("\nAll set. Start services with: bun run cli services up. Then start the API with: bun run dev (or docker compose up envsync_api).");
+	run("bun", ["run", "packages/envsync-api/scripts/cli.ts", "init"]);
+	run("bun", ["run", "scripts/migrate.ts", "latest"], path.join(rootDir, "packages/envsync-api"));
 }
 
-function dockerDown(): void {
-	const result = spawnSync("docker", ["compose", "down"], {
-		cwd: rootDir,
-		stdio: "inherit",
-		env: process.env,
-	});
-	if (result.status !== 0) throw new Error("Docker Compose down failed.");
+async function initProd() {
+	ensureEnv(".env.prod.example");
+	run("docker", ["compose", "-f", "docker-compose.prod.yaml", "up", "-d", "postgres", "redis", "rustfs", "keycloak_db", "keycloak", "openfga_db", "openfga_migrate", "openfga", "minikms_db", "minikms_migrate", "minikms", "clickstack", "otel-agent"]);
+	await waitForPostgres("localhost", 5432);
+	await waitForOpenFGA("http://localhost:8090");
+	await waitForKeycloak("http://localhost:8080");
+	await waitForMiniKMS("localhost", 50051);
+	run("docker", ["compose", "-f", "docker-compose.prod.yaml", "run", "--rm", "envsync_init"]);
 }
 
-function runDb(args: string[]): void {
-	const result = spawnSync(process.execPath, ["run", "scripts/migrate.ts", ...args], {
-		cwd: path.join(rootDir, "packages/envsync-api"),
-		stdio: "inherit",
-		env: process.env,
-	});
-	if (result.status !== 0) throw new Error("DB command failed.");
+function runDb(args: string[]) {
+	run("bun", ["run", "scripts/migrate.ts", ...args], path.join(rootDir, "packages/envsync-api"));
 }
 
-function servicesUp(): void {
-	console.log("Starting Docker Compose services...");
-	const result = spawnSync(
-		"docker",
-		[
-			"compose",
-			"up",
-			"-d",
-			"postgres",
-			"redis",
-			"rustfs",
-			"mailpit",
-			"zitadel",
-			"zitadel_login",
-			"openfga_db",
-			"openfga_migrate",
-			"openfga",
-			"minikms_db",
-			"minikms_migrate",
-			"minikms",
-			"tempo",
-			"loki",
-			"prometheus",
-			"otel-collector",
-			"grafana",
-			"httpbin",
-			"hdx",
-		],
-		{ cwd: rootDir, stdio: "inherit", env: process.env },
-	);
-	if (result.status !== 0) throw new Error("Docker Compose up failed.");
+function servicesUp() {
+	run("docker", ["compose", "up", "-d"]);
 }
 
-function servicesDown(): void {
-	console.log("Stopping Docker Compose services...");
-	const result = spawnSync("docker", ["compose", "down"], {
-		cwd: rootDir,
-		stdio: "inherit",
-		env: process.env,
-	});
-	if (result.status !== 0) throw new Error("Docker Compose down failed.");
+function servicesDown() {
+	run("docker", ["compose", "down"]);
 }
 
-function servicesStatus(): void {
-	const result = spawnSync("docker", ["compose", "ps"], {
-		cwd: rootDir,
-		stdio: "inherit",
-		env: process.env,
-	});
-	if (result.status !== 0) throw new Error("Docker Compose ps failed.");
-}
-
-// ── HyperDX helpers ─────────────────────────────────────────────────
-
-function hyperdxUp(): void {
-	console.log("Starting HyperDX...");
-	const result = spawnSync("docker", ["compose", "up", "-d", "hdx"], {
-		cwd: rootDir,
-		stdio: "inherit",
-		env: process.env,
-	});
-	if (result.status !== 0) throw new Error("HyperDX docker compose up failed.");
-}
-
-function hyperdxDown(): void {
-	console.log("Stopping HyperDX...");
-	const result = spawnSync("docker", ["compose", "stop", "hdx"], {
-		cwd: rootDir,
-		stdio: "inherit",
-		env: process.env,
-	});
-	if (result.status !== 0) throw new Error("HyperDX docker compose stop failed.");
-}
-
-async function hyperdxInit(): Promise<void> {
-	// Remove hdx container and its volumes
-	spawnSync("docker", ["compose", "rm", "-sf", "hdx"], {
-		cwd: rootDir,
-		stdio: "inherit",
-		env: process.env,
-	});
-	spawnSync("docker", ["volume", "rm", "-f", "monorepo_hdx_data", "monorepo_hdx_ch_data", "monorepo_hdx_ch_logs"], {
-		cwd: rootDir,
-		stdio: "inherit",
-		env: process.env,
-	});
-
-	console.log("Initializing HyperDX stack...");
-	const result = spawnSync("docker", ["compose", "up", "-d", "hdx"], {
-		cwd: rootDir,
-		stdio: "inherit",
-		env: process.env,
-	});
-	if (result.status !== 0) throw new Error("HyperDX docker compose init failed.");
-
-	const hdxPort = Number(process.env.HDX_PORT || "8800");
-	await waitFor(
-		"HyperDX",
-		() =>
-			new Promise<boolean>(resolve => {
-				const s = net.createConnection(hdxPort, "localhost", () => {
-					s.destroy();
-					resolve(true);
-				});
-				s.on("error", () => resolve(false));
-				s.setTimeout(2000, () => {
-					s.destroy();
-					resolve(false);
-				});
-			}),
-		2000,
-		25,
-	);
-
-	console.log("HyperDX is ready.");
-
-	// wait for service to be fully ready
-	await new Promise(r => setTimeout(r, 5000));
-
-	// Register a new user
-	const registerResult = await fetch(`http://localhost:${hdxPort}/api/register/password`, {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ email: "dev@envsync.local", password: "TestDev@1234", confirmPassword: "TestDev@1234" }),
-	});
-	if (!registerResult.ok) {
-		throw new Error(`Failed to register HyperDX user (${registerResult.status}): ${await registerResult.text()}`);
-	}
-	const registerData = (await registerResult.json()) as { status: string };
-	console.log(`HyperDX user registered: ${registerData.status}`);
-	console.log(`  Email:    dev@envsync.local`);
-	console.log(`  Password: TestDev@1234`);
-}
-function printUsage(): void {
-	console.log("Usage: bun run cli <command> [options]");
-	console.log("");
-	console.log("Commands:");
-	console.log("  init              Full dev init: .env, Docker up, wait, OpenFGA setup, migrations, API init, then Docker down");
-	console.log("  init --prod       Full prod init: .env from .env.prod.example, generate secrets, Docker up, run envsync_init");
-	console.log("  db <migrate-cmd>  Run DB migrations (packages/envsync-api/scripts/migrate.ts)");
-	console.log("                    e.g. db latest | db list | db rollback | db backup | db restore | db migrate_to <name> | db step | db drop | db init");
-	console.log("  services <sub>    Docker Compose: up | down | status");
-	console.log("  hyperdx <sub>     HyperDX session replay: init | up | down");
-	console.log("");
+function servicesStatus() {
+	run("docker", ["compose", "ps"]);
 }
 
 const cmd = process.argv[2];
-const isProd = process.argv.includes("--prod");
-if (cmd === "init" && isProd) {
-	initProd().catch(err => {
-		console.error(err);
-		process.exit(1);
-	});
+if (cmd === "init" && process.argv.includes("--prod")) {
+	await initProd();
 } else if (cmd === "init") {
-	init().catch(err => {
-		console.error(err);
-		process.exit(1);
-	});
+	await initLocal();
 } else if (cmd === "db") {
-	loadEnvFile(path.join(rootDir, ".env"));
-	const dbArgs = process.argv.slice(3);
-	if (dbArgs.length === 0) {
-		console.log("Usage: bun run cli db <migrate-cmd>");
-		console.log("  e.g. latest | list | rollback | backup | restore | migrate_to <name> | step | drop | init");
-		process.exit(1);
-	}
-	runDb(dbArgs);
+	runDb(process.argv.slice(3));
 } else if (cmd === "services") {
 	const sub = process.argv[3];
 	if (sub === "up") servicesUp();
 	else if (sub === "down") servicesDown();
 	else if (sub === "status") servicesStatus();
-	else {
-		console.log("Usage: bun run cli services <up|down|status>");
-		process.exit(sub ? 1 : 0);
-	}
-} else if (cmd === "hyperdx") {
-	const sub = process.argv[3];
-	if (sub === "init") hyperdxInit();
-	else if (sub === "up") hyperdxUp();
-	else if (sub === "down") hyperdxDown();
-	else {
-		console.log("Usage: bun run cli hyperdx <init|up|down>");
-		process.exit(sub ? 1 : 0);
-	}
+	else process.exit(1);
 } else {
-	printUsage();
+	console.log("Usage: bun run cli <init|init --prod|db|services>");
 	process.exit(cmd ? 1 : 0);
 }

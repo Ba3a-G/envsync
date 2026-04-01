@@ -25,9 +25,9 @@ Bun workspaces with Turbo for orchestration. All workspace packages defined in r
 
 ```sh
 bun install                          # install all dependencies
-docker compose up -d                 # PostgreSQL, Redis, Vault, RustFS, Zitadel, Mailpit, OpenFGA
+docker compose up -d                 # PostgreSQL, Redis, miniKMS, RustFS, Keycloak, Mailpit, OpenFGA
 cp .env.example .env                 # configure env vars
-bun run cli init                     # initialize RustFS bucket + Zitadel OIDC apps
+bun run cli init                     # initialize RustFS bucket + Keycloak clients
 bun run cli create-dev-user --seed   # create dev user + sample data
 bun run dev                          # start all services via Turbo
 ```
@@ -39,10 +39,10 @@ bun run dev                          # start all services via Turbo
 | `bun install` | Install all workspace dependencies |
 | `bun run dev` | Start all services (Turbo) |
 | `bun run build` | Build all packages (Turbo) |
-| `bun run cli init` | Initialize RustFS + Zitadel |
+| `bun run cli init` | Initialize RustFS + Keycloak |
 | `bun run cli create-dev-user --seed` | Seed dev user + sample data |
 | `bun run test:mock` | Run unit tests (mocked dependencies) |
-| `bun run test:e2e` | Run e2e tests (requires running services) |
+| `bun run test:e2e` | Run e2e tests from the repo root (runs `e2e-setup init` first) |
 
 ## Environment variables
 
@@ -59,3 +59,29 @@ Single `.env` file at the repo root. All TS packages read from it via the `load-
 - Path alias `@/*` maps to `src/*` in all TS packages (configured in each `tsconfig.json`)
 - SDKs in `sdks/` are auto-generated — do not hand-edit
 - The TS SDK is consumed by `apps/envsync-web` via workspace link
+
+## Init
+
+Current local bootstrap from scratch is now:
+
+```
+cp .env.example .env
+bun install
+bun run cli init
+bun run clickstack:sync
+bun run dev
+```
+
+Keycloak is built locally from `packages/envsync-keycloak-theme` for dev and E2E. It is not pulled from GHCR in those flows.
+
+For the sim test after local is up:
+```
+cd packages/envsync-api
+bun run scripts/sim.ts
+```
+
+Useful variants:
+```
+SIM_WORKERS=50 bun run scripts/sim.ts
+SIM_WORKERS=200 SIM_DELAY_MS=0 bun run scripts/sim.ts
+```

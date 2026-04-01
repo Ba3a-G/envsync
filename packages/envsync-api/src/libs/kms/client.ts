@@ -291,6 +291,8 @@ export class KMSClient {
 			[this.healthStub, "grpc.health.v1.Health"],
 		]);
 		const serviceName = serviceNameMap.get(stub) ?? "unknown";
+		const [host, portMaybe] = this.grpcAddr.split(":");
+		const port = Number(portMaybe || "50051");
 		return withSpan(
 			`grpc ${serviceName}/${method}`,
 			{
@@ -298,6 +300,9 @@ export class KMSClient {
 				"rpc.service": serviceName,
 				"rpc.method": method,
 				"peer.service": "minikms",
+				"server.address": host,
+				"server.port": port,
+				"network.peer.address": host,
 			},
 			async () => {
 				externalServiceCalls.add(1, { "peer.service": "minikms", "rpc.method": method });

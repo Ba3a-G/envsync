@@ -12,6 +12,7 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8002,
+    allowedHosts: ["localhost", "127.0.0.1", "landing.lvh.me"],
   },
   plugins: [
     react(),

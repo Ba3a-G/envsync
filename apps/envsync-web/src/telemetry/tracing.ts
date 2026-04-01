@@ -21,6 +21,7 @@ export function initTracing(config: TelemetryConfig): WebTracerProvider {
 
   const exporter = new OTLPTraceExporter({
     url: `${config.endpoint}/v1/traces`,
+    headers: config.apiKey ? { Authorization: config.apiKey } : undefined,
   });
 
   provider = new WebTracerProvider({

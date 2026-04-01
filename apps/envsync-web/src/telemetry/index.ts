@@ -19,11 +19,11 @@ export function initTelemetry(): void {
   // "RUM OTEL Web must be inited before recorder".
   initSessionReplay();
 
-  // Skip custom OTel tracing when HyperDX is active (it already
-  // provides tracing, metrics export, and console capture).
-  if (!isHyperDXActive()) {
-    initTracing(config);
-  }
+  // Keep our own browser tracer active even when HyperDX session replay
+  // is enabled. HyperDX gives us replay and browser UX tooling, but the
+  // explicit OTel provider here guarantees envsync-web service spans and
+  // API trace propagation for service-map correlation.
+  initTracing(config);
   initMetrics(config);
   initLogs(config);
   initErrorTracking();

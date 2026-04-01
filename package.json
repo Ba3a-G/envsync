@@ -12,10 +12,13 @@
     "dev": "turbo dev",
     "start": "turbo start",
     "cli": "bun run scripts/cli.ts",
+    "cli:init": "bun run scripts/cli.ts init",
+    "cli:create-dev-user": "bun run packages/envsync-api/scripts/cli.ts create-dev-user",
+    "clickstack:sync": "bun run scripts/sync-clickstack-local.ts",
+    "clickstack:bootstrap": "bun run scripts/bootstrap-clickstack-local.ts",
     "e2e-setup": "bun run scripts/e2e-setup.ts",
     "test:mock": "turbo test:mock",
-    "test:e2e": "turbo test:e2e",
-    "cli:init": "bun run packages/envsync-api/scripts/cli.ts create-dev-user --seed"
+    "test:e2e": "bun run e2e-setup init && turbo test:e2e"
   },
   "peerDependencies": {
     "typescript": "^5",

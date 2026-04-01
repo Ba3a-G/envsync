@@ -1,219 +1,182 @@
 # EnvSync Monorepo
 
-> **Note:** This project was recently migrated to a **monorepo** for a better development experience. All core packages, apps, and SDKs now live in this repository.
+EnvSync is an environment variable and secrets management platform with:
+- a Bun API
+- a Go CLI
+- a React dashboard
+- generated SDKs
 
----
+## What Changed
 
-## What is EnvSync?
+The repo now uses:
+- Keycloak instead of Zitadel
+- ClickStack / HyperDX instead of the old Grafana/Loki/Tempo stack
+- miniKMS for secret storage flows
+- a local bootstrap flow that seeds ClickStack sources and dashboards automatically
+- a locally built Keycloak image from `packages/envsync-keycloak-theme` for dev and E2E
 
-EnvSync keeps your `.env` files, configuration secrets, and environment variables synchronized across development, staging, and production environments.
+## Monorepo Layout
 
-**Key benefits:**
+| Path | Purpose |
+|------|---------|
+| `packages/envsync-api` | Bun + Hono API |
+| `packages/envsync-cli` | Go CLI |
+| `apps/envsync-web` | React dashboard |
+| `apps/envsync-landing` | Landing page |
+| `packages/deploy-cli` | self-hosted deployment CLI |
+| `packages/envsync-keycloak-theme` | custom Keycloak theme |
+| `sdks/` | generated TypeScript and Go SDKs |
+| `scripts/` | local bootstrap and helper scripts |
 
-- **Secure** – End-to-end encryption for sensitive data  
-- **Fast** – Real-time synchronization across environments  
-- **Web-first** – Built for modern web development workflows  
-- **Developer-friendly** – REST API, CLI, and web dashboard  
+## Local Development
 
----
-
-## Install
-
-From the **repository root**:
+Use this from the repo root:
 
 ```bash
+cp .env.example .env
 bun install
-```
-
----
-
-## Environment
-
-All environment variables are read from the **root `.env`** file. No per-package `.env` is required.
-
-1. Copy the example and edit:
-
-   ```bash
-   cp .env.example .env
-   ```
-
-2. Fill in values in the root `.env`. This file is used by:
-   - **envsync-api** (Bun) when running `dev` / `start` / scripts  
-   - **envsync-web** and **envsync-landing** (Vite) via `envDir` pointing at the repo root  
-   - **Docker Compose** via `env_file: .env` for services  
-
-When you run from the root (e.g. `bun run dev`, `bun run cli init`), or when Turbo runs package tasks, the API and Vite apps load `.env` from the monorepo root.
-
----
-
-## Run
-
-```bash
-# Development (all packages via Turbo)
+docker compose up -d
+bun run cli:init
+bun run cli:create-dev-user --seed
+bun run clickstack:sync
 bun run dev
-
-# Full init: creates .env from .env.example, starts Docker services
-# (postgres, redis, rustfs, mailpit, zitadel, vault), waits for
-# postgres/zitadel/rustfs, runs DB migrations, creates RustFS bucket.
-# With ZITADEL_PAT or ZITADEL_PAT_FILE set, init creates Zitadel OIDC apps
-# and writes client IDs/secrets to .env.
-bun run cli init
 ```
 
-After `bun run cli init`, start the API with `bun run dev` or `docker compose up -d envsync_api`.
+If you previously tried local auth on `localhost`, clear browser site data for both `localhost` and `*.lvh.me` before retrying login on `app.lvh.me`.
 
----
+What that does:
+- creates local `.env` from `.env.example`
+- starts local infra with Docker Compose
+- runs DB migrations
+- bootstraps RustFS and Keycloak clients
+- builds the local Keycloak image from repo source when needed
+- seeds a local dev user, org, apps, envs, secrets, and sample data
+- seeds local ClickStack / HyperDX sources and dashboards
+- starts the apps with Turbo
 
-## Root scripts (`scripts/`)
+`lvh.me` is a wildcard hostname that resolves to `127.0.0.1`, so `app.lvh.me`, `auth.lvh.me`, and `api.lvh.me` all point to your machine without editing `/etc/hosts`.
 
-The **`scripts/`** folder at the repo root provides a single entrypoint for environment setup, Docker, and migrations.
+Use `lvh.me` for browser-facing local auth. `localhost` is not the supported browser login path because Keycloak 26 treats `localhost` as a secure context and can break local auth cookies.
+
+## Local Services
+
+Main local endpoints:
+
+| Service | URL |
+|---------|-----|
+| Dashboard | `http://app.lvh.me:8001` |
+| API | `http://api.lvh.me:4000` |
+| Keycloak | `http://auth.lvh.me:8080` |
+| ClickStack / HyperDX | `http://localhost:8800` |
+| Mailpit | `http://localhost:8025` |
+| RustFS S3 API | `http://localhost:19000` |
+| RustFS Console | `http://localhost:19001` |
+| OpenFGA | `http://localhost:8090` |
+
+## Local HyperDX Login
+
+For local dev, `bun run clickstack:sync` seeds a default HyperDX user and dashboards.
+
+UI login:
+- email: `local-operator@envsync.local`
+- password: `EnvsyncLocal!123`
+
+Notes:
+- the script also writes `.env.local` for the frontend telemetry config
+- rerun `bun run clickstack:sync` after recreating the ClickStack container or volumes
+
+## Root Commands
 
 | Command | Description |
 |--------|-------------|
-| `bun run cli init` | Full init: ensure `.env`, Docker up, wait for services, run DB migrations, API init (RustFS bucket + Zitadel OIDC apps), then Docker down |
-| `bun run cli db <cmd>` | Run DB migrations (delegates to `packages/envsync-api/scripts/migrate.ts`). Examples: `db latest`, `db list`, `db rollback`, `db backup`, `db restore`, `db migrate_to <name>`, `db step`, `db drop`, `db init` |
-| `bun run cli services up` | Start Docker Compose services (postgres, redis, rustfs, mailpit, zitadel, vault) |
-| `bun run cli services down` | Stop Docker Compose services |
-| `bun run cli services status` | Show Docker Compose service status |
+| `bun run dev` | run API, web, and landing locally via Turbo |
+| `bun run build` | build the workspace |
+| `bun run cli:init` | local infra bootstrap, migrations, RustFS bucket, Keycloak client setup |
+| `bun run cli:create-dev-user --seed` | create the local dev user and seed sample data |
+| `bun run cli services up` | start Docker Compose services |
+| `bun run cli services down` | stop Docker Compose services |
+| `bun run cli services status` | inspect Docker Compose services |
+| `bun run clickstack:sync` | sync local ClickStack OTLP config and seed sources/dashboards |
+| `bun run clickstack:bootstrap` | reseed local ClickStack dashboards only |
+| `bun run test:mock` | run mock tests |
+| `bun run test:e2e` | run E2E tests from the repo root; it runs `e2e-setup init` first |
 
-Usage:
+## Sim Test
+
+Run the API simulation load test from the API package:
 
 ```bash
-bun run cli <command> [options]
+cd packages/envsync-api
+bun run scripts/sim.ts
 ```
 
-The API package also exposes its own CLI for init/bucket/Zitadel from the API context:
+Useful variants:
 
 ```bash
-# From monorepo root or packages/envsync-api
-bun run packages/envsync-api/scripts/cli.ts init
+SIM_WORKERS=50 bun run scripts/sim.ts
+SIM_WORKERS=200 SIM_DELAY_MS=0 bun run scripts/sim.ts
 ```
 
----
+## Auth
 
-## Monorepo layout
+Keycloak is the only supported identity provider in the current stack.
 
-| Path | Contents |
-|------|----------|
-| **`packages/`** | Core libraries and services (API, CLI) |
-| **`apps/`** | Web applications (dashboard, landing) |
-| **`sdks/`** | Generated API clients (TypeScript, Go) |
-| **`scripts/`** | Root-level CLI for init, DB, and Docker |
+Canonical local browser auth flow:
+- app: `http://app.lvh.me:8001`
+- api callback: `http://api.lvh.me:4000/api/access/web/callback`
+- auth: `http://auth.lvh.me:8080`
 
----
+Canonical local env vars:
+- `KEYCLOAK_URL`
+- `KEYCLOAK_REALM`
+- `KEYCLOAK_ADMIN_USER`
+- `KEYCLOAK_ADMIN_PASSWORD`
+- `KEYCLOAK_WEB_CLIENT_ID`
+- `KEYCLOAK_WEB_CLIENT_SECRET`
+- `KEYCLOAK_CLI_CLIENT_ID`
+- `KEYCLOAK_API_CLIENT_ID`
+- `KEYCLOAK_API_CLIENT_SECRET`
 
-## Packages
+The local realm import lives under [docker/keycloak/realm-import](/Users/bravo68web/Projects/OSS/EnvSync/monorepo/docker/keycloak/realm-import). Self-hosted deploys generate a derived realm config during setup.
+The local and E2E Keycloak container image is built from [packages/envsync-keycloak-theme](/Users/bravo68web/Projects/OSS/EnvSync/monorepo/packages/envsync-keycloak-theme), not pulled from GHCR.
 
-### `packages/envsync-api`
+## Observability
 
-REST API backend for EnvSync Cloud.
+Local observability is ClickStack / HyperDX plus one OTEL collector:
+- API, CLI, and browser telemetry flow into OTLP
+- ClickStack stores traces, logs, and metrics
+- local dashboards are seeded automatically
 
-- **Stack:** Hono, Bun, TypeScript, PostgreSQL (Kysely), Redis, Zitadel (OIDC), S3-compatible (RustFS), Docker  
-- **Docs:** [api.envsync.cloud/docs](https://api.envsync.cloud/docs)  
-- **From root:** `bun run dev` (Turbo) or run from `packages/envsync-api`: `bun run dev`, `bun db` (migrations), `bun run scripts/cli.ts init`  
+If you recreate ClickStack state:
 
-See **[packages/envsync-api/README.md](packages/envsync-api/README.md)** for API-specific setup, env vars, and structure.
+```bash
+bun run clickstack:sync
+```
 
-### `packages/envsync-cli`
+## Self-Hosting
 
-Command-line interface for syncing environment variables.
+Self-hosted deployment now targets:
+- Docker Swarm
+- Traefik
+- Keycloak
+- ClickStack / HyperDX
+- single-host Ubuntu/Debian in v1
 
-- **Stack:** Go, urfave/cli, Uber Zap  
-- **Commands:** `login`, `whoami`, `logout`, `init`, `push`, `pull`, `app create/list/delete`, `env-type list/view`, `config set/get`, `run --command "..."`  
-- **Config:** `envsyncrc.toml` (app_id, env_type_id); auth via API key or JWT (`envsync login`)  
-
-See **[packages/envsync-cli/README.md](packages/envsync-cli/README.md)** for installation, usage, and development.
-
----
-
-## Apps
-
-### `apps/envsync-web`
-
-Web dashboard for managing projects, environment types, variables, and secrets.
-
-- **Stack:** React, Vite, TailwindCSS, React Query, Zod  
-- **Env:** `VITE_API_BASE_URL` (or use root `.env`)  
-- **Run:** `bun run dev` from root or `bun dev` in `apps/envsync-web`  
-
-See **[apps/envsync-web/README.md](apps/envsync-web/README.md)** for details.
-
-### `apps/envsync-landing`
-
-Marketing/landing page for EnvSync Cloud.
-
-- **Stack:** React, Vite, TailwindCSS  
-- **Run:** `bun run dev` from root or `bun dev` in `apps/envsync-landing`  
-
-See **[apps/envsync-landing/README.md](apps/envsync-landing/README.md)** for details.
-
----
+See [SELFHOSTING.md](/Users/bravo68web/Projects/OSS/EnvSync/monorepo/SELFHOSTING.md).
 
 ## SDKs
 
-### `sdks/envsync-ts-sdk`
-
-Generated TypeScript SDK for the EnvSync API.
-
-- Used by the web app and other Node/Bun/TS consumers.  
-- See **[sdks/envsync-ts-sdk/README.md](sdks/envsync-ts-sdk/README.md)**.
-
-### `sdks/envsync-go-sdk`
-
-Generated Go SDK for the EnvSync API.
-
-- **Usage:** See **[sdks/envsync-go-sdk/sdk/README.md](sdks/envsync-go-sdk/sdk/README.md)** for client setup, auth, retries, and timeouts.  
-- Built with [Fern](https://buildwithfern.com); contributions to the README are welcome; code is generated.
-
----
-
-## Zitadel: initial data via API
-
-Zitadel needs a **first user** (human or machine) before you can create data via the API. The recommended approach is [Creating initial data using the API](https://github.com/zitadel/zitadel/discussions/8296).
-
-1. The **first instance** creates an initial machine user and writes a **PAT** to a path you configure (`ZITADEL_FIRSTINSTANCE_PATPATH` in docker-compose, e.g. `/current-dir/admin.pat`).  
-2. Use that PAT to call the Management/Application API (e.g. create project and OIDC apps in the init script).
-
-In this repo, the Zitadel container is configured to create the machine user and write the PAT to the `zitadel_data` volume. The **root init script** (`bun run cli init`) can read the PAT from that Docker volume (via a one-off container), write it to the root `.env` as `ZITADEL_PAT`, and continue with migrations and API init so OIDC apps are created and client IDs/secrets are written to `.env`.
-
-- **Option A (default):** Run `bun run cli init`; the script reads the PAT from the volume, saves it to `.env`, and continues.  
-- **Option B:** If you bind-mount Zitadel data (e.g. `./zitadel-data:/current-dir`), set `ZITADEL_PAT_FILE=./zitadel-data/admin.pat` and the API init step will read the PAT from that file.  
-- **Option C:** Set `ZITADEL_PAT` in `.env` manually (e.g. from the Zitadel console) and skip the volume read.
-
-**URLs:** Console `http://localhost:8080/ui/console`, login UI `http://localhost:3000`. Set `ZITADEL_URL=http://localhost:8080` in `.env` when using from the host.
-
----
-
-## Local Dev
-
-1. Run `bun cli init` to initialize the project locally.
-2. Run `bun cli services up` to start required docker services.
-3. Finally, run `bun dev` to run EnvSync Local.
-
----
+- [sdks/envsync-ts-sdk/README.md](/Users/bravo68web/Projects/OSS/EnvSync/monorepo/sdks/envsync-ts-sdk/README.md)
+- [sdks/envsync-go-sdk/sdk/README.md](/Users/bravo68web/Projects/OSS/EnvSync/monorepo/sdks/envsync-go-sdk/sdk/README.md)
 
 ## Contributing
 
-1. Fork the repository  
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)  
-3. Commit your changes (`git commit -m 'Add amazing feature'`)  
-4. Push to the branch (`git push origin feature/amazing-feature`)  
-5. Open a Pull Request  
+1. Create a branch.
+2. Make changes.
+3. Run relevant tests.
+4. Open a PR.
 
----
+## Support
 
-## License
-
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
-
----
-
-## Support & community
-
-- **Email:** hi@envsync.cloud  
-- **Docs/Blog:** [docs.envsync.cloud](https://docs.envsync.cloud)  
-- **Issues:** [GitHub Issues](https://github.com/EnvSync-Cloud/envsync-monorepo/issues)  
-
-**Making environment configuration simple, secure, and synchronized.**
-
-Built with ❤️ by the EnvSync team
+- Docs: [docs.envsync.cloud](https://docs.envsync.cloud)
+- Issues: [GitHub Issues](https://github.com/EnvSync-Cloud/envsync-monorepo/issues)

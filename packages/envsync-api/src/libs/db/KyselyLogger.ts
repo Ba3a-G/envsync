@@ -1,4 +1,4 @@
-import { SpanStatusCode, context } from "@opentelemetry/api";
+import { SpanKind, SpanStatusCode, context } from "@opentelemetry/api";
 import { type Logger } from "kysely";
 
 import infoLogs, { LogTypes } from "@/libs/logger";
@@ -27,6 +27,8 @@ function parseSQL(sql: string): { table: string; fields: string[]; keywords: str
 export const KyselyLogger: Logger = event => {
 	const { query, queryDurationMillis } = event;
 	const { sql, parameters } = query;
+	const endTime = Date.now();
+	const startTime = endTime - Math.max(queryDurationMillis, 0);
 
 	if (config.DB_LOGGING !== "false") {
 		infoLogs(
@@ -54,8 +56,15 @@ export const KyselyLogger: Logger = event => {
 		const span = tracer.startSpan(
 			`db.query ${operationName}`,
 			{
+				startTime,
+				kind: SpanKind.CLIENT,
 				attributes: {
 					"db.system": "postgresql",
+					"peer.service": "postgres",
+					"server.address": config.DATABASE_HOST,
+					"server.port": Number(config.DATABASE_PORT),
+					"network.peer.address": config.DATABASE_HOST,
+					"db.namespace": config.DATABASE_NAME,
 					"db.operation.name": operationName,
 					"db.sql.table": table,
 					"db.sql.fields": fields.join(", "),
@@ -74,14 +83,21 @@ export const KyselyLogger: Logger = event => {
 			span.setStatus({ code: SpanStatusCode.OK });
 		}
 
-		span.end();
+		span.end(endTime);
 	} else {
 		// Lightweight span without expensive SQL parsing
 		const span = tracer.startSpan(
 			`db.query ${operationName}`,
 			{
+				startTime,
+				kind: SpanKind.CLIENT,
 				attributes: {
 					"db.system": "postgresql",
+					"peer.service": "postgres",
+					"server.address": config.DATABASE_HOST,
+					"server.port": Number(config.DATABASE_PORT),
+					"network.peer.address": config.DATABASE_HOST,
+					"db.namespace": config.DATABASE_NAME,
 					"db.operation.name": operationName,
 					"db.statement": sql,
 					"db.query.duration_ms": queryDurationMillis,
@@ -90,6 +106,6 @@ export const KyselyLogger: Logger = event => {
 			context.active(),
 		);
 		span.setStatus({ code: SpanStatusCode.OK });
-		span.end();
+		span.end(endTime);
 	}
 };
