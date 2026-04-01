@@ -17,10 +17,44 @@ export class CacheClient {
 	private static _redisClient: redis.RedisClientType;
 	private static _nodeClient: NodeCache;
 
+	private static ensureNodeClient() {
+		if (!this._nodeClient) {
+			this._nodeClient = new NodeCache();
+		}
+	}
+
+	private static ensureRedisClient() {
+		if (this._redisClient) return;
+
+		const redisUrl = config.REDIS_URL ?? "";
+		this._redisClient = redis.createClient({
+			url: redisUrl,
+			name: "ec-cache",
+		});
+
+		this._redisClient.connect().catch(err => {
+			infoLogs(`Redis connection failed: ${err}`, LogTypes.ERROR, "CACHE:INIT");
+		});
+	}
+
+	private static ensureInitialized() {
+		if (!this._clientMode) {
+			this._clientMode = "development";
+		}
+
+		if (this._clientMode === "production") {
+			this.ensureRedisClient();
+			return;
+		}
+
+		this.ensureNodeClient();
+	}
+
 	/**
 	 * Get the client based on the environment
 	 */
 	static get client() {
+		this.ensureInitialized();
 		return this._clientMode === "production" ? this._redisClient : this._nodeClient;
 	}
 
@@ -45,19 +79,12 @@ export class CacheClient {
 
 		this._clientMode = env as CacheEnvironment;
 
-		const redisUrl = config.REDIS_URL ?? "";
-
 		if (env === "production") {
-			this._redisClient = redis.createClient({
-				url: redisUrl,
-				name: "ec-cache",
-			});
-			this._redisClient.connect().catch(err => {
-				infoLogs(`Redis connection failed: ${err}`, LogTypes.ERROR, "CACHE:INIT");
-			});
+			this.ensureRedisClient();
+		} else {
+			this.ensureNodeClient();
 		}
 
-		this._nodeClient = new NodeCache();
 		infoLogs(`Caching Client initialized in '${env}' environment`, LogTypes.LOGS, "CACHE:INIT");
 	}
 
@@ -68,6 +95,7 @@ export class CacheClient {
 	 * @param ttl Time to live in seconds (0 = no expiry)
 	 */
 	static async set(key: string, value: string, ttl?: number) {
+		this.ensureInitialized();
 		const redisUrl = config.REDIS_URL ? new URL(config.REDIS_URL) : undefined;
 		const isRedis = this._clientMode === "production";
 		return withSpan("cache SET", {
@@ -100,6 +128,7 @@ export class CacheClient {
 	 * @returns Value of the key
 	 */
 	static async get(key: string): Promise<string | null> {
+		this.ensureInitialized();
 		const redisUrl = config.REDIS_URL ? new URL(config.REDIS_URL) : undefined;
 		const isRedis = this._clientMode === "production";
 		return withSpan("cache GET", {
@@ -125,6 +154,7 @@ export class CacheClient {
 	 * @param key Key to delete
 	 */
 	static async del(key: string): Promise<void> {
+		this.ensureInitialized();
 		const redisUrl = config.REDIS_URL ? new URL(config.REDIS_URL) : undefined;
 		const isRedis = this._clientMode === "production";
 		return withSpan("cache DEL", {
@@ -152,6 +182,7 @@ export class CacheClient {
 	 * @param pattern Glob pattern (e.g. "es:org:123:*")
 	 */
 	static async delByPattern(pattern: string): Promise<void> {
+		this.ensureInitialized();
 		const redisUrl = config.REDIS_URL ? new URL(config.REDIS_URL) : undefined;
 		const isRedis = this._clientMode === "production";
 		return withSpan("cache DEL_PATTERN", {
@@ -192,6 +223,7 @@ export class CacheClient {
 	 * @returns Array of values (null for missing keys)
 	 */
 	static async mget(keys: string[]): Promise<(string | null)[]> {
+		this.ensureInitialized();
 		if (keys.length === 0) return [];
 		const redisUrl = config.REDIS_URL ? new URL(config.REDIS_URL) : undefined;
 		const isRedis = this._clientMode === "production";
@@ -223,6 +255,7 @@ export class CacheClient {
 	 * @returns true if the key exists
 	 */
 	static async exists(key: string): Promise<boolean> {
+		this.ensureInitialized();
 		const redisUrl = config.REDIS_URL ? new URL(config.REDIS_URL) : undefined;
 		const isRedis = this._clientMode === "production";
 		return withSpan("cache EXISTS", {

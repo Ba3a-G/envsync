@@ -186,7 +186,3 @@ export async function waitForKeycloak(url?: string, realm?: string): Promise<voi
 		60,
 	);
 }
-
-export async function waitForZitadel(url?: string): Promise<void> {
-	return waitForKeycloak(url, process.env.KEYCLOAK_REALM ?? "envsync");
-}

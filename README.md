@@ -97,7 +97,7 @@ Notes:
 | `bun run clickstack:sync` | sync local ClickStack OTLP config and seed sources/dashboards |
 | `bun run clickstack:bootstrap` | reseed local ClickStack dashboards only |
 | `bun run test:mock` | run mock tests |
-| `bun run test:e2e` | run E2E tests against real services |
+| `bun run test:e2e` | run E2E tests from the repo root; it runs `e2e-setup init` first |
 
 ## Sim Test
 
