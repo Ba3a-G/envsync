@@ -58,7 +58,10 @@ services:
     networks: [envsync_network]
 
   keycloak:
-    image: ghcr.io/envsync-cloud/envsync-keycloak:latest
+    build:
+      context: ./packages/envsync-keycloak-theme
+      dockerfile: Dockerfile
+    image: envsync-keycloak:local
     restart: unless-stopped
     entrypoint: ["/bin/sh", "-lc"]
     command:
@@ -77,7 +80,6 @@ services:
       KC_HTTP_ENABLED: "true"
       KC_HOSTNAME_STRICT: "false"
     volumes:
-      - ./packages/envsync-keycloak-theme/theme:/opt/keycloak/themes/envsync:ro
       - ./docker/keycloak/realm-import:/opt/keycloak/data/import:ro
     depends_on:
       - keycloak_db

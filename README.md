@@ -13,6 +13,7 @@ The repo now uses:
 - ClickStack / HyperDX instead of the old Grafana/Loki/Tempo stack
 - miniKMS for secret storage flows
 - a local bootstrap flow that seeds ClickStack sources and dashboards automatically
+- a locally built Keycloak image from `packages/envsync-keycloak-theme` for dev and E2E
 
 ## Monorepo Layout
 
@@ -48,6 +49,7 @@ What that does:
 - starts local infra with Docker Compose
 - runs DB migrations
 - bootstraps RustFS and Keycloak clients
+- builds the local Keycloak image from repo source when needed
 - seeds a local dev user, org, apps, envs, secrets, and sample data
 - seeds local ClickStack / HyperDX sources and dashboards
 - starts the apps with Turbo
@@ -136,6 +138,7 @@ Canonical local env vars:
 - `KEYCLOAK_API_CLIENT_SECRET`
 
 The local realm import lives under [docker/keycloak/realm-import](/Users/bravo68web/Projects/OSS/EnvSync/monorepo/docker/keycloak/realm-import). Self-hosted deploys generate a derived realm config during setup.
+The local and E2E Keycloak container image is built from [packages/envsync-keycloak-theme](/Users/bravo68web/Projects/OSS/EnvSync/monorepo/packages/envsync-keycloak-theme), not pulled from GHCR.
 
 ## Observability
 

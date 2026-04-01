@@ -313,7 +313,10 @@ function buildEnvMap(config: DeployConfig) {
 }
 
 function renderEnv(config: DeployConfig) {
-	return Object.entries(buildEnvMap(config))
+	return Object.entries({
+		...buildEnvMap(config),
+		KEYCLOAK_IMAGE_TAG: config.images.keycloak.split(":").slice(1).join(":") || "local",
+	})
 		.map(([k, v]) => `${k}=${v}`)
 		.join("\n") + "\n";
 }
@@ -576,7 +579,9 @@ services:
 
   keycloak:
     image: ${config.images.keycloak}
-    command: start --import-realm
+    entrypoint: ["/bin/sh", "-lc"]
+    command:
+      - /opt/keycloak/bin/kc.sh import --dir /opt/keycloak/data/import --override true && exec /opt/keycloak/bin/kc.sh start-dev
     environment:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://keycloak_db:5432/keycloak
@@ -718,6 +723,7 @@ async function cmdPreinstall() {
 		run("docker", ["swarm", "init"]);
 	} catch {
 	}
+	run("docker", ["buildx", "version"]);
 	run("bash", ["-lc", "curl -fsSL https://ghcr.io >/dev/null"]);
 	run("bash", ["-lc", "curl -fsSL https://acme-v02.api.letsencrypt.org/directory >/dev/null"]);
 }
@@ -743,7 +749,7 @@ async function cmdSetup() {
 		domain: { root_domain: rootDomain, acme_email: acmeEmail },
 		images: {
 			api: `ghcr.io/envsync-cloud/envsync-api:${channel}`,
-			keycloak: `ghcr.io/envsync-cloud/envsync-keycloak:${channel}`,
+			keycloak: `envsync-keycloak:${channel}`,
 			web: `ghcr.io/envsync-cloud/envsync-web-static:${channel}`,
 			landing: `ghcr.io/envsync-cloud/envsync-landing-static:${channel}`,
 			clickstack: "clickhouse/clickstack-all-in-one:latest",
@@ -815,8 +821,17 @@ function extractStaticBundle(image: string, targetDir: string) {
 	}
 }
 
+function buildKeycloakImage(imageTag: string, repoRoot = REPO_ROOT) {
+	const buildContext = path.join(repoRoot, "packages/envsync-keycloak-theme");
+	if (!exists(path.join(buildContext, "Dockerfile"))) {
+		throw new Error(`Missing Keycloak Docker build context at ${buildContext}`);
+	}
+	run("docker", ["build", "-t", imageTag, buildContext]);
+}
+
 async function cmdDeploy() {
 	const config = loadConfig();
+	buildKeycloakImage(config.images.keycloak);
 	ensureDir(`${RELEASES_ROOT}/web/current`);
 	ensureDir(`${RELEASES_ROOT}/landing/current`);
 	extractStaticBundle(config.images.web, `${RELEASES_ROOT}/web/current`);
@@ -829,6 +844,7 @@ async function cmdHealth(asJson: boolean) {
 	const hosts = domainMap(config.domain.root_domain);
 	const services = run("docker", ["stack", "services", config.services.stack_name], { quiet: true });
 	const checks = {
+		keycloak_image: config.images.keycloak,
 		services,
 		public: {
 			landing: `https://${hosts.landing}`,

@@ -72,6 +72,8 @@ bun run clickstack:sync
 bun run dev
 ```
 
+Keycloak is built locally from `packages/envsync-keycloak-theme` for dev and E2E. It is not pulled from GHCR in those flows.
+
 For the sim test after local is up:
 ```
 cd packages/envsync-api

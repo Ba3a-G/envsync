@@ -38,6 +38,16 @@ const E2E_MINIKMS_ROOT_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef01
 
 // ── Docker Compose helpers ──────────────────────────────────────────
 
+function dockerComposeBuildKeycloak(): void {
+	console.log("\nBuilding local Keycloak image for E2E...");
+	const result = spawnSync(
+		"docker",
+		["compose", "build", "keycloak"],
+		{ cwd: rootDir, stdio: "inherit", env: process.env },
+	);
+	if (result.status !== 0) throw new Error("Docker Compose build for Keycloak failed.");
+}
+
 function dockerComposeUp(): void {
 	process.env.MINIKMS_ROOT_KEY ||= E2E_MINIKMS_ROOT_KEY;
 	console.log("\nStarting Docker Compose services for E2E...");
@@ -216,6 +226,7 @@ async function init(): Promise<void> {
 	process.env.MINIKMS_ROOT_KEY ||= E2E_MINIKMS_ROOT_KEY;
 
 	// Start docker services
+	dockerComposeBuildKeycloak();
 	dockerComposeUp();
 
 	// Wait for services

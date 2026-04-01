@@ -7,6 +7,7 @@ See the [README](README.md) and per-package `AGENTS.md` files for full architect
 - **Bun 1.3+**, **Go 1.21+**, **Docker**
 - `bun install` — install all JS/TS dependencies
 - `docker compose up -d` — start Postgres, miniKMS, OpenFGA, Keycloak, Mailpit
+- Keycloak is built locally from `packages/envsync-keycloak-theme`; no GHCR auth is required for local auth/E2E
 - `bun run cli:init` — bootstrap RustFS and Keycloak clients
 - `bun run cli create-dev-user --seed` — seed a development user
 

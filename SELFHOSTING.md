@@ -8,7 +8,7 @@ Supported v1 target:
 - single-host Docker Swarm
 - Ubuntu/Debian manager node
 - Traefik as the only public edge proxy
-- GHCR as the image source
+- GHCR for API and static release images
 - Keycloak for authentication
 - ClickStack / HyperDX for observability
 
@@ -59,6 +59,7 @@ Expected clients:
 
 Theme:
 - custom theme lives in [packages/envsync-keycloak-theme](/Users/bravo68web/Projects/OSS/EnvSync/monorepo/packages/envsync-keycloak-theme)
+- self-hosted deploys build the Keycloak image locally from that repo path instead of pulling a GHCR Keycloak image
 
 Important note:
 - existing Zitadel-based self-hosted installs should be treated as a breaking migration
@@ -122,6 +123,7 @@ That means:
 - self-hosted generation is handled by `packages/deploy-cli`
 - local ClickStack setup is seeded by scripts
 - self-hosted assets and stack files are generated during `setup` / `deploy`
+- local, E2E, and self-hosted all build Keycloak from repo source
 
 ## Current Reality
 
