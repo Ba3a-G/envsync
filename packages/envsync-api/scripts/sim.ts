@@ -25,12 +25,12 @@
  *
  * Prerequisites:
  *   1. Docker services running: `docker compose up -d`
- *   2. E2E init completed: `bun run e2e:init`
+ *   2. E2E init completed: `bun run e2e-setup init`
  *   3. API server running: `bun run dev`
  *
- * Usage: bun run sim
- *        SIM_WORKERS=500 bun run sim    # ~50K RPS
- *        SIM_WORKERS=1000 bun run sim   # ~100K RPS
+ * Usage: bun run scripts/sim.ts
+ *        SIM_WORKERS=500 bun run scripts/sim.ts
+ *        SIM_WORKERS=1000 bun run scripts/sim.ts
  */
 
 import fs from "node:fs";
@@ -95,16 +95,16 @@ Object.assign(process.env, {
 	KEYCLOAK_CLI_CLIENT_ID: process.env.KEYCLOAK_CLI_CLIENT_ID ?? "envsync-cli",
 	KEYCLOAK_API_CLIENT_ID: process.env.KEYCLOAK_API_CLIENT_ID ?? "envsync-api",
 	KEYCLOAK_API_CLIENT_SECRET: process.env.KEYCLOAK_API_CLIENT_SECRET ?? "test-api-client-secret",
-	KEYCLOAK_WEB_REDIRECT_URI: process.env.KEYCLOAK_WEB_REDIRECT_URI ?? "http://localhost:3000/callback",
-	KEYCLOAK_WEB_CALLBACK_URL: process.env.KEYCLOAK_WEB_CALLBACK_URL ?? "http://localhost:3000",
-	KEYCLOAK_API_REDIRECT_URI: process.env.KEYCLOAK_API_REDIRECT_URI ?? "http://localhost:4000/callback",
+	KEYCLOAK_WEB_REDIRECT_URI: process.env.KEYCLOAK_WEB_REDIRECT_URI ?? "http://api.lvh.me:4000/api/access/web/callback",
+	KEYCLOAK_WEB_CALLBACK_URL: process.env.KEYCLOAK_WEB_CALLBACK_URL ?? "http://app.lvh.me:8001/auth/callback",
+	KEYCLOAK_API_REDIRECT_URI: process.env.KEYCLOAK_API_REDIRECT_URI ?? "http://api.lvh.me:4000/api/access/api/callback",
 	OPENFGA_API_URL: process.env.OPENFGA_API_URL ?? "http://localhost:8090",
 	OPENFGA_STORE_ID: process.env.OPENFGA_STORE_ID ?? "",
 	OPENFGA_MODEL_ID: process.env.OPENFGA_MODEL_ID ?? "",
 	MINIKMS_GRPC_ADDR: process.env.MINIKMS_GRPC_ADDR ?? "localhost:50051",
 	MINIKMS_TLS_ENABLED: "false",
-	LANDING_PAGE_URL: "http://localhost:3000",
-	DASHBOARD_URL: "http://localhost:9090",
+	LANDING_PAGE_URL: process.env.LANDING_PAGE_URL ?? "http://localhost:8002",
+	DASHBOARD_URL: process.env.DASHBOARD_URL ?? "http://app.lvh.me:8001",
 });
 
 // ── 4. Initialize services ───────────────────────────────────────────

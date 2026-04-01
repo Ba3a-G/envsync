@@ -55,8 +55,9 @@ export async function bootstrapKeycloakClient(
 			standardFlowEnabled: true,
 			directAccessGrantsEnabled: true,
 			serviceAccountsEnabled: false,
-			redirectUris: ["http://localhost:9090/callback"],
+			redirectUris: ["http://api.lvh.me:4000/api/access/api/callback"],
 			webOrigins: ["*"],
+			defaultClientScopes: ["basic", "profile", "email", "roles"],
 		}),
 	});
 

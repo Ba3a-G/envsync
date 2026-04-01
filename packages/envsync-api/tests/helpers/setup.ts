@@ -104,9 +104,9 @@ if (!isE2E) {
 		KEYCLOAK_CLI_CLIENT_ID: "envsync-cli",
 		KEYCLOAK_API_CLIENT_ID: "envsync-api",
 		KEYCLOAK_API_CLIENT_SECRET: "test-api-client-secret",
-		KEYCLOAK_WEB_REDIRECT_URI: "http://localhost:3000/callback",
-		KEYCLOAK_WEB_CALLBACK_URL: "http://localhost:3000",
-		KEYCLOAK_API_REDIRECT_URI: "http://localhost:4000/callback",
+		KEYCLOAK_WEB_REDIRECT_URI: "http://api.lvh.me:4000/api/access/web/callback",
+		KEYCLOAK_WEB_CALLBACK_URL: "http://app.lvh.me:8001/auth/callback",
+		KEYCLOAK_API_REDIRECT_URI: "http://api.lvh.me:4000/api/access/api/callback",
 		// miniKMS
 		MINIKMS_GRPC_ADDR: "localhost:50051",
 		MINIKMS_TLS_ENABLED: "false",
@@ -115,8 +115,8 @@ if (!isE2E) {
 		OPENFGA_STORE_ID: "test-store-id",
 		OPENFGA_MODEL_ID: "test-model-id",
 		// App URLs
-		LANDING_PAGE_URL: "http://localhost:3000",
-		DASHBOARD_URL: "http://localhost:8080",
+		LANDING_PAGE_URL: "http://localhost:8002",
+		DASHBOARD_URL: "http://app.lvh.me:8001",
 	});
 
 	// ── 2. Mock external modules ─────────────────────────────────────────

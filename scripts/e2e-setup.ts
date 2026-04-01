@@ -262,8 +262,13 @@ async function init(): Promise<void> {
 		KEYCLOAK_REALM: keycloakRealm,
 		KEYCLOAK_ADMIN_USER: keycloakAdminUser,
 		KEYCLOAK_ADMIN_PASSWORD: keycloakAdminPassword,
+		KEYCLOAK_WEB_REDIRECT_URI: process.env.KEYCLOAK_WEB_REDIRECT_URI ?? "http://api.lvh.me:4000/api/access/web/callback",
+		KEYCLOAK_WEB_CALLBACK_URL: process.env.KEYCLOAK_WEB_CALLBACK_URL ?? "http://app.lvh.me:8001/auth/callback",
+		KEYCLOAK_API_REDIRECT_URI: process.env.KEYCLOAK_API_REDIRECT_URI ?? "http://api.lvh.me:4000/api/access/api/callback",
 		KEYCLOAK_E2E_CLIENT_ID: keycloakClient.clientId,
 		KEYCLOAK_E2E_CLIENT_SECRET: keycloakClient.clientSecret,
+		LANDING_PAGE_URL: process.env.LANDING_PAGE_URL ?? "http://localhost:8002",
+		DASHBOARD_URL: process.env.DASHBOARD_URL ?? "http://app.lvh.me:8001",
 		OTEL_EXPORTER_OTLP_ENDPOINT: "http://localhost:14318",
 		OTEL_SERVICE_NAME: "envsync-api",
 	};

@@ -344,6 +344,7 @@ function renderKeycloakRealm(config: DeployConfig) {
 					directAccessGrantsEnabled: false,
 					redirectUris: [`https://${hosts.api}/api/access/web/callback`],
 					webOrigins: [`https://${hosts.app}`],
+					defaultClientScopes: ["basic", "web-origins", "profile", "email", "roles"],
 				},
 				{
 					clientId: config.auth.api_client_id,
@@ -354,6 +355,7 @@ function renderKeycloakRealm(config: DeployConfig) {
 					standardFlowEnabled: true,
 					redirectUris: [`https://${hosts.api}/api/access/api/callback`],
 					webOrigins: [`https://${hosts.api}`],
+					defaultClientScopes: ["basic", "profile", "email", "roles"],
 				},
 				{
 					clientId: config.auth.cli_client_id,
@@ -365,6 +367,7 @@ function renderKeycloakRealm(config: DeployConfig) {
 					attributes: {
 						"oauth2.device.authorization.grant.enabled": "true",
 					},
+					defaultClientScopes: ["basic", "profile", "email", "roles"],
 				},
 			],
 		},

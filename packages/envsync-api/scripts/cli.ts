@@ -8,7 +8,14 @@ import path from "node:path";
 import { config } from "../src/utils/env";
 import { updateRootEnv } from "../src/utils/load-root-env";
 import { DB } from "../src/libs/db";
-import { createKeycloakUser, getKeycloakBaseUrl, getKeycloakRealm } from "../src/helpers/keycloak";
+import {
+	createKeycloakUser,
+	findKeycloakUserByUsername,
+	getKeycloakBaseUrl,
+	getKeycloakRealm,
+	getKeycloakUserById,
+	setKeycloakUserPassword,
+} from "../src/helpers/keycloak";
 
 const repoRoot = path.resolve(import.meta.dir, "..", "..", "..");
 const localRealmImportPath = path.join(repoRoot, "docker/keycloak/realm-import/envsync-realm.json");
@@ -380,7 +387,7 @@ async function ensureSeededSecrets(orgId: string, userId: string, apps: Record<s
 			appName: "Dashboard Web",
 			envName: "Development",
 			key: "VITE_API_BASE_URL",
-			value: "http://localhost:4000",
+			value: "http://api.lvh.me:4000",
 		},
 		{
 			appName: "Dashboard Web",
@@ -551,6 +558,32 @@ async function createDevUser() {
 		console.log(`Dev user created: ${email} / ${password}`);
 	} else {
 		console.log(`Dev user already exists: ${email}`);
+
+		let idpUser = user.auth_service_id ? await getKeycloakUserById(user.auth_service_id) : null;
+		if (!idpUser) {
+			idpUser = await findKeycloakUserByUsername(email);
+		}
+		if (!idpUser) {
+			const parts = fullName.trim().split(/\s+/).filter(Boolean);
+			idpUser = await createKeycloakUser({
+				userName: email,
+				email,
+				firstName: parts[0] ?? "EnvSync",
+				lastName: parts.slice(1).join(" ") || "Dev",
+				password,
+			});
+			console.log("Recreated missing Keycloak user for existing dev account");
+		}
+		if (user.auth_service_id !== idpUser.id) {
+			await db.updateTable("users")
+				.set({ auth_service_id: idpUser.id, updated_at: new Date() })
+				.where("id", "=", user.id)
+				.execute();
+			user = await db.selectFrom("users").selectAll().where("id", "=", user.id).executeTakeFirstOrThrow();
+			console.log("Synced dev user auth_service_id with Keycloak");
+		}
+		await setKeycloakUserPassword(idpUser.id, password);
+		console.log(`Dev user login reset: ${email} / ${password}`);
 	}
 
 	await ensureUserRoleAccess(user.id, org.id, role.id);

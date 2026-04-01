@@ -108,6 +108,13 @@ bunx @envsync-cloud/deploy-cli <subcommand>
 
 Local development today is Docker Compose based.
 
+Canonical local browser URLs:
+- `http://app.lvh.me:8001`
+- `http://api.lvh.me:4000`
+- `http://auth.lvh.me:8080`
+
+`lvh.me` resolves to `127.0.0.1`, so local auth works without editing `/etc/hosts`. `localhost` is not the supported browser login path for Keycloak local auth.
+
 Self-hosted production direction is Docker Swarm based.
 
 That means:
@@ -135,7 +142,9 @@ Still evolving:
 ```bash
 cp .env.example .env
 bun install
-bun run cli init
+docker compose up -d
+bun run cli:init
+bun run cli:create-dev-user --seed
 bun run clickstack:sync
 bun run dev
 ```

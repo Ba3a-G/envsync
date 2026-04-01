@@ -103,6 +103,15 @@ export interface KeycloakUserCreate {
 	password: string;
 }
 
+export interface KeycloakUserRecord {
+	id: string;
+	username?: string;
+	email?: string;
+	firstName?: string;
+	lastName?: string;
+	enabled?: boolean;
+}
+
 function ensureNonEmptyName(value: string, fallback: string): string {
 	const s = String(value ?? "").trim();
 	return s.length > 0 ? s.slice(0, 255) : fallback;
@@ -112,6 +121,45 @@ function readIdFromLocationHeader(location: string | null): string | null {
 	if (!location) return null;
 	const match = location.match(/\/([^/]+)$/);
 	return match?.[1] ?? null;
+}
+
+export async function getKeycloakUserById(userId: string): Promise<KeycloakUserRecord | null> {
+	try {
+		const res = await adminFetch(`/users/${encodeURIComponent(userId)}`);
+		if (res.status === 404) return null;
+		if (!res.ok) {
+			throw new Error(`Keycloak get user failed: ${res.status} ${await res.text()}`);
+		}
+		return (await res.json()) as KeycloakUserRecord;
+	} catch (error) {
+		if (!isLocalHttpAdminFailure(error)) throw error;
+		try {
+			const raw = runLocalKeycloakAdmin([`get users/${JSON.stringify(userId)} -r ${realm()}`]);
+			return raw ? (JSON.parse(raw) as KeycloakUserRecord) : null;
+		} catch {
+			return null;
+		}
+	}
+}
+
+export async function findKeycloakUserByUsername(username: string): Promise<KeycloakUserRecord | null> {
+	try {
+		const res = await adminFetch(`/users?username=${encodeURIComponent(username)}&exact=true`);
+		if (!res.ok) {
+			throw new Error(`Keycloak user lookup failed: ${res.status} ${await res.text()}`);
+		}
+		const users = (await res.json()) as KeycloakUserRecord[];
+		return users.find(user => user.username === username) ?? users[0] ?? null;
+	} catch (error) {
+		if (!isLocalHttpAdminFailure(error)) throw error;
+		const raw = runLocalKeycloakAdmin([
+			"get users",
+			`-r ${realm()}`,
+			`-q username=${JSON.stringify(username)}`,
+		]);
+		const users = (raw ? JSON.parse(raw) : []) as KeycloakUserRecord[];
+		return users.find(user => user.username === username) ?? users[0] ?? null;
+	}
 }
 
 export async function createKeycloakUser(payload: KeycloakUserCreate) {
@@ -255,6 +303,30 @@ export async function sendKeycloakPasswordReset(userId: string) {
 		runLocalKeycloakAdmin([
 			`update users/${JSON.stringify(userId)} -r ${realm()}`,
 			"-s requiredActions=[\"UPDATE_PASSWORD\"]",
+		]);
+	}
+}
+
+export async function setKeycloakUserPassword(userId: string, password: string) {
+	try {
+		const res = await adminFetch(`/users/${encodeURIComponent(userId)}/reset-password`, {
+			method: "PUT",
+			body: JSON.stringify({
+				type: "password",
+				value: password,
+				temporary: false,
+			}),
+		});
+		if (!res.ok && res.status !== 204) {
+			throw new Error(`Keycloak set password failed: ${res.status} ${await res.text()}`);
+		}
+	} catch (error) {
+		if (!isLocalHttpAdminFailure(error)) throw error;
+		runLocalKeycloakAdmin([
+			"set-password",
+			`-r ${realm()}`,
+			`--userid ${JSON.stringify(userId)}`,
+			`--new-password ${JSON.stringify(password)}`,
 		]);
 	}
 }

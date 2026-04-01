@@ -34,18 +34,27 @@ Use this from the repo root:
 ```bash
 cp .env.example .env
 bun install
-bun run cli init
+docker compose up -d
+bun run cli:init
+bun run cli:create-dev-user --seed
 bun run clickstack:sync
 bun run dev
 ```
+
+If you previously tried local auth on `localhost`, clear browser site data for both `localhost` and `*.lvh.me` before retrying login on `app.lvh.me`.
 
 What that does:
 - creates local `.env` from `.env.example`
 - starts local infra with Docker Compose
 - runs DB migrations
 - bootstraps RustFS and Keycloak clients
+- seeds a local dev user, org, apps, envs, secrets, and sample data
 - seeds local ClickStack / HyperDX sources and dashboards
 - starts the apps with Turbo
+
+`lvh.me` is a wildcard hostname that resolves to `127.0.0.1`, so `app.lvh.me`, `auth.lvh.me`, and `api.lvh.me` all point to your machine without editing `/etc/hosts`.
+
+Use `lvh.me` for browser-facing local auth. `localhost` is not the supported browser login path because Keycloak 26 treats `localhost` as a secure context and can break local auth cookies.
 
 ## Local Services
 
@@ -53,8 +62,9 @@ Main local endpoints:
 
 | Service | URL |
 |---------|-----|
-| API | `http://localhost:4000` |
-| Keycloak | `http://localhost:8080` |
+| Dashboard | `http://app.lvh.me:8001` |
+| API | `http://api.lvh.me:4000` |
+| Keycloak | `http://auth.lvh.me:8080` |
 | ClickStack / HyperDX | `http://localhost:8800` |
 | Mailpit | `http://localhost:8025` |
 | RustFS S3 API | `http://localhost:19000` |
@@ -79,7 +89,8 @@ Notes:
 |--------|-------------|
 | `bun run dev` | run API, web, and landing locally via Turbo |
 | `bun run build` | build the workspace |
-| `bun run cli init` | local infra bootstrap, migrations, RustFS bucket, Keycloak client setup |
+| `bun run cli:init` | local infra bootstrap, migrations, RustFS bucket, Keycloak client setup |
+| `bun run cli:create-dev-user --seed` | create the local dev user and seed sample data |
 | `bun run cli services up` | start Docker Compose services |
 | `bun run cli services down` | stop Docker Compose services |
 | `bun run cli services status` | inspect Docker Compose services |
@@ -107,6 +118,11 @@ SIM_WORKERS=200 SIM_DELAY_MS=0 bun run scripts/sim.ts
 ## Auth
 
 Keycloak is the only supported identity provider in the current stack.
+
+Canonical local browser auth flow:
+- app: `http://app.lvh.me:8001`
+- api callback: `http://api.lvh.me:4000/api/access/web/callback`
+- auth: `http://auth.lvh.me:8080`
 
 Canonical local env vars:
 - `KEYCLOAK_URL`

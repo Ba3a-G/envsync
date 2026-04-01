@@ -50,16 +50,16 @@ export function ensureE2EEnv(): void {
 		KEYCLOAK_CLI_CLIENT_ID: process.env.KEYCLOAK_CLI_CLIENT_ID ?? "envsync-cli",
 		KEYCLOAK_API_CLIENT_ID: process.env.KEYCLOAK_API_CLIENT_ID ?? "envsync-api",
 		KEYCLOAK_API_CLIENT_SECRET: process.env.KEYCLOAK_API_CLIENT_SECRET ?? "test-api-client-secret",
-		KEYCLOAK_WEB_REDIRECT_URI: process.env.KEYCLOAK_WEB_REDIRECT_URI ?? "http://localhost:3000/callback",
-		KEYCLOAK_WEB_CALLBACK_URL: process.env.KEYCLOAK_WEB_CALLBACK_URL ?? "http://localhost:3000",
-		KEYCLOAK_API_REDIRECT_URI: process.env.KEYCLOAK_API_REDIRECT_URI ?? "http://localhost:4000/callback",
+		KEYCLOAK_WEB_REDIRECT_URI: process.env.KEYCLOAK_WEB_REDIRECT_URI ?? "http://api.lvh.me:4000/api/access/web/callback",
+		KEYCLOAK_WEB_CALLBACK_URL: process.env.KEYCLOAK_WEB_CALLBACK_URL ?? "http://app.lvh.me:8001/auth/callback",
+		KEYCLOAK_API_REDIRECT_URI: process.env.KEYCLOAK_API_REDIRECT_URI ?? "http://api.lvh.me:4000/api/access/api/callback",
 		OPENFGA_API_URL: process.env.OPENFGA_API_URL ?? "http://localhost:8090",
 		OPENFGA_STORE_ID: process.env.OPENFGA_STORE_ID ?? "",
 		OPENFGA_MODEL_ID: process.env.OPENFGA_MODEL_ID ?? "",
 		MINIKMS_GRPC_ADDR: process.env.MINIKMS_GRPC_ADDR ?? "localhost:50051",
 		MINIKMS_TLS_ENABLED: "false",
-		LANDING_PAGE_URL: process.env.LANDING_PAGE_URL ?? "http://localhost:3000",
-		DASHBOARD_URL: process.env.DASHBOARD_URL ?? "http://localhost:9090",
+		LANDING_PAGE_URL: process.env.LANDING_PAGE_URL ?? "http://localhost:8002",
+		DASHBOARD_URL: process.env.DASHBOARD_URL ?? "http://app.lvh.me:8001",
 	});
 }
 
