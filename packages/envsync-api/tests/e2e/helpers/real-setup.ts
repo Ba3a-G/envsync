@@ -39,11 +39,14 @@ console.log("[E2E Setup] Database initialized and migrations applied.");
 console.log("[E2E Setup] All services are REAL — zero mock.module() calls.");
 
 function ensureKeycloakHttpAdminSupport(adminUser: string, adminPassword: string): void {
+	const monorepoRoot = findMonorepoRoot();
 	const result = spawnSync(
 		"docker",
 		[
+			"compose",
 			"exec",
-			"monorepo-keycloak-1",
+			"-T",
+			"keycloak",
 			"/opt/keycloak/bin/kcadm.sh",
 			"config",
 			"credentials",
@@ -56,7 +59,7 @@ function ensureKeycloakHttpAdminSupport(adminUser: string, adminPassword: string
 			"--password",
 			adminPassword,
 		],
-		{ encoding: "utf8" },
+		{ cwd: monorepoRoot, encoding: "utf8", env: process.env },
 	);
 	if (result.status !== 0) {
 		console.warn("[E2E Setup] Failed to log into Keycloak via kcadm. Admin HTTP flow may still fail.");
@@ -66,15 +69,17 @@ function ensureKeycloakHttpAdminSupport(adminUser: string, adminPassword: string
 	const update = spawnSync(
 		"docker",
 		[
+			"compose",
 			"exec",
-			"monorepo-keycloak-1",
+			"-T",
+			"keycloak",
 			"/opt/keycloak/bin/kcadm.sh",
 			"update",
 			"realms/master",
 			"-s",
 			"sslRequired=NONE",
 		],
-		{ encoding: "utf8" },
+		{ cwd: monorepoRoot, encoding: "utf8", env: process.env },
 	);
 	if (update.status === 0) {
 		console.log("[E2E Setup] Keycloak master realm updated for local HTTP admin access.");
@@ -88,8 +93,10 @@ function ensureMiniKmsSchema(): void {
 	const check = spawnSync(
 		"docker",
 		[
+			"compose",
 			"exec",
-			"monorepo-minikms_db-1",
+			"-T",
+			"minikms_db",
 			"psql",
 			"-U",
 			dbUser,
@@ -113,7 +120,7 @@ function ensureMiniKmsSchema(): void {
 		throw new Error("miniKMS migration failed during E2E preload");
 	}
 
-	const restart = spawnSync("docker", ["restart", "monorepo-minikms-1"], {
+	const restart = spawnSync("docker", ["compose", "restart", "minikms"], {
 		cwd: monorepoRoot,
 		stdio: "inherit",
 		env: process.env,

@@ -76,13 +76,30 @@ function dockerComposeUp(): void {
 	if (result.status !== 0) throw new Error("Docker Compose up failed.");
 }
 
+function dockerComposeExec(service: string, args: string[], opts: { stdio?: "inherit" | "pipe"; encoding?: BufferEncoding } = {}) {
+	return spawnSync(
+		"docker",
+		["compose", "exec", "-T", service, ...args],
+		{ cwd: rootDir, env: process.env, stdio: opts.stdio ?? "inherit", encoding: opts.encoding },
+	);
+}
+
+function dockerComposeRestart(service: string): void {
+	const result = spawnSync("docker", ["compose", "restart", service], {
+		cwd: rootDir,
+		stdio: "inherit",
+		env: process.env,
+	});
+	if (result.status !== 0) {
+		throw new Error(`Failed to restart ${service}.`);
+	}
+}
+
 function ensureKeycloakHttpAdminSupport(adminUser: string, adminPassword: string): void {
 	console.log("\nConfiguring Keycloak admin realm for local HTTP...");
-	const login = spawnSync(
-		"docker",
+	const login = dockerComposeExec(
+		"keycloak",
 		[
-			"exec",
-			"monorepo-keycloak-1",
 			"/opt/keycloak/bin/kcadm.sh",
 			"config",
 			"credentials",
@@ -95,24 +112,20 @@ function ensureKeycloakHttpAdminSupport(adminUser: string, adminPassword: string
 			"--password",
 			adminPassword,
 		],
-		{ cwd: rootDir, stdio: "inherit", env: process.env },
 	);
 	if (login.status !== 0) {
 		throw new Error("Failed to authenticate to Keycloak via kcadm.");
 	}
 
-	const update = spawnSync(
-		"docker",
+	const update = dockerComposeExec(
+		"keycloak",
 		[
-			"exec",
-			"monorepo-keycloak-1",
 			"/opt/keycloak/bin/kcadm.sh",
 			"update",
 			"realms/master",
 			"-s",
 			"sslRequired=NONE",
 		],
-		{ cwd: rootDir, stdio: "inherit", env: process.env },
 	);
 	if (update.status !== 0) {
 		throw new Error("Failed to relax Keycloak master realm SSL requirement for local E2E.");
@@ -122,11 +135,9 @@ function ensureKeycloakHttpAdminSupport(adminUser: string, adminPassword: string
 function ensureMiniKmsSchema(): void {
 	console.log("\nEnsuring miniKMS schema...");
 
-	const check = spawnSync(
-		"docker",
+	const check = dockerComposeExec(
+		"minikms_db",
 		[
-			"exec",
-			"monorepo-minikms_db-1",
 			"psql",
 			"-U",
 			process.env.MINIKMS_DB_USER ?? "postgres",
@@ -135,7 +146,7 @@ function ensureMiniKmsSchema(): void {
 			"-tAc",
 			"SELECT to_regclass('public.certificates') IS NOT NULL",
 		],
-		{ cwd: rootDir, encoding: "utf8", env: process.env },
+		{ stdio: "pipe", encoding: "utf8" },
 	);
 
 	if (check.status === 0 && check.stdout.trim() === "t") {
@@ -152,14 +163,7 @@ function ensureMiniKmsSchema(): void {
 		throw new Error("miniKMS migration failed.");
 	}
 
-	const restart = spawnSync("docker", ["restart", "monorepo-minikms-1"], {
-		cwd: rootDir,
-		stdio: "inherit",
-		env: process.env,
-	});
-	if (restart.status !== 0) {
-		throw new Error("Failed to restart miniKMS after migration.");
-	}
+	dockerComposeRestart("minikms");
 }
 
 // ── Database helpers ────────────────────────────────────────────────
