@@ -174,13 +174,16 @@ Preview mutating steps without changing the host:
 
 ```bash
 npx @envsync-cloud/deploy-cli bootstrap --dry-run
+npx @envsync-cloud/deploy-cli bootstrap --force
 npx @envsync-cloud/deploy-cli deploy --dry-run
 ```
 
 Stage ownership:
 - `setup` writes desired operator config, including an exact release version such as `0.6.2`
-- `bootstrap` first removes the existing EnvSync stack, matching containers, network, and managed volumes after an `ARE YOU SURE?` confirmation, then starts base infra, runs OpenFGA and miniKMS migration jobs, starts runtime infra, initializes RustFS, initializes or validates OpenFGA, and persists generated env state
+- `bootstrap` first removes the existing EnvSync stack, matching containers, network, and managed volumes after a `yes` confirmation, or with `--force` in non-interactive environments, then starts base infra, runs OpenFGA and miniKMS migration jobs, starts runtime infra, initializes RustFS, initializes or validates OpenFGA, and persists generated env state
 - `deploy` starts the pending API and frontend services
+
+Bootstrap waits for Keycloak health on the management interface at `http://keycloak:9000/health/ready`.
 
 Release artifact requirements:
 - `ghcr.io/envsync-cloud/envsync-api:<version>`

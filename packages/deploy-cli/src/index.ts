@@ -96,7 +96,7 @@ interface InternalState {
 
 type RuntimeEnv = Record<string, string>;
 type ServiceHealth = "healthy" | "missing" | "degraded";
-type CommandOptions = { dryRun: boolean };
+type CommandOptions = { dryRun: boolean; force: boolean };
 
 const HOST_ROOT = "/opt/envsync";
 const DEPLOY_ROOT = "/opt/envsync/deploy";
@@ -142,7 +142,7 @@ const REQUIRED_BOOTSTRAP_ENV_KEYS = [
 ] as const;
 
 const SEMVER_VERSION_RE = /^\d+\.\d+\.\d+$/;
-let currentOptions: CommandOptions = { dryRun: false };
+let currentOptions: CommandOptions = { dryRun: false, force: false };
 
 function formatShellArg(arg: string) {
 	if (/^[A-Za-z0-9_./:@%+=,-]+$/.test(arg)) return arg;
@@ -341,7 +341,7 @@ async function ask(question: string, fallback = ""): Promise<string> {
 
 async function askRequired(question: string): Promise<string> {
 	if (!process.stdin.isTTY) {
-		throw new Error(`${question} confirmation requires an interactive terminal.`);
+		throw new Error("Bootstrap confirmation requires an interactive terminal. Re-run with --force to bypass the prompt.");
 	}
 	const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 	return await new Promise(resolve => {
@@ -1262,7 +1262,31 @@ function waitForTcpService(config: DeployConfig, label: string, host: string, po
 }
 
 function waitForHttpService(config: DeployConfig, label: string, url: string, timeoutSeconds = 120) {
-	waitForCommand(config, `${label} HTTP readiness`, "alpine:3.20", `wget -q -O /dev/null ${JSON.stringify(url)}`, timeoutSeconds);
+	if (currentOptions.dryRun) {
+		logDryRun(`Would wait for ${label} at ${url}`);
+		return;
+	}
+	logStep(`Waiting for ${label} on ${url}`);
+	const deadline = Date.now() + timeoutSeconds * 1000;
+	while (Date.now() < deadline) {
+		if (
+			commandSucceeds("docker", [
+				"run",
+				"--rm",
+				"--network",
+				stackNetworkName(config),
+				"alpine:3.20",
+				"sh",
+				"-lc",
+				`wget -q -O /dev/null ${JSON.stringify(url)}`,
+			])
+		) {
+			logSuccess(`${label} is ready`);
+			return;
+		}
+		sleepSeconds(2);
+	}
+	throw new Error(`Timed out waiting for ${label} at ${url}`);
 }
 
 function runOpenFgaMigrate(config: DeployConfig, runtimeEnv: RuntimeEnv) {
@@ -1497,9 +1521,14 @@ async function confirmBootstrapReset(config: DeployConfig) {
 		logWarn("Containers: none currently matched");
 	}
 	logWarn("This removes existing deployment data for the managed EnvSync services.");
-	const response = await askRequired(chalk.bold.red('Type "ARE YOU SURE?" to continue:'));
-	if (response !== "ARE YOU SURE?") {
-		throw new Error("Bootstrap aborted. Confirmation did not match 'ARE YOU SURE?'.");
+	if (currentOptions.force) {
+		logWarn("Skipping confirmation because --force was provided.");
+		logSuccess("Destructive bootstrap reset confirmed");
+		return;
+	}
+	const response = await askRequired(chalk.bold.red('Type "yes" to continue:'));
+	if (response !== "yes") {
+		throw new Error("Bootstrap aborted. Confirmation did not match 'yes'.");
 	}
 	logSuccess("Destructive bootstrap reset confirmed");
 }
@@ -1684,9 +1713,8 @@ async function cmdBootstrap() {
 	assertSwarmManager();
 	if (currentOptions.dryRun) {
 		logWarn("Dry-run mode: bootstrap reset will be previewed but not executed.");
-	} else {
-		await confirmBootstrapReset(config);
 	}
+	await confirmBootstrapReset(config);
 	cleanupBootstrapState(config);
 	ensureRepoCheckout(config);
 	writeDeployArtifacts(config, nextGenerated);
@@ -1717,7 +1745,7 @@ async function cmdBootstrap() {
 		run("docker", ["stack", "deploy", "-c", BOOTSTRAP_STACK_FILE, config.services.stack_name]);
 		logSuccess("Runtime bootstrap stack deployed");
 	}
-	waitForHttpService(config, "keycloak", "http://keycloak:8080/health/ready", 180);
+	waitForHttpService(config, "keycloak management readiness", "http://keycloak:9000/health/ready", 180);
 	waitForHttpService(config, "openfga", "http://openfga:8090/stores");
 	waitForTcpService(config, "minikms", "minikms", 50051);
 	const initResult = runBootstrapInit(config);
@@ -1990,8 +2018,9 @@ async function main() {
 	const args = argv.slice(1);
 	currentOptions = {
 		dryRun: args.includes("--dry-run"),
+		force: args.includes("--force"),
 	};
-	const positionals = args.filter(arg => arg !== "--dry-run");
+	const positionals = args.filter(arg => arg !== "--dry-run" && arg !== "--force");
 	switch (command) {
 		case "preinstall":
 			await cmdPreinstall();
@@ -2022,7 +2051,7 @@ async function main() {
 			break;
 		default:
 			console.log(
-				"Usage: envsync-deploy <preinstall|setup|bootstrap|deploy|health|upgrade|upgrade-deps|backup|restore> [--dry-run]",
+				"Usage: envsync-deploy <preinstall|setup|bootstrap|deploy|health|upgrade|upgrade-deps|backup|restore> [--dry-run] [--force]",
 			);
 			process.exit(command ? 1 : 0);
 	}

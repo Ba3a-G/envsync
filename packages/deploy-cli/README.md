@@ -40,7 +40,7 @@ bunx @envsync-cloud/deploy-cli <command>
 ```text
 envsync-deploy preinstall
 envsync-deploy setup
-envsync-deploy bootstrap [--dry-run]
+envsync-deploy bootstrap [--dry-run] [--force]
 envsync-deploy deploy [--dry-run]
 envsync-deploy health [--json]
 envsync-deploy upgrade [--dry-run]
@@ -71,7 +71,7 @@ Bootstrap infra, migrations, RustFS, and OpenFGA:
 npx @envsync-cloud/deploy-cli bootstrap
 ```
 
-`bootstrap` is destructive. It removes the existing EnvSync stack, matching containers, network, and managed volumes before rebuilding, and requires typing `ARE YOU SURE?` to continue.
+`bootstrap` is destructive. It removes the existing EnvSync stack, matching containers, network, and managed volumes before rebuilding, and requires typing `yes` to continue. Use `--force` to bypass the prompt in automation or other non-interactive environments.
 
 Deploy the pending API and frontend services:
 
@@ -106,6 +106,7 @@ Preview mutating commands without changing the host:
 
 ```bash
 npx @envsync-cloud/deploy-cli bootstrap --dry-run
+npx @envsync-cloud/deploy-cli bootstrap --force
 npx @envsync-cloud/deploy-cli deploy --dry-run
 ```
 
