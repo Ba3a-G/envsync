@@ -1,6 +1,6 @@
 {
   "name": "@envsync-cloud/deploy-cli",
-  "version": "0.4.0",
+  "version": "0.6.0",
   "description": "CLI for self-hosted EnvSync deployment on Docker Swarm",
   "type": "module",
   "bin": {
