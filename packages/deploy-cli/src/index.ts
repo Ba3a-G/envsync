@@ -77,6 +77,7 @@ interface DeployGeneratedState {
 	};
 	secrets: {
 		s3_secret_key: string;
+		keycloak_db_password: string;
 		keycloak_web_client_secret: string;
 		keycloak_api_client_secret: string;
 		openfga_db_password: string;
@@ -338,6 +339,19 @@ async function ask(question: string, fallback = ""): Promise<string> {
 	});
 }
 
+async function askRequired(question: string): Promise<string> {
+	if (!process.stdin.isTTY) {
+		throw new Error(`${question} confirmation requires an interactive terminal.`);
+	}
+	const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+	return await new Promise(resolve => {
+		rl.question(`${question} `, answer => {
+			rl.close();
+			resolve(answer.trim());
+		});
+	});
+}
+
 function sleepSeconds(seconds: number) {
 	spawnSync("sleep", [`${seconds}`], { stdio: "ignore" });
 }
@@ -495,6 +509,7 @@ function emptyGeneratedState(): DeployGeneratedState {
 		},
 		secrets: {
 			s3_secret_key: "",
+			keycloak_db_password: "",
 			keycloak_web_client_secret: "",
 			keycloak_api_client_secret: "",
 			openfga_db_password: "",
@@ -516,6 +531,7 @@ function normalizeGeneratedState(raw?: Partial<DeployGeneratedState>): DeployGen
 		},
 		secrets: {
 			s3_secret_key: raw?.secrets?.s3_secret_key ?? defaults.secrets.s3_secret_key,
+			keycloak_db_password: raw?.secrets?.keycloak_db_password ?? defaults.secrets.keycloak_db_password,
 			keycloak_web_client_secret: raw?.secrets?.keycloak_web_client_secret ?? defaults.secrets.keycloak_web_client_secret,
 			keycloak_api_client_secret: raw?.secrets?.keycloak_api_client_secret ?? defaults.secrets.keycloak_api_client_secret,
 			openfga_db_password: raw?.secrets?.openfga_db_password ?? defaults.secrets.openfga_db_password,
@@ -562,6 +578,7 @@ function mergeGeneratedState(env: RuntimeEnv, generated?: Partial<DeployGenerate
 		},
 		secrets: {
 			s3_secret_key: env.S3_SECRET_KEY ?? normalized.secrets.s3_secret_key,
+			keycloak_db_password: env.KEYCLOAK_DB_PASSWORD ?? normalized.secrets.keycloak_db_password,
 			keycloak_web_client_secret: env.KEYCLOAK_WEB_CLIENT_SECRET ?? normalized.secrets.keycloak_web_client_secret,
 			keycloak_api_client_secret: env.KEYCLOAK_API_CLIENT_SECRET ?? normalized.secrets.keycloak_api_client_secret,
 			openfga_db_password: env.OPENFGA_DB_PASSWORD ?? normalized.secrets.openfga_db_password,
@@ -584,6 +601,7 @@ function ensureGeneratedRuntimeState(generated: DeployGeneratedState) {
 		openfga: generated.openfga,
 		secrets: {
 			s3_secret_key: generated.secrets.s3_secret_key || randomSecret(16),
+			keycloak_db_password: generated.secrets.keycloak_db_password || "",
 			keycloak_web_client_secret: generated.secrets.keycloak_web_client_secret || randomSecret(),
 			keycloak_api_client_secret: generated.secrets.keycloak_api_client_secret || randomSecret(),
 			openfga_db_password: generated.secrets.openfga_db_password || randomSecret(),
@@ -628,6 +646,7 @@ function buildRuntimeEnv(config: DeployConfig, generated: DeployGeneratedState):
 		KEYCLOAK_REALM: config.auth.keycloak_realm,
 		KEYCLOAK_ADMIN_USER: config.auth.admin_user,
 		KEYCLOAK_ADMIN_PASSWORD: config.auth.admin_password,
+		KEYCLOAK_DB_PASSWORD: generated.secrets.keycloak_db_password || config.auth.admin_password,
 		KEYCLOAK_WEB_CLIENT_ID: config.auth.web_client_id,
 		KEYCLOAK_WEB_CLIENT_SECRET: generated.secrets.keycloak_web_client_secret,
 		KEYCLOAK_CLI_CLIENT_ID: config.auth.cli_client_id,
@@ -934,7 +953,7 @@ ${renderEnvList({
     environment:
 ${renderEnvList({
 		POSTGRES_USER: "keycloak",
-		POSTGRES_PASSWORD: runtimeEnv.KEYCLOAK_ADMIN_PASSWORD,
+		POSTGRES_PASSWORD: runtimeEnv.KEYCLOAK_DB_PASSWORD,
 		POSTGRES_DB: "keycloak",
 	})}
     volumes:
@@ -951,7 +970,7 @@ ${renderEnvList({
 		KC_DB: "postgres",
 		KC_DB_URL: "jdbc:postgresql://keycloak_db:5432/keycloak",
 		KC_DB_USERNAME: "keycloak",
-		KC_DB_PASSWORD: runtimeEnv.KEYCLOAK_ADMIN_PASSWORD,
+		KC_DB_PASSWORD: runtimeEnv.KEYCLOAK_DB_PASSWORD,
 		KC_BOOTSTRAP_ADMIN_USERNAME: config.auth.admin_user,
 		KC_BOOTSTRAP_ADMIN_PASSWORD: config.auth.admin_password,
 		KC_HTTP_ENABLED: "true",
@@ -1432,6 +1451,113 @@ function listStackServices(config: DeployConfig) {
 	return services;
 }
 
+function listManagedContainers(config: DeployConfig) {
+	const output = tryRun("docker", ["ps", "-aq", "--filter", `name=^/${config.services.stack_name}_`], { quiet: true });
+	return output
+		.split(/\r?\n/)
+		.map(line => line.trim())
+		.filter(Boolean);
+}
+
+function stackExists(config: DeployConfig) {
+	const output = tryRun("docker", ["stack", "ls", "--format", "{{.Name}}"], { quiet: true });
+	return output
+		.split(/\r?\n/)
+		.map(line => line.trim())
+		.filter(Boolean)
+		.includes(config.services.stack_name);
+}
+
+function waitForStackRemoval(config: DeployConfig, timeoutSeconds = 60) {
+	if (currentOptions.dryRun) {
+		logDryRun(`Would wait for stack ${config.services.stack_name} to be removed`);
+		return;
+	}
+	const deadline = Date.now() + timeoutSeconds * 1000;
+	while (Date.now() < deadline) {
+		if (!stackExists(config)) {
+			return;
+		}
+		sleepSeconds(2);
+	}
+	throw new Error(`Timed out waiting for stack ${config.services.stack_name} to be removed`);
+}
+
+async function confirmBootstrapReset(config: DeployConfig) {
+	const volumeNames = STACK_VOLUMES.map(volume => stackVolumeName(config, volume));
+	const containerIds = listManagedContainers(config);
+	const networkName = stackNetworkName(config);
+	logWarn("Bootstrap will delete existing EnvSync Docker resources before rebuilding infra.");
+	logWarn(`Stack: ${config.services.stack_name}`);
+	logWarn(`Network: ${networkName}`);
+	logWarn(`Volumes: ${volumeNames.join(", ")}`);
+	if (containerIds.length > 0) {
+		logWarn(`Containers: ${containerIds.join(", ")}`);
+	} else {
+		logWarn("Containers: none currently matched");
+	}
+	logWarn("This removes existing deployment data for the managed EnvSync services.");
+	const response = await askRequired(chalk.bold.red('Type "ARE YOU SURE?" to continue:'));
+	if (response !== "ARE YOU SURE?") {
+		throw new Error("Bootstrap aborted. Confirmation did not match 'ARE YOU SURE?'.");
+	}
+	logSuccess("Destructive bootstrap reset confirmed");
+}
+
+function cleanupBootstrapState(config: DeployConfig) {
+	const volumeNames = STACK_VOLUMES.map(volume => stackVolumeName(config, volume));
+	const containerIds = listManagedContainers(config);
+	const networkName = stackNetworkName(config);
+
+	logStep("Removing existing EnvSync deployment resources");
+	if (currentOptions.dryRun) {
+		if (stackExists(config)) {
+			logDryRun(`Would remove stack ${config.services.stack_name}`);
+			logCommand("docker", ["stack", "rm", config.services.stack_name]);
+		} else {
+			logDryRun(`No existing stack named ${config.services.stack_name} found`);
+		}
+		if (containerIds.length > 0) {
+			logDryRun(`Would remove containers: ${containerIds.join(", ")}`);
+			logCommand("docker", ["rm", "-f", ...containerIds]);
+		}
+		logDryRun(`Would remove network ${networkName} if present`);
+		logCommand("docker", ["network", "rm", networkName]);
+		for (const volumeName of volumeNames) {
+			logDryRun(`Would remove volume ${volumeName}`);
+			logCommand("docker", ["volume", "rm", "-f", volumeName]);
+		}
+		logSuccess("Bootstrap cleanup preview completed");
+		return;
+	}
+
+	if (stackExists(config)) {
+		logCommand("docker", ["stack", "rm", config.services.stack_name]);
+		run("docker", ["stack", "rm", config.services.stack_name]);
+		waitForStackRemoval(config);
+	}
+
+	const refreshedContainers = listManagedContainers(config);
+	if (refreshedContainers.length > 0) {
+		logCommand("docker", ["rm", "-f", ...refreshedContainers]);
+		run("docker", ["rm", "-f", ...refreshedContainers]);
+	}
+
+	if (commandSucceeds("docker", ["network", "inspect", networkName])) {
+		logCommand("docker", ["network", "rm", networkName]);
+		run("docker", ["network", "rm", networkName]);
+	}
+
+	for (const volumeName of volumeNames) {
+		if (commandSucceeds("docker", ["volume", "inspect", volumeName])) {
+			logCommand("docker", ["volume", "rm", "-f", volumeName]);
+			run("docker", ["volume", "rm", "-f", volumeName]);
+		}
+	}
+
+	logSuccess("Existing EnvSync deployment resources removed");
+}
+
 function serviceHealth(services: Map<string, ServiceHealth>, name: string) {
 	return services.get(`${name}`) ?? "missing";
 }
@@ -1556,6 +1682,12 @@ async function cmdBootstrap() {
 	const runtimeEnv = buildRuntimeEnv(config, nextGenerated);
 	logInfo(`Release version: ${config.release.version}`);
 	assertSwarmManager();
+	if (currentOptions.dryRun) {
+		logWarn("Dry-run mode: bootstrap reset will be previewed but not executed.");
+	} else {
+		await confirmBootstrapReset(config);
+	}
+	cleanupBootstrapState(config);
 	ensureRepoCheckout(config);
 	writeDeployArtifacts(config, nextGenerated);
 	buildKeycloakImage(config.images.keycloak);
@@ -1571,7 +1703,7 @@ async function cmdBootstrap() {
 	waitForPostgresService(config, "postgres", "postgres", "postgres", "envsync-postgres");
 	waitForRedisService(config);
 	waitForTcpService(config, "rustfs", "rustfs", 9000);
-	waitForPostgresService(config, "keycloak", "keycloak_db", "keycloak", runtimeEnv.KEYCLOAK_ADMIN_PASSWORD);
+	waitForPostgresService(config, "keycloak", "keycloak_db", "keycloak", runtimeEnv.KEYCLOAK_DB_PASSWORD);
 	waitForPostgresService(config, "openfga", "openfga_db", "openfga", runtimeEnv.OPENFGA_DB_PASSWORD);
 	waitForPostgresService(config, "minikms", "minikms_db", "postgres", runtimeEnv.MINIKMS_DB_PASSWORD);
 	runOpenFgaMigrate(config, runtimeEnv);

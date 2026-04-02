@@ -71,6 +71,8 @@ Bootstrap infra, migrations, RustFS, and OpenFGA:
 npx @envsync-cloud/deploy-cli bootstrap
 ```
 
+`bootstrap` is destructive. It removes the existing EnvSync stack, matching containers, network, and managed volumes before rebuilding, and requires typing `ARE YOU SURE?` to continue.
+
 Deploy the pending API and frontend services:
 
 ```bash
@@ -79,7 +81,7 @@ npx @envsync-cloud/deploy-cli deploy
 
 The staged flow is:
 - `setup` writes desired config
-- `bootstrap` starts base infra, runs OpenFGA and miniKMS migrations, starts runtime infra, and persists generated runtime env state
+- `bootstrap` resets the existing EnvSync deployment, then starts base infra, runs OpenFGA and miniKMS migrations, starts runtime infra, and persists generated runtime env state
 - `deploy` starts the pending API and frontend services
 
 Check service health:

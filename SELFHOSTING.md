@@ -179,7 +179,7 @@ npx @envsync-cloud/deploy-cli deploy --dry-run
 
 Stage ownership:
 - `setup` writes desired operator config, including an exact release version such as `0.6.2`
-- `bootstrap` starts base infra, runs OpenFGA and miniKMS migration jobs, starts runtime infra, initializes RustFS, initializes or validates OpenFGA, and persists generated env state
+- `bootstrap` first removes the existing EnvSync stack, matching containers, network, and managed volumes after an `ARE YOU SURE?` confirmation, then starts base infra, runs OpenFGA and miniKMS migration jobs, starts runtime infra, initializes RustFS, initializes or validates OpenFGA, and persists generated env state
 - `deploy` starts the pending API and frontend services
 
 Release artifact requirements:
