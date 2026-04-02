@@ -11,6 +11,9 @@ const PACKAGE_FILES = [
 	path.join(import.meta.dir, "..", "package.json"),
 	path.join(import.meta.dir, "..", "packages", "deploy-cli", "package.json"),
 	path.join(import.meta.dir, "..", "sdks", "envsync-ts-sdk", "package.json"),
+	path.join(import.meta.dir, "..", "apps", "envsync-landing", "package.json"),
+	path.join(import.meta.dir, "..", "apps", "envsync-web", "package.json"),
+	path.join(import.meta.dir, "..", "packages", "envsync-api", "package.json"),
 ] as const;
 const VALID_BUMP_KINDS = new Set<BumpKind>(["patch", "minor", "major"]);
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+$/;

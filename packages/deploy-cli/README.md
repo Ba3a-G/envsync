@@ -40,6 +40,7 @@ bunx @envsync-cloud/deploy-cli <command>
 ```text
 envsync-deploy preinstall
 envsync-deploy setup
+envsync-deploy bootstrap
 envsync-deploy deploy
 envsync-deploy health [--json]
 envsync-deploy upgrade
@@ -56,17 +57,28 @@ Prepare the host:
 npx @envsync-cloud/deploy-cli preinstall
 ```
 
-Generate deployment state and prompts:
+Write the desired self-hosted config:
 
 ```bash
 npx @envsync-cloud/deploy-cli setup
 ```
 
-Apply the Docker Swarm stack:
+Bootstrap infra, migrations, RustFS, and OpenFGA:
+
+```bash
+npx @envsync-cloud/deploy-cli bootstrap
+```
+
+Deploy the pending API and frontend services:
 
 ```bash
 npx @envsync-cloud/deploy-cli deploy
 ```
+
+The staged flow is:
+- `setup` writes desired config
+- `bootstrap` starts infra and persists generated runtime env state
+- `deploy` starts the pending API and frontend services
 
 Check service health:
 

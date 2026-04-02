@@ -3,6 +3,20 @@ import path from "node:path";
 
 const TURBO_JSON = "turbo.json";
 
+function shouldSkipRootEnv() {
+	return process.env.SKIP_ROOT_ENV === "1";
+}
+
+function shouldSkipRootEnvWrite() {
+	return process.env.SKIP_ROOT_ENV_WRITE === "1";
+}
+
+function getRootEnvPath() {
+	const override = process.env.ROOT_ENV_PATH;
+	if (override) return override;
+	return path.join(findMonorepoRoot(), ".env");
+}
+
 /**
  * Find monorepo root by walking up from cwd until we find turbo.json.
  */
@@ -45,9 +59,8 @@ function parseEnvFile(content: string): Record<string, string> {
  * Call this before parsing config so all packages use root env when run from anywhere in the repo.
  */
 export function loadRootEnv(): void {
-	if (process.env.SKIP_ROOT_ENV === "1") return;
-	const root = findMonorepoRoot();
-	const envPath = path.join(root, ".env");
+	if (shouldSkipRootEnv()) return;
+	const envPath = getRootEnvPath();
 	if (!fs.existsSync(envPath)) return;
 	const content = fs.readFileSync(envPath, "utf8");
 	const parsed = parseEnvFile(content);
@@ -61,8 +74,8 @@ export function loadRootEnv(): void {
  */
 export function updateRootEnv(updates: Record<string, string>): void {
 	if (Object.keys(updates).length === 0) return;
-	const root = findMonorepoRoot();
-	const envPath = path.join(root, ".env");
+	if (shouldSkipRootEnvWrite()) return;
+	const envPath = getRootEnvPath();
 	const content = fs.existsSync(envPath) ? fs.readFileSync(envPath, "utf8") : "";
 	const lines = content.split(/\r?\n/);
 	const keyToLineIndex = new Map<string, number>();

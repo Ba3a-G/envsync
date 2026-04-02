@@ -89,9 +89,10 @@ The self-hosted deploy package is:
 Published package name:
 - `@envsync-cloud/deploy-cli`
 
-Planned command surface:
+Command surface:
 - `preinstall`
 - `setup`
+- `bootstrap`
 - `deploy`
 - `health`
 - `upgrade`
@@ -128,8 +129,10 @@ That means:
 - local uses `docker-compose.yaml`
 - self-hosted generation is handled by `packages/deploy-cli`
 - local ClickStack setup is seeded by scripts
-- self-hosted assets and stack files are generated during `setup` / `deploy`
+- self-hosted assets and stack files are generated during `bootstrap` / `deploy`
 - local, E2E, and self-hosted all build Keycloak from repo source
+- self-hosted Keycloak builds use a pinned repo checkout recorded in `/etc/envsync/deploy.yaml`
+- generated runtime state is kept in `/etc/envsync/deploy.env`
 
 ## Current Reality
 
@@ -156,6 +159,28 @@ bun run cli:create-dev-user --seed
 bun run clickstack:sync
 bun run dev
 ```
+
+## Recommended Self-Hosted Flow
+
+```bash
+npx @envsync-cloud/deploy-cli preinstall
+npx @envsync-cloud/deploy-cli setup
+npx @envsync-cloud/deploy-cli bootstrap
+npx @envsync-cloud/deploy-cli deploy
+```
+
+Stage ownership:
+- `setup` writes desired operator config
+- `bootstrap` starts infra, waits for readiness, runs migrations, initializes RustFS, initializes or validates OpenFGA, and persists generated env state
+- `deploy` starts the pending API and frontend services
+
+Release artifact requirements:
+- `ghcr.io/envsync-cloud/envsync-api:stable`
+- `ghcr.io/envsync-cloud/envsync-api:latest`
+- `ghcr.io/envsync-cloud/envsync-web-static:stable`
+- `ghcr.io/envsync-cloud/envsync-web-static:latest`
+- `ghcr.io/envsync-cloud/envsync-landing-static:stable`
+- `ghcr.io/envsync-cloud/envsync-landing-static:latest`
 
 ## Related Files
 

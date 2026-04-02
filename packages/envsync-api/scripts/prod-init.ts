@@ -10,16 +10,63 @@ import { authorizationModelDef } from "../src/libs/openfga/model";
 import { updateRootEnv } from "../src/utils/load-root-env";
 import { config } from "../src/utils/env";
 
+const args = new Set(process.argv.slice(2));
+const jsonMode = args.has("--json");
+const noWriteRootEnv = args.has("--no-write-root-env");
+
+function log(message: string) {
+	if (jsonMode) {
+		console.error(message);
+		return;
+	}
+	console.log(message);
+}
+
+function assertCompleteOpenFgaState() {
+	if ((config.OPENFGA_STORE_ID && !config.OPENFGA_MODEL_ID) || (!config.OPENFGA_STORE_ID && config.OPENFGA_MODEL_ID)) {
+		throw new Error("Partial OpenFGA bootstrap state detected. Set both OPENFGA_STORE_ID and OPENFGA_MODEL_ID, or neither.");
+	}
+}
+
 async function initOpenFGA() {
+	assertCompleteOpenFgaState();
+
+	if (config.OPENFGA_STORE_ID && config.OPENFGA_MODEL_ID) {
+		const existing = new OpenFgaClient({
+			apiUrl: config.OPENFGA_API_URL,
+			storeId: config.OPENFGA_STORE_ID,
+			authorizationModelId: config.OPENFGA_MODEL_ID,
+		});
+		await existing.getStore();
+		await existing.readAuthorizationModel({
+			storeId: config.OPENFGA_STORE_ID,
+			authorizationModelId: config.OPENFGA_MODEL_ID,
+		});
+		return {
+			storeId: config.OPENFGA_STORE_ID,
+			modelId: config.OPENFGA_MODEL_ID,
+		};
+	}
+
 	const client = new OpenFgaClient({ apiUrl: config.OPENFGA_API_URL });
 	const store = await client.createStore({ name: "envsync" });
 	const model = await client.writeAuthorizationModel(authorizationModelDef, { storeId: store.id });
-	updateRootEnv({
-		OPENFGA_STORE_ID: store.id,
-		OPENFGA_MODEL_ID: model.authorization_model_id,
-	});
-	console.log(`OPENFGA_STORE_ID=${store.id}`);
-	console.log(`OPENFGA_MODEL_ID=${model.authorization_model_id}`);
+
+	if (!store.id || !model.authorization_model_id) {
+		throw new Error("OpenFGA bootstrap failed to return store/model IDs");
+	}
+
+	if (!noWriteRootEnv) {
+		updateRootEnv({
+			OPENFGA_STORE_ID: store.id,
+			OPENFGA_MODEL_ID: model.authorization_model_id,
+		});
+	}
+
+	return {
+		storeId: store.id,
+		modelId: model.authorization_model_id,
+	};
 }
 
 async function initRustfs() {
@@ -48,25 +95,38 @@ function runMigrations() {
 }
 
 async function main() {
-	console.log("=== Keycloak ===");
-	console.log(`KEYCLOAK_URL=${config.KEYCLOAK_URL}`);
-	console.log(`KEYCLOAK_REALM=${config.KEYCLOAK_REALM}`);
-	console.log(`KEYCLOAK_WEB_CLIENT_ID=${config.KEYCLOAK_WEB_CLIENT_ID}`);
-	console.log(`KEYCLOAK_API_CLIENT_ID=${config.KEYCLOAK_API_CLIENT_ID}`);
-	console.log(`KEYCLOAK_CLI_CLIENT_ID=${config.KEYCLOAK_CLI_CLIENT_ID}`);
+	log("=== Keycloak ===");
+	log(`KEYCLOAK_URL=${config.KEYCLOAK_URL}`);
+	log(`KEYCLOAK_REALM=${config.KEYCLOAK_REALM}`);
+	log(`KEYCLOAK_WEB_CLIENT_ID=${config.KEYCLOAK_WEB_CLIENT_ID}`);
+	log(`KEYCLOAK_API_CLIENT_ID=${config.KEYCLOAK_API_CLIENT_ID}`);
+	log(`KEYCLOAK_CLI_CLIENT_ID=${config.KEYCLOAK_CLI_CLIENT_ID}`);
 
-	console.log("\n=== OpenFGA ===");
-	await initOpenFGA();
+	log("\n=== OpenFGA ===");
+	const openfga = await initOpenFGA();
 
-	console.log("\n=== Database ===");
+	log("\n=== Database ===");
 	runMigrations();
 
-	console.log("\n=== RustFS ===");
+	log("\n=== RustFS ===");
 	await initRustfs();
 
-	console.log("\n=== ClickStack ===");
-	console.log("CLICKSTACK_URL=http://clickstack:8080");
-	console.log("OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-agent:4318");
+	log("\n=== ClickStack ===");
+	log("CLICKSTACK_URL=http://clickstack:8080");
+	log("OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-agent:4318");
+
+	if (jsonMode) {
+		console.log(
+			JSON.stringify({
+				openfgaStoreId: openfga.storeId,
+				openfgaModelId: openfga.modelId,
+			}),
+		);
+		return;
+	}
+
+	console.log(`OPENFGA_STORE_ID=${openfga.storeId}`);
+	console.log(`OPENFGA_MODEL_ID=${openfga.modelId}`);
 }
 
 await main();
