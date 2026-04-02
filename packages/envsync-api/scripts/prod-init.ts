@@ -14,6 +14,13 @@ const args = new Set(process.argv.slice(2));
 const jsonMode = args.has("--json");
 const noWriteRootEnv = args.has("--no-write-root-env");
 
+function formatErrorMessage(error: unknown) {
+	if (error instanceof Error) {
+		return error.message;
+	}
+	return String(error);
+}
+
 function log(message: string) {
 	if (jsonMode) {
 		console.error(message);
@@ -31,42 +38,52 @@ function assertCompleteOpenFgaState() {
 async function initOpenFGA() {
 	assertCompleteOpenFgaState();
 
-	if (config.OPENFGA_STORE_ID && config.OPENFGA_MODEL_ID) {
-		const existing = new OpenFgaClient({
-			apiUrl: config.OPENFGA_API_URL,
-			storeId: config.OPENFGA_STORE_ID,
-			authorizationModelId: config.OPENFGA_MODEL_ID,
-		});
-		await existing.getStore();
-		await existing.readAuthorizationModel({
-			storeId: config.OPENFGA_STORE_ID,
-			authorizationModelId: config.OPENFGA_MODEL_ID,
-		});
+	try {
+		if (config.OPENFGA_STORE_ID && config.OPENFGA_MODEL_ID) {
+			const existing = new OpenFgaClient({
+				apiUrl: config.OPENFGA_API_URL,
+				storeId: config.OPENFGA_STORE_ID,
+				authorizationModelId: config.OPENFGA_MODEL_ID,
+			});
+			await existing.getStore();
+			await existing.readAuthorizationModel({
+				storeId: config.OPENFGA_STORE_ID,
+				authorizationModelId: config.OPENFGA_MODEL_ID,
+			});
+			return {
+				storeId: config.OPENFGA_STORE_ID,
+				modelId: config.OPENFGA_MODEL_ID,
+			};
+		}
+
+		const client = new OpenFgaClient({ apiUrl: config.OPENFGA_API_URL });
+		const store = await client.createStore({ name: "envsync" });
+		const model = await client.writeAuthorizationModel(authorizationModelDef, { storeId: store.id });
+
+		if (!store.id || !model.authorization_model_id) {
+			throw new Error("OpenFGA bootstrap failed to return store/model IDs");
+		}
+
+		if (!noWriteRootEnv) {
+			updateRootEnv({
+				OPENFGA_STORE_ID: store.id,
+				OPENFGA_MODEL_ID: model.authorization_model_id,
+			});
+		}
+
 		return {
-			storeId: config.OPENFGA_STORE_ID,
-			modelId: config.OPENFGA_MODEL_ID,
+			storeId: store.id,
+			modelId: model.authorization_model_id,
 		};
+	} catch (error) {
+		const message = formatErrorMessage(error);
+		if (message.includes("status code 500") || message.includes("Internal Server Error")) {
+			throw new Error(
+				"OpenFGA is reachable but not initialized correctly. Verify the OpenFGA datastore migration completed successfully before running prod-init.",
+			);
+		}
+		throw new Error(`OpenFGA bootstrap failed: ${message}`);
 	}
-
-	const client = new OpenFgaClient({ apiUrl: config.OPENFGA_API_URL });
-	const store = await client.createStore({ name: "envsync" });
-	const model = await client.writeAuthorizationModel(authorizationModelDef, { storeId: store.id });
-
-	if (!store.id || !model.authorization_model_id) {
-		throw new Error("OpenFGA bootstrap failed to return store/model IDs");
-	}
-
-	if (!noWriteRootEnv) {
-		updateRootEnv({
-			OPENFGA_STORE_ID: store.id,
-			OPENFGA_MODEL_ID: model.authorization_model_id,
-		});
-	}
-
-	return {
-		storeId: store.id,
-		modelId: model.authorization_model_id,
-	};
 }
 
 async function initRustfs() {
@@ -129,4 +146,12 @@ async function main() {
 	console.log(`OPENFGA_MODEL_ID=${openfga.modelId}`);
 }
 
-await main();
+await main().catch(error => {
+	const message = formatErrorMessage(error);
+	if (jsonMode) {
+		console.error(message);
+	} else {
+		console.error(error instanceof Error ? error : message);
+	}
+	process.exit(1);
+});

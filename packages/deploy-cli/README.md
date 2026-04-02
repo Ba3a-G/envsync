@@ -63,6 +63,8 @@ Write the desired self-hosted config:
 npx @envsync-cloud/deploy-cli setup
 ```
 
+`setup` requires an exact release version such as `0.6.2`. Channel names like `stable` and `latest` are not accepted for self-hosted installs.
+
 Bootstrap infra, migrations, RustFS, and OpenFGA:
 
 ```bash
@@ -77,7 +79,7 @@ npx @envsync-cloud/deploy-cli deploy
 
 The staged flow is:
 - `setup` writes desired config
-- `bootstrap` starts infra and persists generated runtime env state
+- `bootstrap` starts base infra, runs OpenFGA and miniKMS migrations, starts runtime infra, and persists generated runtime env state
 - `deploy` starts the pending API and frontend services
 
 Check service health:

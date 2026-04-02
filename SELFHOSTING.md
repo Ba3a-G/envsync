@@ -131,7 +131,8 @@ That means:
 - local ClickStack setup is seeded by scripts
 - self-hosted assets and stack files are generated during `bootstrap` / `deploy`
 - local, E2E, and self-hosted all build Keycloak from repo source
-- self-hosted Keycloak builds use a pinned repo checkout recorded in `/etc/envsync/deploy.yaml`
+- self-hosted installs use an exact release version, not `stable` or `latest`
+- self-hosted Keycloak builds use a pinned repo checkout recorded in `/etc/envsync/deploy.yaml` as `source.ref = v<version>`
 - generated runtime state is kept in `/etc/envsync/deploy.env`
 
 ## Current Reality
@@ -170,17 +171,14 @@ npx @envsync-cloud/deploy-cli deploy
 ```
 
 Stage ownership:
-- `setup` writes desired operator config
-- `bootstrap` starts infra, waits for readiness, runs migrations, initializes RustFS, initializes or validates OpenFGA, and persists generated env state
+- `setup` writes desired operator config, including an exact release version such as `0.6.2`
+- `bootstrap` starts base infra, runs OpenFGA and miniKMS migration jobs, starts runtime infra, initializes RustFS, initializes or validates OpenFGA, and persists generated env state
 - `deploy` starts the pending API and frontend services
 
 Release artifact requirements:
-- `ghcr.io/envsync-cloud/envsync-api:stable`
-- `ghcr.io/envsync-cloud/envsync-api:latest`
-- `ghcr.io/envsync-cloud/envsync-web-static:stable`
-- `ghcr.io/envsync-cloud/envsync-web-static:latest`
-- `ghcr.io/envsync-cloud/envsync-landing-static:stable`
-- `ghcr.io/envsync-cloud/envsync-landing-static:latest`
+- `ghcr.io/envsync-cloud/envsync-api:<version>`
+- `ghcr.io/envsync-cloud/envsync-web-static:<version>`
+- `ghcr.io/envsync-cloud/envsync-landing-static:<version>`
 
 ## Related Files
 

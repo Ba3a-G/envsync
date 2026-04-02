@@ -32,11 +32,11 @@ function bumpVersion(version: string, kind: BumpKind): string {
 	const [major, minor, patch] = version.split(".").map(Number);
 	switch (kind) {
 		case "major":
-			return `${major + 1}.0.0`;
+			return `${major! + 1}.0.0`;
 		case "minor":
-			return `${major}.${minor + 1}.0`;
+			return `${major}.${minor! + 1}.0`;
 		case "patch":
-			return `${major}.${minor}.${patch + 1}`;
+			return `${major}.${minor}.${patch! + 1}`;
 	}
 }
 
@@ -70,13 +70,13 @@ const nextVersion = VALID_BUMP_KINDS.has(versionArg as BumpKind)
 	? bumpVersion(baseVersion, versionArg as BumpKind)
 	: versionArg;
 
-if (!SEMVER_PATTERN.test(nextVersion)) {
+if (!SEMVER_PATTERN.test(nextVersion!)) {
 	console.error(`Invalid version: ${nextVersion}. Expected patch|minor|major or x.y.z.`);
 	process.exit(1);
 }
 
 for (const filePath of PACKAGE_FILES) {
-	writePackageVersion(filePath, nextVersion);
+	writePackageVersion(filePath, nextVersion!);
 }
 
 console.log(`Updated release versions to ${nextVersion}`);

@@ -4,12 +4,13 @@ import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
 
-type ReleaseChannel = "stable" | "latest";
-
 interface DeployConfig {
 	source: {
 		repo_url: string;
 		ref: string;
+	};
+	release: {
+		version: string;
 	};
 	domain: {
 		root_domain: string;
@@ -65,7 +66,7 @@ interface DeployConfig {
 		s3_public: boolean;
 		s3_console_public: boolean;
 	};
-	release_channel: ReleaseChannel;
+	release_channel?: string;
 }
 
 interface DeployGeneratedState {
@@ -105,6 +106,7 @@ const DEPLOY_ENV = "/etc/envsync/deploy.env";
 const DEPLOY_YAML = "/etc/envsync/deploy.yaml";
 const VERSIONS_LOCK = "/opt/envsync/deploy/versions.lock.json";
 const STACK_FILE = "/opt/envsync/deploy/docker-stack.yaml";
+const BOOTSTRAP_BASE_STACK_FILE = "/opt/envsync/deploy/docker-stack.bootstrap.base.yaml";
 const BOOTSTRAP_STACK_FILE = "/opt/envsync/deploy/docker-stack.bootstrap.yaml";
 const TRAEFIK_DYNAMIC_FILE = "/opt/envsync/deploy/traefik-dynamic.yaml";
 const KEYCLOAK_REALM_FILE = "/opt/envsync/deploy/keycloak-realm.envsync.json";
@@ -135,6 +137,8 @@ const REQUIRED_BOOTSTRAP_ENV_KEYS = [
 	"OPENFGA_STORE_ID",
 	"OPENFGA_MODEL_ID",
 ] as const;
+
+const SEMVER_VERSION_RE = /^\d+\.\d+\.\d+$/;
 
 function run(cmd: string, args: string[], opts: { cwd?: string; env?: Record<string, string>; quiet?: boolean } = {}) {
 	const result = spawnSync(cmd, args, {
@@ -313,17 +317,125 @@ function getDeployCliVersion() {
 	}
 }
 
-function defaultSourceConfig() {
+function assertSemverVersion(version: string, label = "release version") {
+	if (!SEMVER_VERSION_RE.test(version)) {
+		throw new Error(`Invalid ${label} '${version}'. Expected an exact semver like 0.6.2.`);
+	}
+}
+
+function versionedImages(version: string) {
+	assertSemverVersion(version);
 	return {
-		repo_url: "https://github.com/EnvSync-Cloud/envsync.git",
-		ref: `v${getDeployCliVersion()}`,
+		api: `ghcr.io/envsync-cloud/envsync-api:${version}`,
+		keycloak: `envsync-keycloak:${version}`,
+		web: `ghcr.io/envsync-cloud/envsync-web-static:${version}`,
+		landing: `ghcr.io/envsync-cloud/envsync-landing-static:${version}`,
 	};
 }
 
-function normalizeConfig(raw: DeployConfig): DeployConfig {
+function defaultSourceConfig(version: string) {
 	return {
-		...raw,
-		source: raw.source ?? defaultSourceConfig(),
+		repo_url: "https://github.com/EnvSync-Cloud/envsync.git",
+		ref: `v${version}`,
+	};
+}
+
+function resolveReleaseVersion(raw: Partial<DeployConfig>) {
+	const releaseVersion = raw.release?.version;
+	if (releaseVersion) {
+		assertSemverVersion(releaseVersion);
+		return releaseVersion;
+	}
+	if (typeof raw.release_channel === "string" && raw.release_channel.length > 0) {
+		if (SEMVER_VERSION_RE.test(raw.release_channel)) {
+			return raw.release_channel;
+		}
+		if (raw.release_channel === "stable" || raw.release_channel === "latest") {
+			throw new Error(
+				"Legacy release channel config is no longer supported for self-hosted installs. Set an exact release version in /etc/envsync/deploy.yaml.",
+			);
+		}
+		throw new Error(`Invalid legacy release channel '${raw.release_channel}'. Set an exact release version in /etc/envsync/deploy.yaml.`);
+	}
+	return getDeployCliVersion();
+}
+
+function requireDefined<T>(value: T | undefined, label: string): T {
+	if (value === undefined) {
+		throw new Error(`Missing ${label} in ${DEPLOY_YAML}. Run setup again.`);
+	}
+	return value;
+}
+
+function normalizeConfig(raw: Partial<DeployConfig>): DeployConfig {
+	const version = resolveReleaseVersion(raw);
+	const derivedImages = versionedImages(version);
+	const { release_channel: _legacyReleaseChannel, ...rest } = raw;
+	const rootDomain = requireDefined(raw.domain?.root_domain, "domain.root_domain");
+	const acmeEmail = requireDefined(raw.domain?.acme_email, "domain.acme_email");
+	return {
+		...rest,
+		source: {
+			repo_url: raw.source?.repo_url ?? "https://github.com/EnvSync-Cloud/envsync.git",
+			ref: `v${version}`,
+		},
+		release: {
+			version,
+		},
+		domain: {
+			root_domain: rootDomain,
+			acme_email: acmeEmail,
+		},
+		images: {
+			api: derivedImages.api,
+			keycloak: derivedImages.keycloak,
+			web: derivedImages.web,
+			landing: derivedImages.landing,
+			clickstack: raw.images?.clickstack ?? "clickhouse/clickstack-all-in-one:latest",
+			traefik: raw.images?.traefik ?? "traefik:v3.1",
+			otel_agent: raw.images?.otel_agent ?? "otel/opentelemetry-collector-contrib:0.111.0",
+		},
+		services: {
+			stack_name: requireDefined(raw.services?.stack_name, "services.stack_name"),
+			api_port: requireDefined(raw.services?.api_port, "services.api_port"),
+			clickstack_ui_port: requireDefined(raw.services?.clickstack_ui_port, "services.clickstack_ui_port"),
+			clickstack_otlp_http_port: requireDefined(raw.services?.clickstack_otlp_http_port, "services.clickstack_otlp_http_port"),
+			clickstack_otlp_grpc_port: requireDefined(raw.services?.clickstack_otlp_grpc_port, "services.clickstack_otlp_grpc_port"),
+			keycloak_port: requireDefined(raw.services?.keycloak_port, "services.keycloak_port"),
+			rustfs_port: requireDefined(raw.services?.rustfs_port, "services.rustfs_port"),
+			rustfs_console_port: requireDefined(raw.services?.rustfs_console_port, "services.rustfs_console_port"),
+		},
+		auth: {
+			keycloak_realm: requireDefined(raw.auth?.keycloak_realm, "auth.keycloak_realm"),
+			admin_user: requireDefined(raw.auth?.admin_user, "auth.admin_user"),
+			admin_password: requireDefined(raw.auth?.admin_password, "auth.admin_password"),
+			web_client_id: requireDefined(raw.auth?.web_client_id, "auth.web_client_id"),
+			api_client_id: requireDefined(raw.auth?.api_client_id, "auth.api_client_id"),
+			cli_client_id: requireDefined(raw.auth?.cli_client_id, "auth.cli_client_id"),
+		},
+		observability: {
+			retention_days: requireDefined(raw.observability?.retention_days, "observability.retention_days"),
+			public_obs: requireDefined(raw.observability?.public_obs, "observability.public_obs"),
+		},
+		backup: {
+			output_dir: requireDefined(raw.backup?.output_dir, "backup.output_dir"),
+			encrypted: requireDefined(raw.backup?.encrypted, "backup.encrypted"),
+		},
+		smtp: {
+			host: requireDefined(raw.smtp?.host, "smtp.host"),
+			port: requireDefined(raw.smtp?.port, "smtp.port"),
+			secure: requireDefined(raw.smtp?.secure, "smtp.secure"),
+			user: requireDefined(raw.smtp?.user, "smtp.user"),
+			pass: requireDefined(raw.smtp?.pass, "smtp.pass"),
+			from: requireDefined(raw.smtp?.from, "smtp.from"),
+		},
+		exposure: {
+			public_auth: requireDefined(raw.exposure?.public_auth, "exposure.public_auth"),
+			public_obs: requireDefined(raw.exposure?.public_obs, "exposure.public_obs"),
+			mailpit_enabled: requireDefined(raw.exposure?.mailpit_enabled, "exposure.mailpit_enabled"),
+			s3_public: requireDefined(raw.exposure?.s3_public, "exposure.s3_public"),
+			s3_console_public: requireDefined(raw.exposure?.s3_console_public, "exposure.s3_console_public"),
+		},
 	};
 }
 
@@ -683,8 +795,10 @@ function renderOtelAgentConfig(config: DeployConfig) {
 	].join("\n") + "\n";
 }
 
-function renderStack(config: DeployConfig, runtimeEnv: RuntimeEnv, includeAppServices: boolean) {
+function renderStack(config: DeployConfig, runtimeEnv: RuntimeEnv, mode: "base" | "bootstrap" | "full") {
 	const hosts = domainMap(config.domain.root_domain);
+	const includeRuntimeInfra = mode !== "base";
+	const includeAppServices = mode === "full";
 	const apiEnvironment = {
 		...runtimeEnv,
 		OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-agent:4318",
@@ -778,7 +892,7 @@ ${renderEnvList({
     volumes:
       - keycloak_db_data:/var/lib/postgresql/data
     networks: [envsync]
-
+${includeRuntimeInfra ? `
   keycloak:
     image: ${config.images.keycloak}
     entrypoint: ["/bin/sh", "-lc"]
@@ -805,7 +919,7 @@ ${renderEnvList({
         - traefik.http.routers.keycloak.rule=Host(\`${hosts.auth}\`)
         - traefik.http.routers.keycloak.entrypoints=websecure
         - traefik.http.routers.keycloak.tls.certresolver=letsencrypt
-        - traefik.http.services.keycloak.loadbalancer.server.port=8080
+        - traefik.http.services.keycloak.loadbalancer.server.port=8080` : ""}
 
   openfga_db:
     image: postgres:17
@@ -818,7 +932,7 @@ ${renderEnvList({
     volumes:
       - openfga_db_data:/var/lib/postgresql/data
     networks: [envsync]
-
+${includeRuntimeInfra ? `
   openfga:
     image: openfga/openfga:v1.12.0
     command: run
@@ -829,7 +943,7 @@ ${renderEnvList({
 		OPENFGA_HTTP_ADDR: "0.0.0.0:8090",
 		OPENFGA_GRPC_ADDR: "0.0.0.0:8091",
 	})}
-    networks: [envsync]
+    networks: [envsync]` : ""}
 
   minikms_db:
     image: postgres:17
@@ -842,7 +956,7 @@ ${renderEnvList({
     volumes:
       - minikms_db_data:/var/lib/postgresql/data
     networks: [envsync]
-
+${includeRuntimeInfra ? `
   minikms:
     image: ghcr.io/envsync-cloud/minikms:sha-735dfe8
     environment:
@@ -853,7 +967,7 @@ ${renderEnvList({
 		MINIKMS_GRPC_ADDR: "0.0.0.0:50051",
 		MINIKMS_TLS_ENABLED: "false",
 	})}
-    networks: [envsync]
+    networks: [envsync]` : ""}
 
   clickstack:
     image: ${config.images.clickstack}
@@ -932,8 +1046,9 @@ function writeDeployArtifacts(config: DeployConfig, generated: DeployGeneratedSt
 	writeFile(VERSIONS_LOCK, JSON.stringify(config.images, null, 2) + "\n");
 	writeFile(KEYCLOAK_REALM_FILE, renderKeycloakRealm(config, runtimeEnv));
 	writeFile(TRAEFIK_DYNAMIC_FILE, renderTraefikDynamicConfig(config));
-	writeFile(STACK_FILE, renderStack(config, runtimeEnv, true));
-	writeFile(BOOTSTRAP_STACK_FILE, renderStack(config, runtimeEnv, false));
+	writeFile(BOOTSTRAP_BASE_STACK_FILE, renderStack(config, runtimeEnv, "base"));
+	writeFile(BOOTSTRAP_STACK_FILE, renderStack(config, runtimeEnv, "bootstrap"));
+	writeFile(STACK_FILE, renderStack(config, runtimeEnv, "full"));
 	writeFile(NGINX_WEB_CONF, renderNginxConf("web"));
 	writeFile(NGINX_LANDING_CONF, renderNginxConf("landing"));
 	writeFile(OTEL_AGENT_CONF, renderOtelAgentConfig(config));
@@ -981,6 +1096,50 @@ function stackNetworkName(config: DeployConfig) {
 	return `${config.services.stack_name}_envsync`;
 }
 
+function assertSwarmManager() {
+	const state = tryRun("docker", ["info", "--format", "{{.Swarm.LocalNodeState}}|{{.Swarm.ControlAvailable}}"], { quiet: true }).trim();
+	if (state !== "active|true") {
+		throw new Error("Docker Swarm is not initialized on this node. Run 'docker swarm init' or 'envsync-deploy preinstall' first.");
+	}
+}
+
+function waitForCommand(
+	config: DeployConfig,
+	label: string,
+	image: string,
+	command: string,
+	timeoutSeconds = 120,
+	env: Record<string, string> = {},
+	volumes: string[] = [],
+) {
+	const deadline = Date.now() + timeoutSeconds * 1000;
+	while (Date.now() < deadline) {
+		const args = ["run", "--rm", "--network", stackNetworkName(config)];
+		for (const volume of volumes) {
+			args.push("-v", volume);
+		}
+		for (const [key, value] of Object.entries(env)) {
+			args.push("-e", `${key}=${value}`);
+		}
+		args.push(image, "sh", "-lc", command);
+		if (commandSucceeds("docker", args)) {
+			return;
+		}
+		sleepSeconds(2);
+	}
+	throw new Error(`Timed out waiting for ${label}`);
+}
+
+function waitForPostgresService(config: DeployConfig, label: string, host: string, user: string, password: string) {
+	waitForCommand(config, `${label} database readiness`, "postgres:17", `pg_isready -h ${host} -U ${user}`, 120, {
+		PGPASSWORD: password,
+	});
+}
+
+function waitForRedisService(config: DeployConfig) {
+	waitForCommand(config, "redis readiness", "redis:7", "redis-cli -h redis ping | grep PONG");
+}
+
 function waitForTcpService(config: DeployConfig, label: string, host: string, port: number, timeoutSeconds = 120) {
 	const deadline = Date.now() + timeoutSeconds * 1000;
 	while (Date.now() < deadline) {
@@ -993,6 +1152,42 @@ function waitForTcpService(config: DeployConfig, label: string, host: string, po
 		sleepSeconds(2);
 	}
 	throw new Error(`Timed out waiting for ${label} at ${host}:${port}`);
+}
+
+function waitForHttpService(config: DeployConfig, label: string, url: string, timeoutSeconds = 120) {
+	waitForCommand(config, `${label} HTTP readiness`, "alpine:3.20", `wget -q -O /dev/null ${JSON.stringify(url)}`, timeoutSeconds);
+}
+
+function runOpenFgaMigrate(config: DeployConfig, runtimeEnv: RuntimeEnv) {
+	run("docker", [
+		"run",
+		"--rm",
+		"--network",
+		stackNetworkName(config),
+		"-e",
+		"OPENFGA_DATASTORE_ENGINE=postgres",
+		"-e",
+		`OPENFGA_DATASTORE_URI=postgres://openfga:${runtimeEnv.OPENFGA_DB_PASSWORD}@openfga_db:5432/openfga?sslmode=disable`,
+		"openfga/openfga:v1.12.0",
+		"migrate",
+	]);
+}
+
+function runMiniKmsMigrate(config: DeployConfig, runtimeEnv: RuntimeEnv) {
+	run("docker", [
+		"run",
+		"--rm",
+		"--network",
+		stackNetworkName(config),
+		"-e",
+		`PGPASSWORD=${runtimeEnv.MINIKMS_DB_PASSWORD}`,
+		"-v",
+		`${path.join(REPO_ROOT, "docker/minikms/migrations")}:/migrations:ro`,
+		"postgres:17",
+		"sh",
+		"-lc",
+		"psql -h minikms_db -U postgres -d minikms -f /migrations/001_initial_schema.sql && psql -h minikms_db -U postgres -d minikms -f /migrations/002_vault_storage.sql",
+	]);
 }
 
 function runBootstrapInit(config: DeployConfig) {
@@ -1119,7 +1314,9 @@ async function cmdPreinstall() {
 async function cmdSetup() {
 	const rootDomain = await ask("Root domain", "example.com");
 	const acmeEmail = await ask("ACME email", `admin@${rootDomain}`);
-	const channel = (await ask("Release channel", "stable")) as ReleaseChannel;
+	const releaseVersion = await ask("Release version", getDeployCliVersion());
+	assertSemverVersion(releaseVersion, "release version");
+	const releaseImages = versionedImages(releaseVersion);
 	const adminUser = await ask("Keycloak admin user", "admin");
 	const adminPassword = await ask("Keycloak admin password", randomSecret(12));
 	const smtpHost = await ask("SMTP host", "smtp.example.com");
@@ -1134,13 +1331,16 @@ async function cmdSetup() {
 	const mailpitEnabled = (await ask("Enable mailpit (true/false)", "false")) === "true";
 
 	const config: DeployConfig = {
-		source: defaultSourceConfig(),
+		source: defaultSourceConfig(releaseVersion),
+		release: {
+			version: releaseVersion,
+		},
 		domain: { root_domain: rootDomain, acme_email: acmeEmail },
 		images: {
-			api: `ghcr.io/envsync-cloud/envsync-api:${channel}`,
-			keycloak: `envsync-keycloak:${channel}`,
-			web: `ghcr.io/envsync-cloud/envsync-web-static:${channel}`,
-			landing: `ghcr.io/envsync-cloud/envsync-landing-static:${channel}`,
+			api: releaseImages.api,
+			keycloak: releaseImages.keycloak,
+			web: releaseImages.web,
+			landing: releaseImages.landing,
 			clickstack: "clickhouse/clickstack-all-in-one:latest",
 			traefik: "traefik:v3.1",
 			otel_agent: "otel/opentelemetry-collector-contrib:0.111.0",
@@ -1186,7 +1386,6 @@ async function cmdSetup() {
 			s3_public: true,
 			s3_console_public: true,
 		},
-		release_channel: channel,
 	};
 
 	saveDesiredConfig(config);
@@ -1199,15 +1398,23 @@ async function cmdSetup() {
 async function cmdBootstrap() {
 	const { config, generated } = loadState();
 	const nextGenerated = ensureGeneratedRuntimeState(generated);
+	const runtimeEnv = buildRuntimeEnv(config, nextGenerated);
+	assertSwarmManager();
 	ensureRepoCheckout(config);
 	writeDeployArtifacts(config, nextGenerated);
 	buildKeycloakImage(config.images.keycloak);
-	run("docker", ["stack", "deploy", "-c", BOOTSTRAP_STACK_FILE, config.services.stack_name]);
-	waitForTcpService(config, "postgres", "postgres", 5432);
-	waitForTcpService(config, "redis", "redis", 6379);
+	run("docker", ["stack", "deploy", "-c", BOOTSTRAP_BASE_STACK_FILE, config.services.stack_name]);
+	waitForPostgresService(config, "postgres", "postgres", "postgres", "envsync-postgres");
+	waitForRedisService(config);
 	waitForTcpService(config, "rustfs", "rustfs", 9000);
-	waitForTcpService(config, "keycloak", "keycloak", 8080);
-	waitForTcpService(config, "openfga", "openfga", 8090);
+	waitForPostgresService(config, "keycloak", "keycloak_db", "keycloak", runtimeEnv.KEYCLOAK_ADMIN_PASSWORD);
+	waitForPostgresService(config, "openfga", "openfga_db", "openfga", runtimeEnv.OPENFGA_DB_PASSWORD);
+	waitForPostgresService(config, "minikms", "minikms_db", "postgres", runtimeEnv.MINIKMS_DB_PASSWORD);
+	runOpenFgaMigrate(config, runtimeEnv);
+	runMiniKmsMigrate(config, runtimeEnv);
+	run("docker", ["stack", "deploy", "-c", BOOTSTRAP_STACK_FILE, config.services.stack_name]);
+	waitForHttpService(config, "keycloak", "http://keycloak:8080/realms/master");
+	waitForHttpService(config, "openfga", "http://openfga:8090/stores");
 	waitForTcpService(config, "minikms", "minikms", 50051);
 	const initResult = runBootstrapInit(config);
 	const bootstrappedGenerated = normalizeGeneratedState({
@@ -1226,7 +1433,16 @@ async function cmdBootstrap() {
 
 async function cmdDeploy() {
 	const { config, generated } = loadState();
+	assertSwarmManager();
 	assertBootstrapState(generated);
+	const services = listStackServices(config);
+	if (
+		serviceHealth(services, `${config.services.stack_name}_keycloak`) === "missing" ||
+		serviceHealth(services, `${config.services.stack_name}_openfga`) === "missing" ||
+		serviceHealth(services, `${config.services.stack_name}_minikms`) === "missing"
+	) {
+		throw new Error("Bootstrap has not completed successfully. Run 'envsync-deploy bootstrap' again.");
+	}
 	ensureRepoCheckout(config);
 	writeDeployArtifacts(config, generated);
 	buildKeycloakImage(config.images.keycloak);
@@ -1280,7 +1496,10 @@ async function cmdHealth(asJson: boolean) {
 
 async function cmdUpgrade() {
 	const { config } = loadState();
-	config.images.api = `ghcr.io/envsync-cloud/envsync-api:${config.release_channel}`;
+	config.images = {
+		...config.images,
+		...versionedImages(config.release.version),
+	};
 	saveDesiredConfig(config);
 	await cmdDeploy();
 }
@@ -1349,6 +1568,7 @@ async function cmdBackup() {
 	writeFile(path.join(staged, "deploy.yaml"), fs.readFileSync(DEPLOY_YAML, "utf8"));
 	writeFile(path.join(staged, "config.json"), fs.readFileSync(INTERNAL_CONFIG_JSON, "utf8"));
 	writeFile(path.join(staged, "versions.lock.json"), fs.readFileSync(VERSIONS_LOCK, "utf8"));
+	writeFile(path.join(staged, "docker-stack.bootstrap.base.yaml"), fs.readFileSync(BOOTSTRAP_BASE_STACK_FILE, "utf8"));
 	writeFile(path.join(staged, "docker-stack.bootstrap.yaml"), fs.readFileSync(BOOTSTRAP_STACK_FILE, "utf8"));
 	writeFile(path.join(staged, "docker-stack.yaml"), fs.readFileSync(STACK_FILE, "utf8"));
 	writeFile(path.join(staged, "traefik-dynamic.yaml"), fs.readFileSync(TRAEFIK_DYNAMIC_FILE, "utf8"));
@@ -1379,6 +1599,7 @@ async function cmdRestore(archivePath: string) {
 	writeFile(DEPLOY_YAML, fs.readFileSync(path.join(restoreRoot, "deploy.yaml"), "utf8"));
 	writeFile(INTERNAL_CONFIG_JSON, fs.readFileSync(path.join(restoreRoot, "config.json"), "utf8"));
 	writeFile(VERSIONS_LOCK, fs.readFileSync(path.join(restoreRoot, "versions.lock.json"), "utf8"));
+	writeFile(BOOTSTRAP_BASE_STACK_FILE, fs.readFileSync(path.join(restoreRoot, "docker-stack.bootstrap.base.yaml"), "utf8"));
 	writeFile(BOOTSTRAP_STACK_FILE, fs.readFileSync(path.join(restoreRoot, "docker-stack.bootstrap.yaml"), "utf8"));
 	writeFile(STACK_FILE, fs.readFileSync(path.join(restoreRoot, "docker-stack.yaml"), "utf8"));
 	writeFile(TRAEFIK_DYNAMIC_FILE, fs.readFileSync(path.join(restoreRoot, "traefik-dynamic.yaml"), "utf8"));
