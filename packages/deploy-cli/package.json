@@ -1,6 +1,6 @@
 {
   "name": "@envsync-cloud/deploy-cli",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "description": "CLI for self-hosted EnvSync deployment on Docker Swarm",
   "type": "module",
   "bin": {
@@ -39,6 +39,9 @@
     "cli",
     "secrets"
   ],
+  "dependencies": {
+    "chalk": "^5.6.2"
+  },
   "devDependencies": {
     "tsup": "^8.5.0",
     "typescript": "^5.9.2"

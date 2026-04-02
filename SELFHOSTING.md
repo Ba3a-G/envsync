@@ -92,13 +92,13 @@ Published package name:
 Command surface:
 - `preinstall`
 - `setup`
-- `bootstrap`
-- `deploy`
+- `bootstrap [--dry-run]`
+- `deploy [--dry-run]`
 - `health`
-- `upgrade`
-- `upgrade-deps`
-- `backup`
-- `restore`
+- `upgrade [--dry-run]`
+- `upgrade-deps [--dry-run]`
+- `backup [--dry-run]`
+- `restore [--dry-run]`
 
 Invocation style:
 
@@ -168,6 +168,13 @@ npx @envsync-cloud/deploy-cli preinstall
 npx @envsync-cloud/deploy-cli setup
 npx @envsync-cloud/deploy-cli bootstrap
 npx @envsync-cloud/deploy-cli deploy
+```
+
+Preview mutating steps without changing the host:
+
+```bash
+npx @envsync-cloud/deploy-cli bootstrap --dry-run
+npx @envsync-cloud/deploy-cli deploy --dry-run
 ```
 
 Stage ownership:

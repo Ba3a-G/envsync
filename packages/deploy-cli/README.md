@@ -40,13 +40,13 @@ bunx @envsync-cloud/deploy-cli <command>
 ```text
 envsync-deploy preinstall
 envsync-deploy setup
-envsync-deploy bootstrap
-envsync-deploy deploy
+envsync-deploy bootstrap [--dry-run]
+envsync-deploy deploy [--dry-run]
 envsync-deploy health [--json]
-envsync-deploy upgrade
-envsync-deploy upgrade-deps
-envsync-deploy backup
-envsync-deploy restore <archive>
+envsync-deploy upgrade [--dry-run]
+envsync-deploy upgrade-deps [--dry-run]
+envsync-deploy backup [--dry-run]
+envsync-deploy restore <archive> [--dry-run]
 ```
 
 ## Quick Start
@@ -98,6 +98,13 @@ Restore from an existing backup archive:
 
 ```bash
 npx @envsync-cloud/deploy-cli restore /path/to/envsync-backup.tar.gz
+```
+
+Preview mutating commands without changing the host:
+
+```bash
+npx @envsync-cloud/deploy-cli bootstrap --dry-run
+npx @envsync-cloud/deploy-cli deploy --dry-run
 ```
 
 ## Links

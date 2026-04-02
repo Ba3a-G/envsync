@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
+import chalk from "chalk";
 
 interface DeployConfig {
 	source: {
@@ -94,6 +95,7 @@ interface InternalState {
 
 type RuntimeEnv = Record<string, string>;
 type ServiceHealth = "healthy" | "missing" | "degraded";
+type CommandOptions = { dryRun: boolean };
 
 const HOST_ROOT = "/opt/envsync";
 const DEPLOY_ROOT = "/opt/envsync/deploy";
@@ -139,6 +141,44 @@ const REQUIRED_BOOTSTRAP_ENV_KEYS = [
 ] as const;
 
 const SEMVER_VERSION_RE = /^\d+\.\d+\.\d+$/;
+let currentOptions: CommandOptions = { dryRun: false };
+
+function formatShellArg(arg: string) {
+	if (/^[A-Za-z0-9_./:@%+=,-]+$/.test(arg)) return arg;
+	return JSON.stringify(arg);
+}
+
+function formatCommand(cmd: string, args: string[]) {
+	return [cmd, ...args].map(formatShellArg).join(" ");
+}
+
+function logSection(title: string) {
+	console.log(`\n${chalk.bold.blue(title)}`);
+}
+
+function logStep(message: string) {
+	console.log(`${chalk.cyan("[step]")} ${message}`);
+}
+
+function logInfo(message: string) {
+	console.log(`${chalk.blue("[info]")} ${message}`);
+}
+
+function logSuccess(message: string) {
+	console.log(`${chalk.green("[ok]")} ${message}`);
+}
+
+function logWarn(message: string) {
+	console.log(`${chalk.yellow("[warn]")} ${message}`);
+}
+
+function logDryRun(message: string) {
+	console.log(`${chalk.magenta("[dry-run]")} ${message}`);
+}
+
+function logCommand(cmd: string, args: string[]) {
+	console.log(chalk.dim(`$ ${formatCommand(cmd, args)}`));
+}
 
 function run(cmd: string, args: string[], opts: { cwd?: string; env?: Record<string, string>; quiet?: boolean } = {}) {
 	const result = spawnSync(cmd, args, {
@@ -180,6 +220,14 @@ function writeFile(target: string, content: string, mode?: number) {
 	ensureDir(path.dirname(target));
 	fs.writeFileSync(target, content, "utf8");
 	if (mode != null) fs.chmodSync(target, mode);
+}
+
+function writeFileMaybe(target: string, content: string, mode?: number) {
+	if (currentOptions.dryRun) {
+		logDryRun(`Would write ${target}`);
+		return;
+	}
+	writeFile(target, content, mode);
 }
 
 function exists(target: string) {
@@ -907,8 +955,9 @@ ${renderEnvList({
 		KC_BOOTSTRAP_ADMIN_USERNAME: config.auth.admin_user,
 		KC_BOOTSTRAP_ADMIN_PASSWORD: config.auth.admin_password,
 		KC_HTTP_ENABLED: "true",
+		KC_HEALTH_ENABLED: "true",
 		KC_PROXY_HEADERS: "xforwarded",
-		KC_HOSTNAME: hosts.auth,
+		KC_HOSTNAME_STRICT: "false",
 	})}
     volumes:
       - ${KEYCLOAK_REALM_FILE}:/opt/keycloak/data/import/realm.json:ro
@@ -1038,43 +1087,62 @@ volumes:
 
 function writeDeployArtifacts(config: DeployConfig, generated: DeployGeneratedState) {
 	const runtimeEnv = buildRuntimeEnv(config, generated);
-	writeFile(DEPLOY_ENV, renderEnvFile(runtimeEnv), 0o600);
-	writeFile(
+	logStep("Rendering deploy artifacts");
+	writeFileMaybe(DEPLOY_ENV, renderEnvFile(runtimeEnv), 0o600);
+	writeFileMaybe(
 		INTERNAL_CONFIG_JSON,
 		JSON.stringify({ config, generated: mergeGeneratedState(runtimeEnv, generated) }, null, 2) + "\n",
 	);
-	writeFile(VERSIONS_LOCK, JSON.stringify(config.images, null, 2) + "\n");
-	writeFile(KEYCLOAK_REALM_FILE, renderKeycloakRealm(config, runtimeEnv));
-	writeFile(TRAEFIK_DYNAMIC_FILE, renderTraefikDynamicConfig(config));
-	writeFile(BOOTSTRAP_BASE_STACK_FILE, renderStack(config, runtimeEnv, "base"));
-	writeFile(BOOTSTRAP_STACK_FILE, renderStack(config, runtimeEnv, "bootstrap"));
-	writeFile(STACK_FILE, renderStack(config, runtimeEnv, "full"));
-	writeFile(NGINX_WEB_CONF, renderNginxConf("web"));
-	writeFile(NGINX_LANDING_CONF, renderNginxConf("landing"));
-	writeFile(OTEL_AGENT_CONF, renderOtelAgentConfig(config));
+	writeFileMaybe(VERSIONS_LOCK, JSON.stringify(config.images, null, 2) + "\n");
+	writeFileMaybe(KEYCLOAK_REALM_FILE, renderKeycloakRealm(config, runtimeEnv));
+	writeFileMaybe(TRAEFIK_DYNAMIC_FILE, renderTraefikDynamicConfig(config));
+	writeFileMaybe(BOOTSTRAP_BASE_STACK_FILE, renderStack(config, runtimeEnv, "base"));
+	writeFileMaybe(BOOTSTRAP_STACK_FILE, renderStack(config, runtimeEnv, "bootstrap"));
+	writeFileMaybe(STACK_FILE, renderStack(config, runtimeEnv, "full"));
+	writeFileMaybe(NGINX_WEB_CONF, renderNginxConf("web"));
+	writeFileMaybe(NGINX_LANDING_CONF, renderNginxConf("landing"));
+	writeFileMaybe(OTEL_AGENT_CONF, renderOtelAgentConfig(config));
+	logSuccess(currentOptions.dryRun ? "Deploy artifacts previewed" : "Deploy artifacts written");
 }
 
 function saveDesiredConfig(config: DeployConfig) {
 	const internal = readInternalState();
 	const generated = mergeGeneratedState(loadGeneratedEnv(), internal?.generated);
-	writeFile(DEPLOY_YAML, toYaml(config) + "\n");
-	writeFile(
+	logStep(`Saving desired config to ${DEPLOY_YAML}`);
+	writeFileMaybe(DEPLOY_YAML, toYaml(config) + "\n");
+	writeFileMaybe(
 		INTERNAL_CONFIG_JSON,
 		JSON.stringify({ config, generated }, null, 2) + "\n",
 	);
+	logSuccess(currentOptions.dryRun ? "Desired config previewed" : "Desired config saved");
 }
 
 function ensureRepoCheckout(config: DeployConfig) {
+	logStep(`Ensuring pinned repo checkout at ${config.source.ref}`);
+	if (currentOptions.dryRun) {
+		logDryRun(`Would ensure repo checkout at ${REPO_ROOT}`);
+		return;
+	}
 	ensureDir(REPO_ROOT);
 	if (!exists(path.join(REPO_ROOT, ".git"))) {
+		logCommand("git", ["clone", config.source.repo_url, REPO_ROOT]);
 		run("git", ["clone", config.source.repo_url, REPO_ROOT]);
 	}
+	logCommand("git", ["remote", "set-url", "origin", config.source.repo_url]);
 	run("git", ["remote", "set-url", "origin", config.source.repo_url], { cwd: REPO_ROOT });
+	logCommand("git", ["fetch", "--tags", "--force", "origin"]);
 	run("git", ["fetch", "--tags", "--force", "origin"], { cwd: REPO_ROOT });
+	logCommand("git", ["checkout", "--force", config.source.ref]);
 	run("git", ["checkout", "--force", config.source.ref], { cwd: REPO_ROOT });
+	logSuccess(`Pinned repo checkout ready at ${config.source.ref}`);
 }
 
 function extractStaticBundle(image: string, targetDir: string) {
+	logStep(`Extracting static bundle from ${image}`);
+	if (currentOptions.dryRun) {
+		logDryRun(`Would extract ${image} into ${targetDir}`);
+		return;
+	}
 	ensureDir(targetDir);
 	const containerId = run("docker", ["create", image], { quiet: true }).trim();
 	try {
@@ -1082,6 +1150,7 @@ function extractStaticBundle(image: string, targetDir: string) {
 	} finally {
 		run("docker", ["rm", "-f", containerId], { quiet: true });
 	}
+	logSuccess(`Static bundle extracted to ${targetDir}`);
 }
 
 function buildKeycloakImage(imageTag: string, repoRoot = REPO_ROOT) {
@@ -1089,7 +1158,14 @@ function buildKeycloakImage(imageTag: string, repoRoot = REPO_ROOT) {
 	if (!exists(path.join(buildContext, "Dockerfile"))) {
 		throw new Error(`Missing Keycloak Docker build context at ${buildContext}`);
 	}
+	logStep(`Building Keycloak image ${imageTag}`);
+	if (currentOptions.dryRun) {
+		logDryRun(`Would build ${imageTag} from ${buildContext}`);
+		return;
+	}
+	logCommand("docker", ["build", "-t", imageTag, buildContext]);
 	run("docker", ["build", "-t", imageTag, buildContext]);
+	logSuccess(`Built Keycloak image ${imageTag}`);
 }
 
 function stackNetworkName(config: DeployConfig) {
@@ -1097,10 +1173,16 @@ function stackNetworkName(config: DeployConfig) {
 }
 
 function assertSwarmManager() {
+	if (currentOptions.dryRun) {
+		logDryRun("Skipping Docker Swarm manager validation");
+		return;
+	}
+	logStep("Validating Docker Swarm manager state");
 	const state = tryRun("docker", ["info", "--format", "{{.Swarm.LocalNodeState}}|{{.Swarm.ControlAvailable}}"], { quiet: true }).trim();
 	if (state !== "active|true") {
 		throw new Error("Docker Swarm is not initialized on this node. Run 'docker swarm init' or 'envsync-deploy preinstall' first.");
 	}
+	logSuccess("Docker Swarm manager is ready");
 }
 
 function waitForCommand(
@@ -1112,6 +1194,11 @@ function waitForCommand(
 	env: Record<string, string> = {},
 	volumes: string[] = [],
 ) {
+	if (currentOptions.dryRun) {
+		logDryRun(`Would wait for ${label}`);
+		return;
+	}
+	logStep(`Waiting for ${label}`);
 	const deadline = Date.now() + timeoutSeconds * 1000;
 	while (Date.now() < deadline) {
 		const args = ["run", "--rm", "--network", stackNetworkName(config)];
@@ -1123,6 +1210,7 @@ function waitForCommand(
 		}
 		args.push(image, "sh", "-lc", command);
 		if (commandSucceeds("docker", args)) {
+			logSuccess(`${label} is ready`);
 			return;
 		}
 		sleepSeconds(2);
@@ -1159,6 +1247,23 @@ function waitForHttpService(config: DeployConfig, label: string, url: string, ti
 }
 
 function runOpenFgaMigrate(config: DeployConfig, runtimeEnv: RuntimeEnv) {
+	logStep("Running OpenFGA datastore migrations");
+	if (currentOptions.dryRun) {
+		logDryRun("Would run OpenFGA datastore migrations");
+		logCommand("docker", [
+			"run",
+			"--rm",
+			"--network",
+			stackNetworkName(config),
+			"-e",
+			"OPENFGA_DATASTORE_ENGINE=postgres",
+			"-e",
+			`OPENFGA_DATASTORE_URI=postgres://openfga:${runtimeEnv.OPENFGA_DB_PASSWORD}@openfga_db:5432/openfga?sslmode=disable`,
+			"openfga/openfga:v1.12.0",
+			"migrate",
+		]);
+		return;
+	}
 	run("docker", [
 		"run",
 		"--rm",
@@ -1171,9 +1276,29 @@ function runOpenFgaMigrate(config: DeployConfig, runtimeEnv: RuntimeEnv) {
 		"openfga/openfga:v1.12.0",
 		"migrate",
 	]);
+	logSuccess("OpenFGA datastore migrations completed");
 }
 
 function runMiniKmsMigrate(config: DeployConfig, runtimeEnv: RuntimeEnv) {
+	logStep("Running miniKMS datastore migrations");
+	if (currentOptions.dryRun) {
+		logDryRun("Would run miniKMS datastore migrations");
+		logCommand("docker", [
+			"run",
+			"--rm",
+			"--network",
+			stackNetworkName(config),
+			"-e",
+			`PGPASSWORD=${runtimeEnv.MINIKMS_DB_PASSWORD}`,
+			"-v",
+			`${path.join(REPO_ROOT, "docker/minikms/migrations")}:/migrations:ro`,
+			"postgres:17",
+			"sh",
+			"-lc",
+			"psql -h minikms_db -U postgres -d minikms -f /migrations/001_initial_schema.sql && psql -h minikms_db -U postgres -d minikms -f /migrations/002_vault_storage.sql",
+		]);
+		return;
+	}
 	run("docker", [
 		"run",
 		"--rm",
@@ -1188,9 +1313,36 @@ function runMiniKmsMigrate(config: DeployConfig, runtimeEnv: RuntimeEnv) {
 		"-lc",
 		"psql -h minikms_db -U postgres -d minikms -f /migrations/001_initial_schema.sql && psql -h minikms_db -U postgres -d minikms -f /migrations/002_vault_storage.sql",
 	]);
+	logSuccess("miniKMS datastore migrations completed");
 }
 
 function runBootstrapInit(config: DeployConfig) {
+	logStep("Running API bootstrap init");
+	if (currentOptions.dryRun) {
+		logDryRun("Would run API bootstrap init and persist generated OpenFGA IDs");
+		logCommand("docker", [
+			"run",
+			"--rm",
+			"--network",
+			stackNetworkName(config),
+			"--env-file",
+			DEPLOY_ENV,
+			"-e",
+			"SKIP_ROOT_ENV=1",
+			"-e",
+			"SKIP_ROOT_ENV_WRITE=1",
+			config.images.api,
+			"bun",
+			"run",
+			"scripts/prod-init.ts",
+			"--json",
+			"--no-write-root-env",
+		]);
+		return {
+			openfgaStoreId: "",
+			openfgaModelId: "",
+		};
+	}
 	const output = run(
 		"docker",
 		[
@@ -1217,6 +1369,7 @@ function runBootstrapInit(config: DeployConfig) {
 	if (!result.openfgaStoreId || !result.openfgaModelId) {
 		throw new Error("Bootstrap init did not return OpenFGA IDs");
 	}
+	logSuccess("API bootstrap init completed");
 	return {
 		openfgaStoreId: result.openfgaStoreId,
 		openfgaModelId: result.openfgaModelId,
@@ -1312,6 +1465,7 @@ async function cmdPreinstall() {
 }
 
 async function cmdSetup() {
+	logSection("Setup");
 	const rootDomain = await ask("Root domain", "example.com");
 	const acmeEmail = await ask("ACME email", `admin@${rootDomain}`);
 	const releaseVersion = await ask("Release version", getDeployCliVersion());
@@ -1389,21 +1543,31 @@ async function cmdSetup() {
 	};
 
 	saveDesiredConfig(config);
-	console.log(`Config written to ${DEPLOY_YAML}`);
-	console.log(`Pinned source checkout: ${config.source.repo_url} @ ${config.source.ref}`);
-	console.log("Create these DNS records:");
+	logSuccess(`Config written to ${DEPLOY_YAML}`);
+	logInfo(`Pinned source checkout: ${config.source.repo_url} @ ${config.source.ref}`);
+	logInfo("Create these DNS records:");
 	console.log(JSON.stringify(domainMap(rootDomain), null, 2));
 }
 
 async function cmdBootstrap() {
+	logSection("Bootstrap");
 	const { config, generated } = loadState();
 	const nextGenerated = ensureGeneratedRuntimeState(generated);
 	const runtimeEnv = buildRuntimeEnv(config, nextGenerated);
+	logInfo(`Release version: ${config.release.version}`);
 	assertSwarmManager();
 	ensureRepoCheckout(config);
 	writeDeployArtifacts(config, nextGenerated);
 	buildKeycloakImage(config.images.keycloak);
-	run("docker", ["stack", "deploy", "-c", BOOTSTRAP_BASE_STACK_FILE, config.services.stack_name]);
+	if (currentOptions.dryRun) {
+		logDryRun(`Would deploy base bootstrap stack for ${config.services.stack_name}`);
+		logCommand("docker", ["stack", "deploy", "-c", BOOTSTRAP_BASE_STACK_FILE, config.services.stack_name]);
+	} else {
+		logStep("Deploying base bootstrap stack");
+		logCommand("docker", ["stack", "deploy", "-c", BOOTSTRAP_BASE_STACK_FILE, config.services.stack_name]);
+		run("docker", ["stack", "deploy", "-c", BOOTSTRAP_BASE_STACK_FILE, config.services.stack_name]);
+		logSuccess("Base bootstrap stack deployed");
+	}
 	waitForPostgresService(config, "postgres", "postgres", "postgres", "envsync-postgres");
 	waitForRedisService(config);
 	waitForTcpService(config, "rustfs", "rustfs", 9000);
@@ -1412,11 +1576,24 @@ async function cmdBootstrap() {
 	waitForPostgresService(config, "minikms", "minikms_db", "postgres", runtimeEnv.MINIKMS_DB_PASSWORD);
 	runOpenFgaMigrate(config, runtimeEnv);
 	runMiniKmsMigrate(config, runtimeEnv);
-	run("docker", ["stack", "deploy", "-c", BOOTSTRAP_STACK_FILE, config.services.stack_name]);
-	waitForHttpService(config, "keycloak", "http://keycloak:8080/realms/master");
+	if (currentOptions.dryRun) {
+		logDryRun(`Would deploy runtime bootstrap stack for ${config.services.stack_name}`);
+		logCommand("docker", ["stack", "deploy", "-c", BOOTSTRAP_STACK_FILE, config.services.stack_name]);
+	} else {
+		logStep("Deploying runtime bootstrap stack");
+		logCommand("docker", ["stack", "deploy", "-c", BOOTSTRAP_STACK_FILE, config.services.stack_name]);
+		run("docker", ["stack", "deploy", "-c", BOOTSTRAP_STACK_FILE, config.services.stack_name]);
+		logSuccess("Runtime bootstrap stack deployed");
+	}
+	waitForHttpService(config, "keycloak", "http://keycloak:8080/health/ready", 180);
 	waitForHttpService(config, "openfga", "http://openfga:8090/stores");
 	waitForTcpService(config, "minikms", "minikms", 50051);
 	const initResult = runBootstrapInit(config);
+	if (currentOptions.dryRun) {
+		logDryRun("Skipping generated OpenFGA ID persistence in preview mode");
+		logSuccess("Bootstrap dry-run completed");
+		return;
+	}
 	const bootstrappedGenerated = normalizeGeneratedState({
 		openfga: {
 			store_id: initResult.openfgaStoreId,
@@ -1428,31 +1605,51 @@ async function cmdBootstrap() {
 		},
 	});
 	writeDeployArtifacts(config, bootstrappedGenerated);
-	console.log("Bootstrap completed.");
+	logSuccess("Bootstrap completed");
 }
 
 async function cmdDeploy() {
+	logSection("Deploy");
 	const { config, generated } = loadState();
+	logInfo(`Release version: ${config.release.version}`);
 	assertSwarmManager();
 	assertBootstrapState(generated);
-	const services = listStackServices(config);
-	if (
-		serviceHealth(services, `${config.services.stack_name}_keycloak`) === "missing" ||
-		serviceHealth(services, `${config.services.stack_name}_openfga`) === "missing" ||
-		serviceHealth(services, `${config.services.stack_name}_minikms`) === "missing"
-	) {
-		throw new Error("Bootstrap has not completed successfully. Run 'envsync-deploy bootstrap' again.");
+	if (!currentOptions.dryRun) {
+		const services = listStackServices(config);
+		if (
+			serviceHealth(services, `${config.services.stack_name}_keycloak`) === "missing" ||
+			serviceHealth(services, `${config.services.stack_name}_openfga`) === "missing" ||
+			serviceHealth(services, `${config.services.stack_name}_minikms`) === "missing"
+		) {
+			throw new Error("Bootstrap has not completed successfully. Run 'envsync-deploy bootstrap' again.");
+		}
+	} else {
+		logDryRun("Skipping runtime bootstrap service validation");
 	}
 	ensureRepoCheckout(config);
 	writeDeployArtifacts(config, generated);
 	buildKeycloakImage(config.images.keycloak);
-	ensureDir(`${RELEASES_ROOT}/web/current`);
-	ensureDir(`${RELEASES_ROOT}/landing/current`);
+	if (currentOptions.dryRun) {
+		logDryRun(`Would ensure ${RELEASES_ROOT}/web/current exists`);
+		logDryRun(`Would ensure ${RELEASES_ROOT}/landing/current exists`);
+	} else {
+		ensureDir(`${RELEASES_ROOT}/web/current`);
+		ensureDir(`${RELEASES_ROOT}/landing/current`);
+	}
 	extractStaticBundle(config.images.web, `${RELEASES_ROOT}/web/current`);
 	extractStaticBundle(config.images.landing, `${RELEASES_ROOT}/landing/current`);
-	writeFile(`${RELEASES_ROOT}/web/current/runtime-config.js`, renderFrontendRuntimeConfig(config));
-	writeFile(`${RELEASES_ROOT}/landing/current/runtime-config.js`, renderFrontendRuntimeConfig(config));
+	writeFileMaybe(`${RELEASES_ROOT}/web/current/runtime-config.js`, renderFrontendRuntimeConfig(config));
+	writeFileMaybe(`${RELEASES_ROOT}/landing/current/runtime-config.js`, renderFrontendRuntimeConfig(config));
+	if (currentOptions.dryRun) {
+		logDryRun(`Would deploy full stack for ${config.services.stack_name}`);
+		logCommand("docker", ["stack", "deploy", "-c", STACK_FILE, config.services.stack_name]);
+		logSuccess("Deploy dry-run completed");
+		return;
+	}
+	logStep("Deploying full stack");
+	logCommand("docker", ["stack", "deploy", "-c", STACK_FILE, config.services.stack_name]);
 	run("docker", ["stack", "deploy", "-c", STACK_FILE, config.services.stack_name]);
+	logSuccess("Deploy completed");
 }
 
 async function cmdHealth(asJson: boolean) {
@@ -1495,21 +1692,29 @@ async function cmdHealth(asJson: boolean) {
 }
 
 async function cmdUpgrade() {
+	logSection("Upgrade");
 	const { config } = loadState();
 	config.images = {
 		...config.images,
 		...versionedImages(config.release.version),
 	};
 	saveDesiredConfig(config);
+	if (currentOptions.dryRun) {
+		logDryRun(`Would upgrade stack to release ${config.release.version}`);
+	}
 	await cmdDeploy();
 }
 
 async function cmdUpgradeDeps() {
+	logSection("Upgrade Dependencies");
 	const { config } = loadState();
 	config.images.traefik = "traefik:v3.1";
 	config.images.clickstack = "clickhouse/clickstack-all-in-one:latest";
 	config.images.otel_agent = "otel/opentelemetry-collector-contrib:0.111.0";
 	saveDesiredConfig(config);
+	if (currentOptions.dryRun) {
+		logDryRun("Would refresh dependency image tags and redeploy");
+	}
 	await cmdDeploy();
 }
 
@@ -1524,6 +1729,11 @@ function stackVolumeName(config: DeployConfig, name: (typeof STACK_VOLUMES)[numb
 }
 
 function backupDockerVolume(volumeName: string, targetDir: string) {
+	logStep(`Backing up Docker volume ${volumeName}`);
+	if (currentOptions.dryRun) {
+		logDryRun(`Would back up ${volumeName} into ${targetDir}`);
+		return;
+	}
 	ensureDir(targetDir);
 	run("docker", [
 		"run",
@@ -1537,9 +1747,15 @@ function backupDockerVolume(volumeName: string, targetDir: string) {
 		"-lc",
 		"cd /from && tar -czf /to/volume.tar.gz .",
 	]);
+	logSuccess(`Backed up Docker volume ${volumeName}`);
 }
 
 function restoreDockerVolume(volumeName: string, sourceDir: string) {
+	logStep(`Restoring Docker volume ${volumeName}`);
+	if (currentOptions.dryRun) {
+		logDryRun(`Would restore ${volumeName} from ${sourceDir}`);
+		return;
+	}
 	run("docker", ["volume", "create", volumeName], { quiet: true });
 	run("docker", [
 		"run",
@@ -1553,16 +1769,30 @@ function restoreDockerVolume(volumeName: string, sourceDir: string) {
 		"-lc",
 		"cd /to && tar -xzf /from/volume.tar.gz",
 	]);
+	logSuccess(`Restored Docker volume ${volumeName}`);
 }
 
 async function cmdBackup() {
+	logSection("Backup");
 	const { config } = loadState();
-	ensureDir(config.backup.output_dir);
 	const timestamp = new Date().toISOString().replace(/[:]/g, "-");
 	const archiveBase = path.join(config.backup.output_dir, `envsync-backup-${timestamp}`);
 	const manifestPath = `${archiveBase}.manifest.json`;
 	const tarPath = `${archiveBase}.tar.gz`;
 	const staged = path.join(BACKUPS_ROOT, `staging-${timestamp}`);
+	logInfo(`Backup archive target: ${tarPath}`);
+	if (currentOptions.dryRun) {
+		logDryRun(`Would stage backup files in ${staged}`);
+		for (const volume of STACK_VOLUMES) {
+			backupDockerVolume(stackVolumeName(config, volume), path.join(staged, "volumes", volume));
+		}
+		logDryRun(`Would write manifest ${manifestPath}`);
+		logDryRun(`Would create archive ${tarPath}`);
+		logSuccess("Backup dry-run completed");
+		console.log(tarPath);
+		return;
+	}
+	ensureDir(config.backup.output_dir);
 	ensureDir(staged);
 	writeFile(path.join(staged, "deploy.env"), fs.readFileSync(DEPLOY_ENV, "utf8"));
 	writeFile(path.join(staged, "deploy.yaml"), fs.readFileSync(DEPLOY_YAML, "utf8"));
@@ -1587,12 +1817,22 @@ async function cmdBackup() {
 		volumes: STACK_VOLUMES.map(volume => stackVolumeName(config, volume)),
 	};
 	writeFile(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
+	logSuccess("Backup completed");
 	console.log(tarPath);
 }
 
 async function cmdRestore(archivePath: string) {
 	if (!archivePath) throw new Error("restore requires a .tar.gz path");
+	logSection("Restore");
 	const restoreRoot = path.join(BACKUPS_ROOT, `restore-${Date.now()}`);
+	logInfo(`Restore archive: ${archivePath}`);
+	if (currentOptions.dryRun) {
+		logDryRun(`Would extract ${archivePath} into ${restoreRoot}`);
+		logDryRun(`Would restore deploy files into ${DEPLOY_ROOT} and ${ETC_ROOT}`);
+		logDryRun("Would restore all managed Docker volumes from the archive");
+		logSuccess("Restore dry-run completed");
+		return;
+	}
 	ensureDir(restoreRoot);
 	run("bash", ["-lc", `tar -xzf ${JSON.stringify(archivePath)} -C ${JSON.stringify(restoreRoot)}`]);
 	writeFile(DEPLOY_ENV, fs.readFileSync(path.join(restoreRoot, "deploy.env"), "utf8"), 0o600);
@@ -1609,12 +1849,17 @@ async function cmdRestore(archivePath: string) {
 	for (const volume of STACK_VOLUMES) {
 		restoreDockerVolume(stackVolumeName(config, volume), path.join(restoreRoot, "volumes", volume));
 	}
-	console.log("Restore completed. Run 'envsync-deploy deploy' to start services.");
+	logSuccess("Restore completed. Run 'envsync-deploy deploy' to start services.");
 }
 
 async function main() {
-	const command = process.argv[2];
-	const flag = process.argv[3];
+	const argv = process.argv.slice(2);
+	const command = argv[0];
+	const args = argv.slice(1);
+	currentOptions = {
+		dryRun: args.includes("--dry-run"),
+	};
+	const positionals = args.filter(arg => arg !== "--dry-run");
 	switch (command) {
 		case "preinstall":
 			await cmdPreinstall();
@@ -1629,7 +1874,7 @@ async function main() {
 			await cmdDeploy();
 			break;
 		case "health":
-			await cmdHealth(flag === "--json");
+			await cmdHealth(positionals[0] === "--json");
 			break;
 		case "upgrade":
 			await cmdUpgrade();
@@ -1641,10 +1886,12 @@ async function main() {
 			await cmdBackup();
 			break;
 		case "restore":
-			await cmdRestore(flag ?? "");
+			await cmdRestore(positionals[0] ?? "");
 			break;
 		default:
-			console.log("Usage: envsync-deploy <preinstall|setup|bootstrap|deploy|health|upgrade|upgrade-deps|backup|restore>");
+			console.log(
+				"Usage: envsync-deploy <preinstall|setup|bootstrap|deploy|health|upgrade|upgrade-deps|backup|restore> [--dry-run]",
+			);
 			process.exit(command ? 1 : 0);
 	}
 }
