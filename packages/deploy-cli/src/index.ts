@@ -343,8 +343,15 @@ function renderKeycloakRealm(config: DeployConfig) {
 					secret: webSecret,
 					standardFlowEnabled: true,
 					directAccessGrantsEnabled: false,
-					redirectUris: [`https://${hosts.api}/api/access/web/callback`],
+					redirectUris: [
+						`https://${hosts.api}/api/access/web/callback`,
+						`https://${hosts.app}/auth/callback`,
+						`https://${hosts.app}`,
+					],
 					webOrigins: [`https://${hosts.app}`],
+					attributes: {
+						"post.logout.redirect.uris": "+",
+					},
 					defaultClientScopes: ["basic", "web-origins", "profile", "email", "roles"],
 				},
 				{
@@ -451,6 +458,18 @@ function renderNginxConf(kind: "web" | "landing") {
 		"  }",
 		"}",
 	].join("\n") + "\n";
+}
+
+function renderFrontendRuntimeConfig(config: DeployConfig) {
+	const hosts = domainMap(config.domain.root_domain);
+	return `window.__ENVSYNC_RUNTIME_CONFIG__ = ${JSON.stringify({
+		apiBaseUrl: `https://${hosts.api}`,
+		appBaseUrl: `https://${hosts.app}`,
+		authBaseUrl: `https://${hosts.auth}`,
+		keycloakRealm: config.auth.keycloak_realm,
+		webClientId: config.auth.web_client_id,
+		apiDocsUrl: `https://${hosts.api}/docs`,
+	}, null, 2)};\n`;
 }
 
 function renderOtelAgentConfig(config: DeployConfig) {
@@ -834,6 +853,8 @@ async function cmdDeploy() {
 	ensureDir(`${RELEASES_ROOT}/landing/current`);
 	extractStaticBundle(config.images.web, `${RELEASES_ROOT}/web/current`);
 	extractStaticBundle(config.images.landing, `${RELEASES_ROOT}/landing/current`);
+	writeFile(`${RELEASES_ROOT}/web/current/runtime-config.js`, renderFrontendRuntimeConfig(config));
+	writeFile(`${RELEASES_ROOT}/landing/current/runtime-config.js`, renderFrontendRuntimeConfig(config));
 	run("docker", ["stack", "deploy", "-c", STACK_FILE, config.services.stack_name]);
 }
 

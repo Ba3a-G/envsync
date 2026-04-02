@@ -55,7 +55,7 @@ export class EnvSyncAPISDK {
     constructor(config?: Partial<OpenAPIConfig>, HttpRequest: HttpRequestConstructor = FetchHttpRequest) {
         this.request = new HttpRequest({
             BASE: config?.BASE ?? 'http://localhost:4000',
-            VERSION: config?.VERSION ?? '0.6.0',
+            VERSION: config?.VERSION ?? '0.6.1',
             WITH_CREDENTIALS: config?.WITH_CREDENTIALS ?? false,
             CREDENTIALS: config?.CREDENTIALS ?? 'include',
             TOKEN: config?.TOKEN,

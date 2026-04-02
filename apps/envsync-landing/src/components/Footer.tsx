@@ -1,6 +1,7 @@
 
 import { Github } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { runtimeConfig } from "@/utils/runtime-config";
 
 const Footer = () => {
   return (
@@ -50,7 +51,7 @@ const Footer = () => {
               <h3 className="mb-4 font-semibold text-foreground">Resources</h3>
               <ul className="space-y-2">
                 <li><a href="https://blog.envsync.cloud" className="text-muted-foreground transition-colors hover:text-foreground">Blog</a></li>
-                <li><a href="https://api.envsync.cloud/docs" className="text-muted-foreground transition-colors hover:text-foreground">API Reference</a></li>
+                <li><a href={runtimeConfig.apiDocsUrl} className="text-muted-foreground transition-colors hover:text-foreground">API Reference</a></li>
               </ul>
             </div>
 

@@ -5,6 +5,7 @@ import { Menu, X } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
+import { runtimeConfig } from "@/utils/runtime-config";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -58,7 +59,7 @@ const Header = () => {
             >
               Blog
             </a>
-            <a href="https://app.envsync.cloud" className="h-full">
+            <a href={runtimeConfig.appBaseUrl} className="h-full">
               <Button
                 variant="outline"
                 className="border-border bg-card text-foreground hover:bg-accent h-full px-8"
@@ -115,7 +116,7 @@ const Header = () => {
                 Blog
               </a>
               <div className="flex flex-col space-y-2 pt-4">
-                <a href="https://app.envsync.cloud">
+                <a href={runtimeConfig.appBaseUrl}>
                   <Button
                     variant="outline"
                     className="w-full justify-start border-border bg-card text-foreground hover:bg-accent"

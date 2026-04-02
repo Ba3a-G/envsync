@@ -1,4 +1,5 @@
 import HyperDX from "@hyperdx/browser";
+import { env } from "@/utils/env";
 
 let hdxActive = false;
 
@@ -6,7 +7,7 @@ export function initSessionReplay(): void {
   const apiKey = import.meta.env.VITE_HYPERDX_API_KEY;
   const url = import.meta.env.VITE_HYPERDX_URL;
   const disabled = import.meta.env.VITE_HYPERDX_DISABLED === "true";
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
+  const apiBaseUrl = env.VITE_API_BASE_URL;
   if (!apiKey || disabled) return;
 
   HyperDX.init({

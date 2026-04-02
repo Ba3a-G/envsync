@@ -4,6 +4,7 @@ import { Link, useLocation } from "react-router-dom";
 import { useMemo } from "react";
 import { navGroups } from "@/constants";
 import { useAuthContext } from "@/contexts/auth";
+import { runtimeConfig } from "@/utils/runtime-config";
 
 interface SidebarProps {
   expanded: boolean;
@@ -11,7 +12,7 @@ interface SidebarProps {
 }
 
 export const Sidebar = ({ expanded, onToggle }: SidebarProps) => {
-  const { user, token, allowedScopes } = useAuthContext();
+  const { user, allowedScopes } = useAuthContext();
   const { pathname } = useLocation();
 
   const authorizedGroups = useMemo(
@@ -29,10 +30,12 @@ export const Sidebar = ({ expanded, onToggle }: SidebarProps) => {
 
   const handleLogout = () => {
     localStorage.removeItem("access_token");
-    const logoutUrl = `https://envsync.eu.auth0.com/oidc/logout?post_logout_redirect_uri=${encodeURIComponent(
-      window.location.origin
-    )}&id_token_hint=${token}`;
-    window.location.href = logoutUrl;
+    const logoutUrl = new URL(
+      `${runtimeConfig.authBaseUrl}/realms/${runtimeConfig.keycloakRealm}/protocol/openid-connect/logout`
+    );
+    logoutUrl.searchParams.set("client_id", runtimeConfig.webClientId);
+    logoutUrl.searchParams.set("post_logout_redirect_uri", window.location.origin);
+    window.location.href = logoutUrl.toString();
   };
 
   return (

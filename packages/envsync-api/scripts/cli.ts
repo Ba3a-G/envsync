@@ -87,7 +87,14 @@ function loadImportedRealmClients() {
 async function ensureKeycloakClient(
 	token: string,
 	clientId: string,
-	opts: { publicClient: boolean; redirectUris: string[]; standardFlowEnabled: boolean; deviceGrant?: boolean },
+	opts: {
+		publicClient: boolean;
+		redirectUris: string[];
+		standardFlowEnabled: boolean;
+		deviceGrant?: boolean;
+		webOrigins?: string[];
+		attributes?: Record<string, string>;
+	},
 ) {
 	const base = `${getKeycloakBaseUrl()}/admin/realms/${getKeycloakRealm()}`;
 	const lookup = await fetch(`${base}/clients?clientId=${encodeURIComponent(clientId)}`, {
@@ -119,8 +126,11 @@ async function ensureKeycloakClient(
 			directAccessGrantsEnabled: false,
 			serviceAccountsEnabled: false,
 			redirectUris: opts.redirectUris,
-			webOrigins: ["*"],
-			attributes: opts.deviceGrant ? { "oauth2.device.authorization.grant.enabled": "true" } : {},
+			webOrigins: opts.webOrigins ?? ["*"],
+			attributes: {
+				...(opts.attributes ?? {}),
+				...(opts.deviceGrant ? { "oauth2.device.authorization.grant.enabled": "true" } : {}),
+			},
 		}),
 	});
 	if (!createRes.ok && createRes.status !== 201) {
@@ -137,10 +147,13 @@ async function initKeycloakClients() {
 
 	try {
 		const { access_token } = await getAdminToken();
+		const webCallbackOrigin = new URL(config.KEYCLOAK_WEB_CALLBACK_URL).origin;
 		web = await ensureKeycloakClient(access_token, config.KEYCLOAK_WEB_CLIENT_ID, {
 			publicClient: false,
-			redirectUris: [config.KEYCLOAK_WEB_REDIRECT_URI],
+			redirectUris: [config.KEYCLOAK_WEB_REDIRECT_URI, config.KEYCLOAK_WEB_CALLBACK_URL, webCallbackOrigin],
 			standardFlowEnabled: true,
+			webOrigins: [webCallbackOrigin],
+			attributes: { "post.logout.redirect.uris": "+" },
 		});
 		api = await ensureKeycloakClient(access_token, config.KEYCLOAK_API_CLIENT_ID, {
 			publicClient: false,

@@ -1,5 +1,6 @@
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { runtimeConfig } from "@/utils/runtime-config";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -284,7 +285,7 @@ const AcceptOrgInvite = () => {
                   </p>
                   <Button 
                     className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                    onClick={() => window.location.href = 'https://app.envsync.cloud'}
+                    onClick={() => window.location.href = runtimeConfig.appBaseUrl}
                   >
                     Get Started
                   </Button>

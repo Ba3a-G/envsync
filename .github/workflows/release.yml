@@ -74,6 +74,81 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
+  build-frontend-static-images:
+    name: Build & Push Frontend Static Images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package_name: envsync-web
+            context: apps/envsync-web
+            image: ghcr.io/envsync-cloud/envsync-web-static
+          - package_name: envsync-landing
+            context: apps/envsync-landing
+            image: ghcr.io/envsync-cloud/envsync-landing-static
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate release tag
+        run: |
+          ROOT_VERSION=$(node -p "require('./package.json').version")
+          TAG_NAME="${GITHUB_REF_NAME}"
+
+          if [ "${TAG_NAME}" != "v${ROOT_VERSION}" ]; then
+            echo "Tag ${TAG_NAME} does not match root package version v${ROOT_VERSION}"
+            exit 1
+          fi
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.9"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build TypeScript SDK
+        run: bun run --filter @envsync-cloud/envsync-ts-sdk build
+
+      - name: Build frontend app
+        run: bun run --filter ${{ matrix.package_name }} build
+        env:
+          VITE_API_BASE_URL: https://placeholder.invalid
+          VITE_OTEL_SDK_DISABLED: "true"
+          VITE_HYPERDX_DISABLED: "true"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ matrix.image }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=stable
+            type=raw,value=latest
+            type=sha,prefix=
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: docker/frontend-static.Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
   publish-deploy-cli:
     name: Publish Deploy CLI
     runs-on: ubuntu-latest

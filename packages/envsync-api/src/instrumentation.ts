@@ -82,7 +82,7 @@ if (!OTEL_SDK_DISABLED) {
 
 	const resource = new Resource({
 		"service.name": serviceName,
-		"service.version": process.env.npm_package_version || "0.6.0",
+		"service.version": process.env.npm_package_version || "0.6.1",
 		"deployment.environment": process.env.NODE_ENV || "development",
 	});
 

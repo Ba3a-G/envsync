@@ -1,4 +1,5 @@
 import z, { ZodTypeAny } from 'zod';
+import { runtimeConfig } from "@/utils/runtime-config";
 
 export type JWT = `Bearer ${string}`;
 export type TEnvKey = `VITE_${string}`;
@@ -24,11 +25,13 @@ const envSchema = z.object({
 
 function getEnv() {
   try {
-    return envSchema.parse(import.meta.env);
+    return envSchema.parse({
+      VITE_API_BASE_URL: runtimeConfig.apiBaseUrl,
+    });
   } catch (e) {
     console.warn("Env validation failed, using defaults:", e);
     return {
-      VITE_API_BASE_URL: "http://localhost:4000",
+      VITE_API_BASE_URL: runtimeConfig.apiBaseUrl,
     } as z.infer<typeof envSchema>;
   }
 }
