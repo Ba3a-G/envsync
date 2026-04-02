@@ -1,5 +1,3 @@
-#!/usr/bin/env bun
-
 import { createHash, randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";

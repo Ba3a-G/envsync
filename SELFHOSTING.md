@@ -102,6 +102,12 @@ Planned command surface:
 Invocation style:
 
 ```bash
+npx @envsync-cloud/deploy-cli <subcommand>
+```
+
+Optional Bun invocation:
+
+```bash
 bunx @envsync-cloud/deploy-cli <subcommand>
 ```
 
