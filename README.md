@@ -179,4 +179,4 @@ See [SELFHOSTING.md](/Users/bravo68web/Projects/OSS/EnvSync/monorepo/SELFHOSTING
 ## Support
 
 - Docs: [docs.envsync.cloud](https://docs.envsync.cloud)
-- Issues: [GitHub Issues](https://github.com/EnvSync-Cloud/envsync-monorepo/issues)
+- Issues: [GitHub Issues](https://github.com/EnvSync-Cloud/envsync/issues)

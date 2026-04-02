@@ -1,12 +1,47 @@
 {
   "name": "@envsync-cloud/deploy-cli",
-  "version": "0.1.0",
+  "version": "0.4.0",
+  "description": "CLI for self-hosted EnvSync deployment on Docker Swarm",
   "type": "module",
   "bin": {
-    "envsync-deploy": "./src/index.ts"
+    "envsync-deploy": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
   },
   "scripts": {
+    "build": "tsup --config tsup.config.ts",
+    "prepack": "bun run build",
+    "check:pack": "npm pack --dry-run",
     "start": "bun run src/index.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EnvSync-Cloud/envsync.git",
+    "directory": "packages/deploy-cli"
+  },
+  "homepage": "https://github.com/EnvSync-Cloud/envsync/tree/main/packages/deploy-cli#readme",
+  "bugs": {
+    "url": "https://github.com/EnvSync-Cloud/envsync/issues"
+  },
+  "author": "EnvSync Cloud",
+  "license": "MIT",
+  "keywords": [
+    "envsync",
+    "deploy",
+    "self-hosted",
+    "docker-swarm",
+    "cli",
+    "secrets"
+  ],
+  "devDependencies": {
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.2"
   },
   "publishConfig": {
     "access": "public"

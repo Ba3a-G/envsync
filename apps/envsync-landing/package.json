@@ -12,7 +12,7 @@
     "deploy": "bun run build && bun wrangler deploy"
   },
   "dependencies": {
-    "@envsync-cloud/envsync-ts-sdk": "^0.2.3",
+    "@envsync-cloud/envsync-ts-sdk": "workspace:*",
     "@hookform/resolvers": "^3.9.0",
     "@radix-ui/react-accordion": "^1.2.0",
     "@radix-ui/react-alert-dialog": "^1.1.1",

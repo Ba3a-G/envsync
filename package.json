@@ -11,6 +11,8 @@
     "build": "turbo build",
     "dev": "turbo dev",
     "start": "turbo start",
+    "release:bump": "bun run scripts/bump-release-version.ts",
+    "deploy-cli:bump": "bun run release:bump",
     "cli": "bun run scripts/cli.ts",
     "cli:init": "bun run scripts/cli.ts init",
     "cli:create-dev-user": "bun run packages/envsync-api/scripts/cli.ts create-dev-user",
