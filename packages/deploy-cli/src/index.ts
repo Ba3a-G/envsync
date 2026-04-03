@@ -1895,7 +1895,6 @@ async function cmdBootstrap() {
 	waitForHttpService(config, "keycloak management readiness", "http://keycloak:9000/health/ready", 180);
 	waitForHttpService(config, "openfga", "http://openfga:8090/stores");
 	waitForTcpService(config, "minikms", "minikms", 50051);
-	waitForTcpService(config, "clickstack ui", "clickstack", 8080, 180);
 	const initResult = runBootstrapInit(config);
 	const persistedGenerated = normalizeGeneratedState({
 		openfga: {
