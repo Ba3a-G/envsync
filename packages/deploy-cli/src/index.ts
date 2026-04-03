@@ -1112,8 +1112,9 @@ ${renderEnvList({
 		KC_PROXY_HEADERS: "xforwarded",
 		KC_HOSTNAME_STRICT: "false",
 	})}
-    volumes:
-      - ${KEYCLOAK_REALM_FILE}:/opt/keycloak/data/import/realm.json:ro
+    configs:
+      - source: keycloak_realm
+        target: /opt/keycloak/data/import/realm.json
     networks: [envsync]
     deploy:
       labels:
@@ -1183,7 +1184,9 @@ ${renderEnvList({
       - clickstack_data:/data/db
       - clickstack_ch_data:/var/lib/clickhouse
       - clickstack_ch_logs:/var/log/clickhouse-server
-      - ${CLICKSTACK_CLICKHOUSE_CONF}:/etc/clickhouse-server/config.d/envsync-listen-host.xml:ro
+    configs:
+      - source: clickstack_clickhouse_conf
+        target: /etc/clickhouse-server/config.d/envsync-listen-host.xml
     networks: [envsync]
     healthcheck:
       disable: true
@@ -1191,22 +1194,27 @@ ${renderEnvList({
   otel-agent:
     image: ${config.images.otel_agent}
     command: ["--config=/etc/otel-agent.yaml"]
-    volumes:
-      - ${OTEL_AGENT_CONF}:/etc/otel-agent.yaml:ro
+    configs:
+      - source: otel_agent_conf
+        target: /etc/otel-agent.yaml
     networks: [envsync]
 ${includeAppServices ? `
 
   landing_nginx:
     image: nginx:1.27-alpine
+    configs:
+      - source: nginx_landing_conf
+        target: /etc/nginx/conf.d/default.conf
     volumes:
-      - ${NGINX_LANDING_CONF}:/etc/nginx/conf.d/default.conf:ro
       - ${RELEASES_ROOT}/landing/current:/srv/landing:ro
     networks: [envsync]
 
   web_nginx:
     image: nginx:1.27-alpine
+    configs:
+      - source: nginx_web_conf
+        target: /etc/nginx/conf.d/default.conf
     volumes:
-      - ${NGINX_WEB_CONF}:/etc/nginx/conf.d/default.conf:ro
       - ${RELEASES_ROOT}/web/current:/srv/web:ro
     networks: [envsync]
 
@@ -1237,6 +1245,18 @@ volumes:
   clickstack_data:
   clickstack_ch_data:
   clickstack_ch_logs:
+
+configs:
+  keycloak_realm:
+    file: ${KEYCLOAK_REALM_FILE}
+  clickstack_clickhouse_conf:
+    file: ${CLICKSTACK_CLICKHOUSE_CONF}
+  otel_agent_conf:
+    file: ${OTEL_AGENT_CONF}
+  nginx_landing_conf:
+    file: ${NGINX_LANDING_CONF}
+  nginx_web_conf:
+    file: ${NGINX_WEB_CONF}
 `.trimStart();
 }
 

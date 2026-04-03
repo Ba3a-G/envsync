@@ -189,6 +189,40 @@ function runCli(args: string[], capture = false) {
 	});
 }
 
+function buildLocalReleaseImages() {
+	console.log("Building local self-host smoke images\n");
+	run("docker", ["build", "-t", `ghcr.io/envsync-cloud/envsync-api:${version}`, "packages/envsync-api"]);
+	run("bun", ["run", "--filter", "@envsync-cloud/envsync-ts-sdk", "build"]);
+	run("bun", ["run", "--filter", "envsync-web", "build"], {
+		env: {
+			VITE_API_BASE_URL: "https://placeholder.invalid",
+			VITE_HYPERDX_DISABLED: "true",
+		},
+	});
+	run("docker", [
+		"build",
+		"-t",
+		`ghcr.io/envsync-cloud/envsync-web-static:${version}`,
+		"-f",
+		"docker/frontend-static.Dockerfile",
+		"apps/envsync-web",
+	]);
+	run("bun", ["run", "--filter", "envsync-landing", "build"], {
+		env: {
+			VITE_API_BASE_URL: "https://placeholder.invalid",
+			VITE_HYPERDX_DISABLED: "true",
+		},
+	});
+	run("docker", [
+		"build",
+		"-t",
+		`ghcr.io/envsync-cloud/envsync-landing-static:${version}`,
+		"-f",
+		"docker/frontend-static.Dockerfile",
+		"apps/envsync-landing",
+	]);
+}
+
 function readJson<T>(filePath: string): T {
 	return JSON.parse(fs.readFileSync(filePath, "utf8")) as T;
 }
@@ -279,6 +313,7 @@ async function main() {
 	ensureSwarmManager();
 	publicHttpPort = await reserveFreePort();
 	publicHttpsPort = await reserveFreePort();
+	buildLocalReleaseImages();
 	writeConfig();
 
 	let firstStoreId = "";
