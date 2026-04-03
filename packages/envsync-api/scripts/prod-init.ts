@@ -105,9 +105,18 @@ async function initRustfs() {
 function runMigrations() {
 	const result = spawnSync("bun", ["run", "scripts/migrate.ts", "latest"], {
 		cwd: fileURLToPath(new URL("..", import.meta.url)),
-		stdio: "inherit",
+		stdio: jsonMode ? "pipe" : "inherit",
 		env: process.env,
+		encoding: "utf8",
 	});
+	if (jsonMode) {
+		if (result.stdout) {
+			process.stderr.write(result.stdout);
+		}
+		if (result.stderr) {
+			process.stderr.write(result.stderr);
+		}
+	}
 	if (result.status !== 0) throw new Error("DB migrations failed");
 }
 

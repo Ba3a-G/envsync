@@ -1426,7 +1426,7 @@ function runBootstrapInit(config: DeployConfig) {
 		],
 		{ quiet: true },
 	).trim();
-	const result = JSON.parse(output) as { openfgaStoreId?: string; openfgaModelId?: string };
+	const result = parseBootstrapInitJson(output);
 	if (!result.openfgaStoreId || !result.openfgaModelId) {
 		throw new Error("Bootstrap init did not return OpenFGA IDs");
 	}
@@ -1435,6 +1435,36 @@ function runBootstrapInit(config: DeployConfig) {
 		openfgaStoreId: result.openfgaStoreId,
 		openfgaModelId: result.openfgaModelId,
 	};
+}
+
+function parseBootstrapInitJson(output: string) {
+	const trimmed = output.trim();
+	if (!trimmed) {
+		throw new Error("Bootstrap init returned no JSON output");
+	}
+
+	try {
+		return JSON.parse(trimmed) as { openfgaStoreId?: string; openfgaModelId?: string };
+	} catch {
+		const lines = trimmed
+			.split(/\r?\n/)
+			.map(line => line.trim())
+			.filter(Boolean);
+
+		for (let index = lines.length - 1; index >= 0; index -= 1) {
+			const candidate = lines[index]!;
+			if (!candidate.startsWith("{") || !candidate.endsWith("}")) continue;
+			try {
+				return JSON.parse(candidate) as { openfgaStoreId?: string; openfgaModelId?: string };
+			} catch {
+				continue;
+			}
+		}
+
+		throw new Error(
+			`Bootstrap init returned non-JSON output.\nCaptured stdout:\n${trimmed}`,
+		);
+	}
 }
 
 function hasCompleteBootstrapState(generated: DeployGeneratedState) {
