@@ -65,6 +65,8 @@ npx @envsync-cloud/deploy-cli setup
 
 `setup` requires an exact release version such as `0.6.2`. Channel names like `stable` and `latest` are not accepted for self-hosted installs.
 
+The configured target release comes from `/etc/envsync/deploy.yaml`. Running a newer CLI package with `bunx @envsync-cloud/deploy-cli@<version> ...` does not change the pinned target release by itself.
+
 Bootstrap infra, migrations, RustFS, and OpenFGA:
 
 ```bash
@@ -72,6 +74,8 @@ npx @envsync-cloud/deploy-cli bootstrap
 ```
 
 `bootstrap` is destructive. It removes the existing EnvSync stack, matching containers, network, and managed volumes before rebuilding, and requires typing `yes` to continue. Use `--force` to bypass the prompt in automation or other non-interactive environments.
+
+During destructive bootstrap, stable generated secrets are preserved, but persisted OpenFGA store/model IDs are cleared before re-initialization so a fresh OpenFGA database cannot reuse stale IDs from a previous run.
 
 Deploy the pending API and frontend services:
 
@@ -116,6 +120,26 @@ npx @envsync-cloud/deploy-cli bootstrap --dry-run
 npx @envsync-cloud/deploy-cli bootstrap --force
 npx @envsync-cloud/deploy-cli deploy --dry-run
 ```
+
+## Local Smoke Testing
+
+Use the repo-local smoke harness to test unpublished self-hosted deploy-cli changes without publishing to GitHub or npm:
+
+```bash
+bun run selfhost:smoke
+```
+
+The smoke harness:
+- runs the local `packages/deploy-cli/src/index.ts` directly
+- uses disposable roots under `.tmp/selfhost-smoke`
+- sets `ENVSYNC_REPO_ROOT` to the current workspace so no repo clone/fetch/checkout happens
+- uses high host ports instead of `80/443`
+
+Advanced local test overrides supported by the deploy-cli:
+- `ENVSYNC_HOST_ROOT`
+- `ENVSYNC_ETC_ROOT`
+- `ENVSYNC_TRAEFIK_STATE_ROOT`
+- `ENVSYNC_REPO_ROOT`
 
 ## Links
 

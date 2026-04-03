@@ -29,6 +29,8 @@ interface DeployConfig {
 	services: {
 		stack_name: string;
 		api_port: number;
+		public_http_port: number;
+		public_https_port: number;
 		clickstack_ui_port: number;
 		clickstack_otlp_http_port: number;
 		clickstack_otlp_grpc_port: number;
@@ -98,26 +100,26 @@ type RuntimeEnv = Record<string, string>;
 type ServiceHealth = "healthy" | "missing" | "degraded";
 type CommandOptions = { dryRun: boolean; force: boolean };
 
-const HOST_ROOT = "/opt/envsync";
-const DEPLOY_ROOT = "/opt/envsync/deploy";
-const RELEASES_ROOT = "/opt/envsync/releases";
-const BACKUPS_ROOT = "/opt/envsync/backups";
-const ETC_ROOT = "/etc/envsync";
-const TRAEFIK_STATE_ROOT = "/var/lib/envsync/traefik";
-const REPO_ROOT = "/opt/envsync/repo";
-const DEPLOY_ENV = "/etc/envsync/deploy.env";
-const DEPLOY_YAML = "/etc/envsync/deploy.yaml";
-const VERSIONS_LOCK = "/opt/envsync/deploy/versions.lock.json";
-const STACK_FILE = "/opt/envsync/deploy/docker-stack.yaml";
-const BOOTSTRAP_BASE_STACK_FILE = "/opt/envsync/deploy/docker-stack.bootstrap.base.yaml";
-const BOOTSTRAP_STACK_FILE = "/opt/envsync/deploy/docker-stack.bootstrap.yaml";
-const TRAEFIK_DYNAMIC_FILE = "/opt/envsync/deploy/traefik-dynamic.yaml";
-const KEYCLOAK_REALM_FILE = "/opt/envsync/deploy/keycloak-realm.envsync.json";
-const NGINX_WEB_CONF = "/opt/envsync/deploy/nginx-web.conf";
-const NGINX_LANDING_CONF = "/opt/envsync/deploy/nginx-landing.conf";
-const OTEL_AGENT_CONF = "/opt/envsync/deploy/otel-agent.yaml";
-const CLICKSTACK_CLICKHOUSE_CONF = "/opt/envsync/deploy/clickhouse-listen.xml";
-const INTERNAL_CONFIG_JSON = "/opt/envsync/deploy/config.json";
+const HOST_ROOT = process.env.ENVSYNC_HOST_ROOT ?? "/opt/envsync";
+const ETC_ROOT = process.env.ENVSYNC_ETC_ROOT ?? "/etc/envsync";
+const TRAEFIK_STATE_ROOT = process.env.ENVSYNC_TRAEFIK_STATE_ROOT ?? "/var/lib/envsync/traefik";
+const DEPLOY_ROOT = path.join(HOST_ROOT, "deploy");
+const RELEASES_ROOT = path.join(HOST_ROOT, "releases");
+const BACKUPS_ROOT = path.join(HOST_ROOT, "backups");
+const REPO_ROOT = process.env.ENVSYNC_REPO_ROOT ?? path.join(HOST_ROOT, "repo");
+const DEPLOY_ENV = path.join(ETC_ROOT, "deploy.env");
+const DEPLOY_YAML = path.join(ETC_ROOT, "deploy.yaml");
+const VERSIONS_LOCK = path.join(DEPLOY_ROOT, "versions.lock.json");
+const STACK_FILE = path.join(DEPLOY_ROOT, "docker-stack.yaml");
+const BOOTSTRAP_BASE_STACK_FILE = path.join(DEPLOY_ROOT, "docker-stack.bootstrap.base.yaml");
+const BOOTSTRAP_STACK_FILE = path.join(DEPLOY_ROOT, "docker-stack.bootstrap.yaml");
+const TRAEFIK_DYNAMIC_FILE = path.join(DEPLOY_ROOT, "traefik-dynamic.yaml");
+const KEYCLOAK_REALM_FILE = path.join(DEPLOY_ROOT, "keycloak-realm.envsync.json");
+const NGINX_WEB_CONF = path.join(DEPLOY_ROOT, "nginx-web.conf");
+const NGINX_LANDING_CONF = path.join(DEPLOY_ROOT, "nginx-landing.conf");
+const OTEL_AGENT_CONF = path.join(DEPLOY_ROOT, "otel-agent.yaml");
+const CLICKSTACK_CLICKHOUSE_CONF = path.join(DEPLOY_ROOT, "clickhouse-listen.xml");
+const INTERNAL_CONFIG_JSON = path.join(DEPLOY_ROOT, "config.json");
 
 const STACK_VOLUMES = [
 	"postgres_data",
@@ -212,6 +214,32 @@ function commandSucceeds(cmd: string, args: string[], opts: { cwd?: string; env?
 		encoding: "utf8",
 	});
 	return result.status === 0;
+}
+
+function runIgnoringAbsent(
+	cmd: string,
+	args: string[],
+	opts: { cwd?: string; env?: Record<string, string>; absentPatterns?: string[] } = {},
+) {
+	const result = spawnSync(cmd, args, {
+		cwd: opts.cwd,
+		env: { ...process.env, ...opts.env },
+		stdio: "pipe",
+		encoding: "utf8",
+	});
+	if (result.status === 0) {
+		const stdout = typeof result.stdout === "string" ? result.stdout.trim() : "";
+		if (stdout) console.log(stdout);
+		return true;
+	}
+	const combined = `${typeof result.stdout === "string" ? result.stdout : ""}\n${typeof result.stderr === "string" ? result.stderr : ""}`
+		.toLowerCase();
+	const absentPatterns = (opts.absentPatterns ?? []).map(pattern => pattern.toLowerCase());
+	if (absentPatterns.some(pattern => combined.includes(pattern))) {
+		return false;
+	}
+	const stderr = typeof result.stderr === "string" ? result.stderr : "";
+	throw new Error(`Command failed: ${cmd} ${args.join(" ")}${stderr ? `\n${stderr}` : ""}`);
 }
 
 function ensureDir(dir: string) {
@@ -380,6 +408,21 @@ function getDeployCliVersion() {
 	}
 }
 
+function hasExplicitRepoOverride() {
+	return typeof process.env.ENVSYNC_REPO_ROOT === "string" && process.env.ENVSYNC_REPO_ROOT.length > 0;
+}
+
+function logReleaseContext(config: DeployConfig) {
+	const cliVersion = getDeployCliVersion();
+	logInfo(`Configured release version from ${DEPLOY_YAML}: ${config.release.version}`);
+	logInfo(`Running deploy-cli version: ${cliVersion}`);
+	if (cliVersion !== config.release.version) {
+		logWarn(
+			`The running deploy-cli version does not change the configured release target. This run will deploy the version pinned in ${DEPLOY_YAML}.`,
+		);
+	}
+}
+
 function assertSemverVersion(version: string, label = "release version") {
 	if (!SEMVER_VERSION_RE.test(version)) {
 		throw new Error(`Invalid ${label} '${version}'. Expected an exact semver like 0.6.2.`);
@@ -461,6 +504,8 @@ function normalizeConfig(raw: Partial<DeployConfig>): DeployConfig {
 		services: {
 			stack_name: requireDefined(raw.services?.stack_name, "services.stack_name"),
 			api_port: requireDefined(raw.services?.api_port, "services.api_port"),
+			public_http_port: raw.services?.public_http_port ?? 80,
+			public_https_port: raw.services?.public_https_port ?? 443,
 			clickstack_ui_port: requireDefined(raw.services?.clickstack_ui_port, "services.clickstack_ui_port"),
 			clickstack_otlp_http_port: requireDefined(raw.services?.clickstack_otlp_http_port, "services.clickstack_otlp_http_port"),
 			clickstack_otlp_grpc_port: requireDefined(raw.services?.clickstack_otlp_grpc_port, "services.clickstack_otlp_grpc_port"),
@@ -610,6 +655,19 @@ function ensureGeneratedRuntimeState(generated: DeployGeneratedState) {
 			minikms_db_password: generated.secrets.minikms_db_password || randomSecret(),
 		},
 		bootstrap: generated.bootstrap,
+	});
+}
+
+function resetBootstrapGeneratedState(generated: DeployGeneratedState) {
+	return normalizeGeneratedState({
+		openfga: {
+			store_id: "",
+			model_id: "",
+		},
+		secrets: generated.secrets,
+		bootstrap: {
+			completed_at: "",
+		},
 	});
 }
 
@@ -958,11 +1016,11 @@ services:
       - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
     ports:
       - target: 80
-        published: 80
+        published: ${config.services.public_http_port}
         protocol: tcp
         mode: host
       - target: 443
-        published: 443
+        published: ${config.services.public_https_port}
         protocol: tcp
         mode: host
     volumes:
@@ -1212,6 +1270,14 @@ function ensureRepoCheckout(config: DeployConfig) {
 	logStep(`Ensuring pinned repo checkout at ${config.source.ref}`);
 	if (currentOptions.dryRun) {
 		logDryRun(`Would ensure repo checkout at ${REPO_ROOT}`);
+		return;
+	}
+	if (hasExplicitRepoOverride()) {
+		if (!exists(path.join(REPO_ROOT, ".git"))) {
+			throw new Error(`ENVSYNC_REPO_ROOT is set but no git repo was found at ${REPO_ROOT}`);
+		}
+		logInfo(`Using local repo override at ${REPO_ROOT}`);
+		logSuccess("Local repo override is ready");
 		return;
 	}
 	ensureDir(REPO_ROOT);
@@ -1716,18 +1782,33 @@ function cleanupBootstrapState(config: DeployConfig) {
 	const refreshedContainers = listManagedContainers(config);
 	if (refreshedContainers.length > 0) {
 		logCommand("docker", ["rm", "-f", ...refreshedContainers]);
-		run("docker", ["rm", "-f", ...refreshedContainers]);
+		const removed = runIgnoringAbsent("docker", ["rm", "-f", ...refreshedContainers], {
+			absentPatterns: ["no such container", "not found"],
+		});
+		if (!removed) {
+			logInfo("Managed containers were already absent");
+		}
 	}
 
 	if (commandSucceeds("docker", ["network", "inspect", networkName])) {
 		logCommand("docker", ["network", "rm", networkName]);
-		run("docker", ["network", "rm", networkName]);
+		const removed = runIgnoringAbsent("docker", ["network", "rm", networkName], {
+			absentPatterns: ["network", "not found", "no such network"],
+		});
+		if (!removed) {
+			logInfo(`Network ${networkName} was already absent`);
+		}
 	}
 
 	for (const volumeName of volumeNames) {
 		if (commandSucceeds("docker", ["volume", "inspect", volumeName])) {
 			logCommand("docker", ["volume", "rm", "-f", volumeName]);
-			run("docker", ["volume", "rm", "-f", volumeName]);
+			const removed = runIgnoringAbsent("docker", ["volume", "rm", "-f", volumeName], {
+				absentPatterns: ["no such volume", "not found"],
+			});
+			if (!removed) {
+				logInfo(`Volume ${volumeName} was already absent`);
+			}
 		}
 	}
 
@@ -1804,6 +1885,8 @@ async function cmdSetup() {
 		services: {
 			stack_name: "envsync",
 			api_port: 4000,
+			public_http_port: 80,
+			public_https_port: 443,
 			clickstack_ui_port: 8080,
 			clickstack_otlp_http_port: 4318,
 			clickstack_otlp_grpc_port: 4317,
@@ -1854,9 +1937,9 @@ async function cmdSetup() {
 async function cmdBootstrap() {
 	logSection("Bootstrap");
 	const { config, generated } = loadState();
-	const nextGenerated = ensureGeneratedRuntimeState(generated);
+	const nextGenerated = ensureGeneratedRuntimeState(resetBootstrapGeneratedState(generated));
 	const runtimeEnv = buildRuntimeEnv(config, nextGenerated);
-	logInfo(`Release version: ${config.release.version}`);
+	logReleaseContext(config);
 	assertSwarmManager();
 	if (currentOptions.dryRun) {
 		logWarn("Dry-run mode: bootstrap reset will be previewed but not executed.");
@@ -1930,7 +2013,7 @@ async function cmdBootstrap() {
 async function cmdDeploy() {
 	logSection("Deploy");
 	const { config, generated } = loadState();
-	logInfo(`Release version: ${config.release.version}`);
+	logReleaseContext(config);
 	assertSwarmManager();
 	assertBootstrapState(generated);
 	if (!currentOptions.dryRun) {
@@ -2033,6 +2116,7 @@ async function cmdHealth(asJson: boolean) {
 async function cmdUpgrade() {
 	logSection("Upgrade");
 	const { config } = loadState();
+	logReleaseContext(config);
 	config.images = {
 		...config.images,
 		...versionedImages(config.release.version),
@@ -2047,6 +2131,7 @@ async function cmdUpgrade() {
 async function cmdUpgradeDeps() {
 	logSection("Upgrade Dependencies");
 	const { config } = loadState();
+	logReleaseContext(config);
 	config.images.traefik = "traefik:v3.6.6";
 	config.images.clickstack = "clickhouse/clickstack-all-in-one:latest";
 	config.images.otel_agent = "otel/opentelemetry-collector-contrib:0.111.0";

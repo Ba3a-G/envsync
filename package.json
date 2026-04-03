@@ -1,6 +1,6 @@
 {
   "name": "monorepo",
-  "version": "0.6.14",
+  "version": "0.6.15",
   "private": true,
   "workspaces": [
     "packages/*",
@@ -18,6 +18,7 @@
     "cli:create-dev-user": "bun run packages/envsync-api/scripts/cli.ts create-dev-user",
     "clickstack:sync": "bun run scripts/sync-clickstack-local.ts",
     "clickstack:bootstrap": "bun run scripts/bootstrap-clickstack-local.ts",
+    "selfhost:smoke": "bun run scripts/selfhost-smoke.ts",
     "e2e-setup": "bun run scripts/e2e-setup.ts",
     "test:mock": "turbo test:mock",
     "test:e2e": "bun run e2e-setup init && turbo test:e2e"

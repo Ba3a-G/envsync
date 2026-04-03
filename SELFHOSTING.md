@@ -188,6 +188,16 @@ Stage ownership:
 
 Bootstrap waits for Keycloak health on the management interface at `http://keycloak:9000/health/ready`.
 
+Bootstrap cleanup is idempotent. If `docker stack rm` already removed the EnvSync overlay network or other managed resources, bootstrap should continue instead of failing and requiring a second run.
+
+Destructive bootstrap resets generated OpenFGA IDs before re-initialization:
+- generated secrets persist
+- `OPENFGA_STORE_ID` does not persist
+- `OPENFGA_MODEL_ID` does not persist
+- `bootstrap.completed_at` is cleared until the new run succeeds
+
+The configured target release always comes from `/etc/envsync/deploy.yaml`. Running a newer CLI package version does not change that target automatically.
+
 Generated frontend runtime config uses:
 - `otelEndpoint = https://obs.<root-domain>`
 
@@ -206,6 +216,21 @@ Release artifact requirements:
 - `ghcr.io/envsync-cloud/envsync-api:<version>`
 - `ghcr.io/envsync-cloud/envsync-web-static:<version>`
 - `ghcr.io/envsync-cloud/envsync-landing-static:<version>`
+
+## Local Smoke Testing
+
+Use the repo-local self-host smoke harness before publishing deploy-cli changes:
+
+```bash
+bun run selfhost:smoke
+```
+
+This smoke flow:
+- runs the local deploy-cli source directly
+- uses disposable roots under `.tmp/selfhost-smoke`
+- avoids touching `/etc/envsync` and `/opt/envsync`
+- uses `ENVSYNC_REPO_ROOT` to test the current workspace without cloning or checking out tags
+- publishes Traefik on high test ports instead of `80/443`
 
 ## Related Files
 
