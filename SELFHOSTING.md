@@ -73,6 +73,9 @@ Current direction:
 - OTLP from API, CLI, and browser
 - one OTEL agent for local and self-hosted collection/routing
 - ClickStack as the UI and backend for traces, logs, and metrics
+- self-hosted browser OTLP posts to `https://obs.<root-domain>/v1/...`
+- self-hosted ClickStack UI lives at `https://obs.<root-domain>/`
+- self-hosted ClickStack API is reverse proxied at `https://obs.<root-domain>/api/...`
 
 Local helper commands:
 
@@ -180,10 +183,24 @@ npx @envsync-cloud/deploy-cli deploy --dry-run
 
 Stage ownership:
 - `setup` writes desired operator config, including an exact release version such as `0.6.2`
-- `bootstrap` first removes the existing EnvSync stack, matching containers, network, and managed volumes after a `yes` confirmation, or with `--force` in non-interactive environments, then starts base infra, runs OpenFGA and miniKMS migration jobs, starts runtime infra, initializes RustFS, initializes or validates OpenFGA, and persists generated env state
+- `bootstrap` first removes the existing EnvSync stack, matching containers, network, and managed volumes after a `yes` confirmation, or with `--force` in non-interactive environments, then starts base infra, runs OpenFGA and miniKMS migration jobs, starts runtime infra, initializes RustFS, initializes or validates OpenFGA, bootstraps ClickStack sources/dashboards for the self-hosted host, and persists generated env state
 - `deploy` starts the pending API and frontend services
 
 Bootstrap waits for Keycloak health on the management interface at `http://keycloak:9000/health/ready`.
+
+Generated frontend runtime config uses:
+- `otelEndpoint = https://obs.<root-domain>`
+
+Traefik public host routing is:
+- `https://<root-domain>` -> landing
+- `https://app.<root-domain>` -> dashboard
+- `https://api.<root-domain>` -> EnvSync API
+- `https://auth.<root-domain>` -> Keycloak
+- `https://obs.<root-domain>/` -> ClickStack UI
+- `https://obs.<root-domain>/api/...` -> ClickStack API
+- `https://obs.<root-domain>/v1/{traces,logs,metrics}` -> OTLP HTTP
+- `https://s3.<root-domain>` -> RustFS S3 API
+- `https://console.s3.<root-domain>` -> RustFS console
 
 Release artifact requirements:
 - `ghcr.io/envsync-cloud/envsync-api:<version>`
@@ -197,3 +214,4 @@ Release artifact requirements:
 - [packages/deploy-cli/src/index.ts](/Users/bravo68web/Projects/OSS/EnvSync/monorepo/packages/deploy-cli/src/index.ts)
 - [scripts/sync-clickstack-local.ts](/Users/bravo68web/Projects/OSS/EnvSync/monorepo/scripts/sync-clickstack-local.ts)
 - [scripts/bootstrap-clickstack-local.ts](/Users/bravo68web/Projects/OSS/EnvSync/monorepo/scripts/bootstrap-clickstack-local.ts)
+- [scripts/bootstrap-clickstack-selfhost.mjs](/Users/bravo68web/Projects/OSS/EnvSync/monorepo/scripts/bootstrap-clickstack-selfhost.mjs)

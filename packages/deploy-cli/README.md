@@ -81,8 +81,15 @@ npx @envsync-cloud/deploy-cli deploy
 
 The staged flow is:
 - `setup` writes desired config
-- `bootstrap` resets the existing EnvSync deployment, then starts base infra, runs OpenFGA and miniKMS migrations, starts runtime infra, and persists generated runtime env state
+- `bootstrap` resets the existing EnvSync deployment, then starts base infra, runs OpenFGA and miniKMS migrations, starts runtime infra, initializes ClickStack sources and dashboards, and persists generated runtime env state
 - `deploy` starts the pending API and frontend services
+
+Self-hosted observability routing is:
+- `https://obs.<root-domain>/` for ClickStack UI
+- `https://obs.<root-domain>/api/...` for ClickStack API
+- `https://obs.<root-domain>/v1/{traces,logs,metrics}` for browser OTLP
+
+Both frontends receive `otelEndpoint = https://obs.<root-domain>` in the generated `runtime-config.js`.
 
 Check service health:
 

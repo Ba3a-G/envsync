@@ -759,6 +759,19 @@ function renderTraefikDynamicConfig(config: DeployConfig) {
 		"        stsSeconds: 31536000",
 		"    gzip:",
 		"      compress: {}",
+		"    otel-cors:",
+		"      headers:",
+		"        accessControlAllowOriginList:",
+		`          - https://${hosts.landing}`,
+		`          - https://${hosts.app}`,
+		"        accessControlAllowMethods:",
+		"          - POST",
+		"          - OPTIONS",
+		"        accessControlAllowHeaders:",
+		"          - Content-Type",
+		"          - Authorization",
+		"        accessControlAllowCredentials: false",
+		"        addVaryHeader: true",
 		"  services:",
 		"    envsync-api:",
 		"      weighted:",
@@ -783,7 +796,15 @@ function renderTraefikDynamicConfig(config: DeployConfig) {
 		"      loadBalancer:",
 		"        servers:",
 		"          - url: http://web_nginx:8080",
-		"    browser-otlp:",
+		"    clickstack-ui:",
+		"      loadBalancer:",
+		"        servers:",
+		"          - url: http://clickstack:8080",
+		"    clickstack-api:",
+		"      loadBalancer:",
+		"        servers:",
+		"          - url: http://clickstack:8000",
+		"    clickstack-otlp:",
 		"      loadBalancer:",
 		"        servers:",
 		`          - url: http://clickstack:${config.services.clickstack_otlp_http_port}`,
@@ -798,16 +819,23 @@ function renderTraefikDynamicConfig(config: DeployConfig) {
 		"      service: web",
 		"      entryPoints: [websecure]",
 		"      tls: {}",
-		"    landing-otlp-router:",
-		`      rule: Host(\`${hosts.landing}\`) && (PathPrefix(\`/v1/traces\`) || PathPrefix(\`/v1/logs\`) || PathPrefix(\`/v1/metrics\`))`,
-		"      service: browser-otlp",
+		"    obs-otlp-router:",
+		`      rule: Host(\`${hosts.obs}\`) && (PathPrefix(\`/v1/traces\`) || PathPrefix(\`/v1/logs\`) || PathPrefix(\`/v1/metrics\`))`,
+		"      service: clickstack-otlp",
+		"      middlewares: [otel-cors]",
 		"      priority: 100",
 		"      entryPoints: [websecure]",
 		"      tls: {}",
-		"    web-otlp-router:",
-		`      rule: Host(\`${hosts.app}\`) && (PathPrefix(\`/v1/traces\`) || PathPrefix(\`/v1/logs\`) || PathPrefix(\`/v1/metrics\`))`,
-		"      service: browser-otlp",
-		"      priority: 100",
+		"    obs-api-router:",
+		`      rule: Host(\`${hosts.obs}\`) && PathPrefix(\`/api\`)`,
+		"      service: clickstack-api",
+		"      priority: 90",
+		"      entryPoints: [websecure]",
+		"      tls: {}",
+		"    obs-ui-router:",
+		`      rule: Host(\`${hosts.obs}\`)`,
+		"      service: clickstack-ui",
+		"      priority: 10",
 		"      entryPoints: [websecure]",
 		"      tls: {}",
 		"    api-router:",
@@ -834,7 +862,7 @@ function renderNginxConf(kind: "web" | "landing") {
 
 function renderFrontendRuntimeConfig(config: DeployConfig, kind: "web" | "landing") {
 	const hosts = domainMap(config.domain.root_domain);
-	const otelEndpoint = kind === "web" ? `https://${hosts.app}` : `https://${hosts.landing}`;
+	const otelEndpoint = `https://${hosts.obs}`;
 	return `window.__ENVSYNC_RUNTIME_CONFIG__ = ${JSON.stringify({
 		apiBaseUrl: `https://${hosts.api}`,
 		appBaseUrl: `https://${hosts.app}`,
@@ -884,6 +912,11 @@ function renderStack(config: DeployConfig, runtimeEnv: RuntimeEnv, mode: "base" 
 	const hosts = domainMap(config.domain.root_domain);
 	const includeRuntimeInfra = mode !== "base";
 	const includeAppServices = mode === "full";
+	const stackName = config.services.stack_name;
+	const s3RouterName = `${stackName}-s3-router`;
+	const s3ServiceName = `${stackName}-s3-service`;
+	const s3ConsoleRouterName = `${stackName}-s3-console-router`;
+	const s3ConsoleServiceName = `${stackName}-s3-console-service`;
 	const apiEnvironment = {
 		...runtimeEnv,
 		OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-agent:4318",
@@ -961,16 +994,16 @@ ${renderEnvList({
     deploy:
       labels:
         - traefik.enable=true
-        - traefik.http.routers.s3.rule=Host(\`${hosts.s3}\`)
-        - traefik.http.routers.s3.entrypoints=websecure
-        - traefik.http.routers.s3.tls.certresolver=letsencrypt
-        - traefik.http.routers.s3.service=s3
-        - traefik.http.services.s3.loadbalancer.server.port=9000
-        - traefik.http.routers.s3-console.rule=Host(\`${hosts.s3Console}\`)
-        - traefik.http.routers.s3-console.entrypoints=websecure
-        - traefik.http.routers.s3-console.tls.certresolver=letsencrypt
-        - traefik.http.routers.s3-console.service=s3-console
-        - traefik.http.services.s3-console.loadbalancer.server.port=9001
+        - traefik.http.routers.${s3RouterName}.rule=Host(\`${hosts.s3}\`)
+        - traefik.http.routers.${s3RouterName}.entrypoints=websecure
+        - traefik.http.routers.${s3RouterName}.tls.certresolver=letsencrypt
+        - traefik.http.routers.${s3RouterName}.service=${s3ServiceName}
+        - traefik.http.services.${s3ServiceName}.loadbalancer.server.port=9000
+        - traefik.http.routers.${s3ConsoleRouterName}.rule=Host(\`${hosts.s3Console}\`)
+        - traefik.http.routers.${s3ConsoleRouterName}.entrypoints=websecure
+        - traefik.http.routers.${s3ConsoleRouterName}.tls.certresolver=letsencrypt
+        - traefik.http.routers.${s3ConsoleRouterName}.service=${s3ConsoleServiceName}
+        - traefik.http.services.${s3ConsoleServiceName}.loadbalancer.server.port=9001
 
   keycloak_db:
     image: postgres:17
@@ -1063,18 +1096,19 @@ ${renderEnvList({
 
   clickstack:
     image: ${config.images.clickstack}
+    environment:
+${renderEnvList({
+		HYPERDX_APP_URL: `https://${hosts.obs}`,
+		HYPERDX_APP_PORT: "443",
+		HYPERDX_API_URL: `https://${hosts.obs}`,
+		HYPERDX_API_PORT: "443",
+		FRONTEND_URL: `https://${hosts.obs}`,
+	})}
     volumes:
       - clickstack_data:/data/db
       - clickstack_ch_data:/var/lib/clickhouse
       - clickstack_ch_logs:/var/log/clickhouse-server
     networks: [envsync]
-    deploy:
-      labels:
-        - traefik.enable=true
-        - traefik.http.routers.obs.rule=Host(\`${hosts.obs}\`)
-        - traefik.http.routers.obs.entrypoints=websecure
-        - traefik.http.routers.obs.tls.certresolver=letsencrypt
-        - traefik.http.services.obs.loadbalancer.server.port=8080
 
   otel-agent:
     image: ${config.images.otel_agent}
@@ -1313,6 +1347,56 @@ function waitForHttpService(config: DeployConfig, label: string, url: string, ti
 	throw new Error(`Timed out waiting for ${label} at ${url}`);
 }
 
+function serviceContainerId(config: DeployConfig, serviceName: string) {
+	const output = tryRun(
+		"docker",
+		[
+			"ps",
+			"--filter",
+			`label=com.docker.swarm.service.name=${config.services.stack_name}_${serviceName}`,
+			"--format",
+			"{{.ID}}",
+		],
+		{ quiet: true },
+	);
+	return output
+		.split(/\r?\n/)
+		.map(line => line.trim())
+		.find(Boolean) ?? "";
+}
+
+function waitForContainerHealth(config: DeployConfig, serviceName: string, label: string, timeoutSeconds = 180) {
+	if (currentOptions.dryRun) {
+		logDryRun(`Would wait for ${label}`);
+		return;
+	}
+	logStep(`Waiting for ${label}`);
+	const deadline = Date.now() + timeoutSeconds * 1000;
+	while (Date.now() < deadline) {
+		const containerId = serviceContainerId(config, serviceName);
+		if (!containerId) {
+			sleepSeconds(2);
+			continue;
+		}
+		const health = tryRun(
+			"docker",
+			[
+				"inspect",
+				"--format",
+				"{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}",
+				containerId,
+			],
+			{ quiet: true },
+		).trim();
+		if (health === "healthy" || health === "running") {
+			logSuccess(`${label} is ready`);
+			return;
+		}
+		sleepSeconds(2);
+	}
+	throw new Error(`Timed out waiting for ${label}`);
+}
+
 function runOpenFgaMigrate(config: DeployConfig, runtimeEnv: RuntimeEnv) {
 	logStep("Running OpenFGA datastore migrations");
 	if (currentOptions.dryRun) {
@@ -1441,6 +1525,22 @@ function runBootstrapInit(config: DeployConfig) {
 		openfgaStoreId: result.openfgaStoreId,
 		openfgaModelId: result.openfgaModelId,
 	};
+}
+
+function runClickstackBootstrap(config: DeployConfig) {
+	logStep("Running ClickStack self-host bootstrap");
+	if (currentOptions.dryRun) {
+		logDryRun("Would bootstrap ClickStack sources and dashboards");
+		logCommand("node", [path.join(REPO_ROOT, "scripts/bootstrap-clickstack-selfhost.mjs")]);
+		return;
+	}
+	run("node", [path.join(REPO_ROOT, "scripts/bootstrap-clickstack-selfhost.mjs")], {
+		env: {
+			ENVSYNC_STACK_NAME: config.services.stack_name,
+			ENVSYNC_ROOT_DOMAIN: config.domain.root_domain,
+		},
+	});
+	logSuccess("ClickStack self-host bootstrap completed");
 }
 
 function parseBootstrapInitJson(output: string) {
@@ -1802,7 +1902,20 @@ async function cmdBootstrap() {
 	waitForHttpService(config, "keycloak management readiness", "http://keycloak:9000/health/ready", 180);
 	waitForHttpService(config, "openfga", "http://openfga:8090/stores");
 	waitForTcpService(config, "minikms", "minikms", 50051);
+	waitForContainerHealth(config, "clickstack", "clickstack container health");
 	const initResult = runBootstrapInit(config);
+	const persistedGenerated = normalizeGeneratedState({
+		openfga: {
+			store_id: initResult.openfgaStoreId,
+			model_id: initResult.openfgaModelId,
+		},
+		secrets: nextGenerated.secrets,
+		bootstrap: nextGenerated.bootstrap,
+	});
+	if (!currentOptions.dryRun) {
+		writeDeployArtifacts(config, persistedGenerated);
+	}
+	runClickstackBootstrap(config);
 	if (currentOptions.dryRun) {
 		logDryRun("Skipping generated OpenFGA ID persistence in preview mode");
 		logSuccess("Bootstrap dry-run completed");
@@ -1871,6 +1984,7 @@ async function cmdHealth(asJson: boolean) {
 	const hosts = domainMap(config.domain.root_domain);
 	const services = listStackServices(config);
 	const stackName = config.services.stack_name;
+	const traefikDynamic = exists(TRAEFIK_DYNAMIC_FILE) ? fs.readFileSync(TRAEFIK_DYNAMIC_FILE, "utf8") : "";
 	const bootstrapServices = {
 		postgres: serviceHealth(services, `${stackName}_postgres`),
 		redis: serviceHealth(services, `${stackName}_redis`),
@@ -1889,6 +2003,25 @@ async function cmdHealth(asJson: boolean) {
 			api: apiHealth(services, stackName),
 			web: serviceHealth(services, `${stackName}_web_nginx`),
 			landing: serviceHealth(services, `${stackName}_landing_nginx`),
+		},
+		observability: {
+			service: serviceHealth(services, `${stackName}_clickstack`),
+			obs_ui: {
+				url: `https://${hosts.obs}`,
+				configured: traefikDynamic.includes("obs-ui-router"),
+			},
+			obs_api: {
+				url: `https://${hosts.obs}/api`,
+				configured: traefikDynamic.includes("obs-api-router"),
+			},
+			obs_otlp: {
+				url: `https://${hosts.obs}/v1/traces`,
+				configured: traefikDynamic.includes("obs-otlp-router"),
+			},
+			frontend_otel_endpoint: {
+				web: `https://${hosts.obs}`,
+				landing: `https://${hosts.obs}`,
+			},
 		},
 		public: {
 			landing: `https://${hosts.landing}`,
