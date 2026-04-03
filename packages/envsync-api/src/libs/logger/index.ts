@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync, unlinkSync } from "node:fs";
 import { resolve, join } from "node:path";
 import pino, { type Bindings } from "pino";
 import { trace, isSpanContextValid, context } from "@opentelemetry/api";
@@ -11,7 +11,21 @@ export enum LogTypes {
 }
 
 const LOGS_DIR = join(resolve(import.meta.dir, "../../../../.."), "logs");
-try { mkdirSync(LOGS_DIR, { recursive: true }); } catch {}
+
+function createFileDestination(fileName: string) {
+	try {
+		mkdirSync(LOGS_DIR, { recursive: true });
+		const probePath = join(LOGS_DIR, ".write-test");
+		writeFileSync(probePath, "");
+		unlinkSync(probePath);
+		return pino.destination({ dest: join(LOGS_DIR, fileName), sync: false, mkdir: true });
+	} catch {
+		return null;
+	}
+}
+
+const appLogDestination = createFileDestination("app.log");
+const apiResponseLogDestination = createFileDestination("api-responses.log");
 
 // Singleton Pino instance with trace context mixin for OTEL log-trace correlation
 const logger = pino({
@@ -31,12 +45,13 @@ const logger = pino({
 	},
 }, pino.multistream([
 	{ stream: process.stdout },
-	{ stream: pino.destination({ dest: join(LOGS_DIR, "app.log"), sync: false, mkdir: true }) },
+	...(appLogDestination ? [{ stream: appLogDestination }] : []),
 ]));
 
 // API response logger: file only
 export const apiResponseLogger = pino(
-	pino.destination({ dest: join(LOGS_DIR, "api-responses.log"), sync: false, mkdir: true }),
+	{},
+	apiResponseLogDestination ?? process.stdout,
 );
 
 function emitOtelLog(body: string, severityNumber: SeverityNumber, severityText: string, generatedBy: string) {

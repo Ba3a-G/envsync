@@ -7,6 +7,7 @@ const runtimeConfigSchema = z.object({
   keycloakRealm: z.string().min(1),
   webClientId: z.string().min(1),
   apiDocsUrl: z.string().url(),
+  otelEndpoint: z.string().url().optional(),
 });
 
 export type RuntimeConfig = z.infer<typeof runtimeConfigSchema>;
@@ -26,6 +27,7 @@ const fallbackRuntimeConfig: RuntimeConfig = {
   keycloakRealm: "envsync",
   webClientId: "envsync-web",
   apiDocsUrl: `${defaultApiBaseUrl.replace(/\/$/, "")}/docs`,
+  otelEndpoint: "http://localhost:14318",
 };
 
 function getRuntimeConfig(): RuntimeConfig {

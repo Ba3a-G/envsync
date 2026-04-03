@@ -5,9 +5,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { 
   createBrowserRouter,
   createRoutesFromElements,
+  Outlet,
   Route,
   RouterProvider,
 } from "react-router-dom";
+import { RouteChangeTracker } from "@/telemetry";
 import Index from "./pages/Index";
 import About from "./pages/About";
 import Onboarding from "./pages/Onboarding";
@@ -18,9 +20,16 @@ import AcceptUserInvite from "./pages/AcceptUserInvite";
 
 const queryClient = new QueryClient();
 
+const TelemetryLayout = () => (
+  <>
+    <RouteChangeTracker />
+    <Outlet />
+  </>
+);
+
 const router = createBrowserRouter(
   createRoutesFromElements(
-    <>
+    <Route element={<TelemetryLayout />}>
       <Route path="/" element={<Index />} />
       <Route path="/about" element={<About />} />
       <Route path="/onboarding" element={<Onboarding />} />
@@ -28,7 +37,7 @@ const router = createBrowserRouter(
       <Route path="/onboarding/accept-user-invite/:invite_code" element={<AcceptUserInvite />} />
       <Route path="/integrations" element={<Integrations />} />
       <Route path="*" element={<NotFound />} />
-    </>
+    </Route>
   )
 );
 

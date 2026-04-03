@@ -16,7 +16,6 @@ export function initLogs(config: TelemetryConfig): LoggerProvider {
   const processor = new BatchLogRecordProcessor(
     new OTLPLogExporter({
       url: `${config.endpoint}/v1/logs`,
-      headers: config.apiKey ? { Authorization: config.apiKey } : undefined,
     }),
   );
 
@@ -29,7 +28,6 @@ export function initLogs(config: TelemetryConfig): LoggerProvider {
   }).addLogRecordProcessor(processor);
 
   loggerProvider = provider;
-
   interceptConsoleErrors();
 
   return loggerProvider;

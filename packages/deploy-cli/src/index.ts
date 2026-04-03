@@ -783,6 +783,10 @@ function renderTraefikDynamicConfig(config: DeployConfig) {
 		"      loadBalancer:",
 		"        servers:",
 		"          - url: http://web_nginx:8080",
+		"    browser-otlp:",
+		"      loadBalancer:",
+		"        servers:",
+		`          - url: http://clickstack:${config.services.clickstack_otlp_http_port}`,
 		"  routers:",
 		"    landing-router:",
 		`      rule: Host(\`${hosts.landing}\`)`,
@@ -792,6 +796,18 @@ function renderTraefikDynamicConfig(config: DeployConfig) {
 		"    web-router:",
 		`      rule: Host(\`${hosts.app}\`)`,
 		"      service: web",
+		"      entryPoints: [websecure]",
+		"      tls: {}",
+		"    landing-otlp-router:",
+		`      rule: Host(\`${hosts.landing}\`) && (PathPrefix(\`/v1/traces\`) || PathPrefix(\`/v1/logs\`) || PathPrefix(\`/v1/metrics\`))`,
+		"      service: browser-otlp",
+		"      priority: 100",
+		"      entryPoints: [websecure]",
+		"      tls: {}",
+		"    web-otlp-router:",
+		`      rule: Host(\`${hosts.app}\`) && (PathPrefix(\`/v1/traces\`) || PathPrefix(\`/v1/logs\`) || PathPrefix(\`/v1/metrics\`))`,
+		"      service: browser-otlp",
+		"      priority: 100",
 		"      entryPoints: [websecure]",
 		"      tls: {}",
 		"    api-router:",
@@ -816,8 +832,9 @@ function renderNginxConf(kind: "web" | "landing") {
 	].join("\n") + "\n";
 }
 
-function renderFrontendRuntimeConfig(config: DeployConfig) {
+function renderFrontendRuntimeConfig(config: DeployConfig, kind: "web" | "landing") {
 	const hosts = domainMap(config.domain.root_domain);
+	const otelEndpoint = kind === "web" ? `https://${hosts.app}` : `https://${hosts.landing}`;
 	return `window.__ENVSYNC_RUNTIME_CONFIG__ = ${JSON.stringify({
 		apiBaseUrl: `https://${hosts.api}`,
 		appBaseUrl: `https://${hosts.app}`,
@@ -825,6 +842,7 @@ function renderFrontendRuntimeConfig(config: DeployConfig) {
 		keycloakRealm: config.auth.keycloak_realm,
 		webClientId: config.auth.web_client_id,
 		apiDocsUrl: `https://${hosts.api}/docs`,
+		otelEndpoint,
 	}, null, 2)};\n`;
 }
 
@@ -1798,8 +1816,8 @@ async function cmdDeploy() {
 	}
 	extractStaticBundle(config.images.web, `${RELEASES_ROOT}/web/current`);
 	extractStaticBundle(config.images.landing, `${RELEASES_ROOT}/landing/current`);
-	writeFileMaybe(`${RELEASES_ROOT}/web/current/runtime-config.js`, renderFrontendRuntimeConfig(config));
-	writeFileMaybe(`${RELEASES_ROOT}/landing/current/runtime-config.js`, renderFrontendRuntimeConfig(config));
+	writeFileMaybe(`${RELEASES_ROOT}/web/current/runtime-config.js`, renderFrontendRuntimeConfig(config, "web"));
+	writeFileMaybe(`${RELEASES_ROOT}/landing/current/runtime-config.js`, renderFrontendRuntimeConfig(config, "landing"));
 	if (currentOptions.dryRun) {
 		logDryRun(`Would deploy full stack for ${config.services.stack_name}`);
 		logCommand("docker", ["stack", "deploy", "-c", STACK_FILE, config.services.stack_name]);
