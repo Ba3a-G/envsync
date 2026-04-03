@@ -454,7 +454,7 @@ function normalizeConfig(raw: Partial<DeployConfig>): DeployConfig {
 			web: derivedImages.web,
 			landing: derivedImages.landing,
 			clickstack: raw.images?.clickstack ?? "clickhouse/clickstack-all-in-one:latest",
-			traefik: raw.images?.traefik ?? "traefik:v3.1",
+			traefik: raw.images?.traefik ?? "traefik:v3.6.6",
 			otel_agent: raw.images?.otel_agent ?? "otel/opentelemetry-collector-contrib:0.111.0",
 		},
 		services: {
@@ -900,10 +900,14 @@ services:
   traefik:
     image: ${config.images.traefik}
     command:
-      - --providers.docker.swarmMode=true
-      - --providers.docker.exposedByDefault=false
+      - --providers.swarm=true
+      - --providers.swarm.endpoint=unix:///var/run/docker.sock
+      - --providers.swarm.exposedByDefault=false
       - --providers.file.filename=/etc/traefik/dynamic/traefik-dynamic.yaml
       - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entryPoint.to=websecure
+      - --entrypoints.web.http.redirections.entryPoint.scheme=https
+      - --entrypoints.web.http.redirections.entryPoint.permanent=true
       - --entrypoints.websecure.address=:443
       - --certificatesresolvers.letsencrypt.acme.email=${config.domain.acme_email}
       - --certificatesresolvers.letsencrypt.acme.storage=/var/lib/traefik/acme.json
@@ -1699,7 +1703,7 @@ async function cmdSetup() {
 			web: releaseImages.web,
 			landing: releaseImages.landing,
 			clickstack: "clickhouse/clickstack-all-in-one:latest",
-			traefik: "traefik:v3.1",
+			traefik: "traefik:v3.6.6",
 			otel_agent: "otel/opentelemetry-collector-contrib:0.111.0",
 		},
 		services: {
@@ -1916,7 +1920,7 @@ async function cmdUpgrade() {
 async function cmdUpgradeDeps() {
 	logSection("Upgrade Dependencies");
 	const { config } = loadState();
-	config.images.traefik = "traefik:v3.1";
+	config.images.traefik = "traefik:v3.6.6";
 	config.images.clickstack = "clickhouse/clickstack-all-in-one:latest";
 	config.images.otel_agent = "otel/opentelemetry-collector-contrib:0.111.0";
 	saveDesiredConfig(config);
