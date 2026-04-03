@@ -439,12 +439,20 @@ function publicHttpsOrigin(config: DeployConfig, host: string) {
 	return `https://${host}${config.services.public_https_port === 443 ? "" : `:${config.services.public_https_port}`}`;
 }
 
+function publicHttpsUrl(config: DeployConfig, host: string, path = "") {
+	return `${publicHttpsOrigin(config, host)}${path}`;
+}
+
 function publicHttpsOriginVariants(config: DeployConfig, host: string) {
 	const canonical = `https://${host}`;
 	if (config.services.public_https_port === 443) {
 		return [canonical];
 	}
 	return [canonical, publicHttpsOrigin(config, host)];
+}
+
+function publicHttpsUrlVariants(config: DeployConfig, host: string, path = "") {
+	return publicHttpsOriginVariants(config, host).map(origin => `${origin}${path}`);
 }
 
 function getDeployCliVersion() {
@@ -768,7 +776,7 @@ function buildRuntimeEnv(config: DeployConfig, generated: DeployGeneratedState):
 		S3_REGION: "us-east-1",
 		S3_ACCESS_KEY: "envsync-rustfs",
 		S3_SECRET_KEY: generated.secrets.s3_secret_key,
-		S3_BUCKET_URL: `https://${hosts.s3}`,
+		S3_BUCKET_URL: publicHttpsUrl(config, hosts.s3),
 		S3_ENDPOINT: "http://rustfs:9000",
 		REDIS_URL: "redis://redis:6379",
 		SMTP_HOST: config.smtp.host,
@@ -778,7 +786,7 @@ function buildRuntimeEnv(config: DeployConfig, generated: DeployGeneratedState):
 		SMTP_PASS: config.smtp.pass,
 		SMTP_FROM: config.smtp.from,
 		KEYCLOAK_URL: "http://keycloak:8080",
-		KEYCLOAK_PUBLIC_URL: `https://${hosts.auth}`,
+		KEYCLOAK_PUBLIC_URL: publicHttpsUrl(config, hosts.auth),
 		KEYCLOAK_REALM: config.auth.keycloak_realm,
 		KEYCLOAK_ADMIN_USER: config.auth.admin_user,
 		KEYCLOAK_ADMIN_PASSWORD: config.auth.admin_password,
@@ -788,11 +796,11 @@ function buildRuntimeEnv(config: DeployConfig, generated: DeployGeneratedState):
 		KEYCLOAK_CLI_CLIENT_ID: config.auth.cli_client_id,
 		KEYCLOAK_API_CLIENT_ID: config.auth.api_client_id,
 		KEYCLOAK_API_CLIENT_SECRET: generated.secrets.keycloak_api_client_secret,
-		KEYCLOAK_WEB_REDIRECT_URI: `https://${hosts.api}/api/access/web/callback`,
-		KEYCLOAK_WEB_CALLBACK_URL: `https://${hosts.app}/auth/callback`,
-		KEYCLOAK_API_REDIRECT_URI: `https://${hosts.api}/api/access/api/callback`,
-		LANDING_PAGE_URL: `https://${hosts.landing}`,
-		DASHBOARD_URL: `https://${hosts.app}`,
+		KEYCLOAK_WEB_REDIRECT_URI: publicHttpsUrl(config, hosts.api, "/api/access/web/callback"),
+		KEYCLOAK_WEB_CALLBACK_URL: publicHttpsUrl(config, hosts.app, "/auth/callback"),
+		KEYCLOAK_API_REDIRECT_URI: publicHttpsUrl(config, hosts.api, "/api/access/api/callback"),
+		LANDING_PAGE_URL: publicHttpsUrl(config, hosts.landing),
+		DASHBOARD_URL: publicHttpsUrl(config, hosts.app),
 		OPENFGA_API_URL: "http://openfga:8090",
 		OPENFGA_STORE_ID: generated.openfga.store_id,
 		OPENFGA_MODEL_ID: generated.openfga.model_id,
@@ -809,7 +817,7 @@ function buildRuntimeEnv(config: DeployConfig, generated: DeployGeneratedState):
 		OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-agent:4318",
 		OTEL_SERVICE_NAME: "envsync-api",
 		OTEL_SDK_DISABLED: "false",
-		CLICKSTACK_URL: `https://${hosts.obs}`,
+		CLICKSTACK_URL: publicHttpsUrl(config, hosts.obs),
 		KEYCLOAK_IMAGE_TAG: keycloakImageTag(config.images.keycloak),
 	};
 }
@@ -830,6 +838,14 @@ function renderEnvList(values: Record<string, string | number | boolean>, indent
 
 function renderKeycloakRealm(config: DeployConfig, runtimeEnv: RuntimeEnv) {
 	const hosts = domainMap(config.domain.root_domain);
+	const webRedirectUris = [
+		...publicHttpsUrlVariants(config, hosts.api, "/api/access/web/callback"),
+		...publicHttpsUrlVariants(config, hosts.app, "/auth/callback"),
+		...publicHttpsUrlVariants(config, hosts.app),
+	];
+	const webOrigins = publicHttpsOriginVariants(config, hosts.app);
+	const apiRedirectUris = publicHttpsUrlVariants(config, hosts.api, "/api/access/api/callback");
+	const apiOrigins = publicHttpsOriginVariants(config, hosts.api);
 	return JSON.stringify(
 		{
 			realm: config.auth.keycloak_realm,
@@ -845,12 +861,8 @@ function renderKeycloakRealm(config: DeployConfig, runtimeEnv: RuntimeEnv) {
 					secret: runtimeEnv.KEYCLOAK_WEB_CLIENT_SECRET,
 					standardFlowEnabled: true,
 					directAccessGrantsEnabled: false,
-					redirectUris: [
-						`https://${hosts.api}/api/access/web/callback`,
-						`https://${hosts.app}/auth/callback`,
-						`https://${hosts.app}`,
-					],
-					webOrigins: [`https://${hosts.app}`],
+					redirectUris: [...new Set(webRedirectUris)],
+					webOrigins: [...new Set(webOrigins)],
 					attributes: {
 						"post.logout.redirect.uris": "+",
 					},
@@ -863,8 +875,8 @@ function renderKeycloakRealm(config: DeployConfig, runtimeEnv: RuntimeEnv) {
 					publicClient: false,
 					secret: runtimeEnv.KEYCLOAK_API_CLIENT_SECRET,
 					standardFlowEnabled: true,
-					redirectUris: [`https://${hosts.api}/api/access/api/callback`],
-					webOrigins: [`https://${hosts.api}`],
+					redirectUris: [...new Set(apiRedirectUris)],
+					webOrigins: [...new Set(apiOrigins)],
 					defaultClientScopes: ["basic", "profile", "email", "roles"],
 				},
 				{
@@ -1010,14 +1022,14 @@ function renderNginxConf(kind: "web" | "landing") {
 
 function renderFrontendRuntimeConfig(config: DeployConfig, generated: DeployGeneratedState) {
 	const hosts = domainMap(config.domain.root_domain);
-	const otelEndpoint = `https://${hosts.obs}`;
+	const otelEndpoint = publicHttpsUrl(config, hosts.obs);
 	return `window.__ENVSYNC_RUNTIME_CONFIG__ = ${JSON.stringify({
-		apiBaseUrl: `https://${hosts.api}`,
-		appBaseUrl: `https://${hosts.app}`,
-		authBaseUrl: `https://${hosts.auth}`,
+		apiBaseUrl: publicHttpsUrl(config, hosts.api),
+		appBaseUrl: publicHttpsUrl(config, hosts.app),
+		authBaseUrl: publicHttpsUrl(config, hosts.auth),
 		keycloakRealm: config.auth.keycloak_realm,
 		webClientId: config.auth.web_client_id,
-		apiDocsUrl: `https://${hosts.api}/docs`,
+		apiDocsUrl: publicHttpsUrl(config, hosts.api, "/docs"),
 		otelEndpoint,
 		hyperdxApiKey: generated.clickstack.browser_api_key || undefined,
 		hyperdxUrl: otelEndpoint,
@@ -1088,7 +1100,7 @@ function renderStack(config: DeployConfig, runtimeEnv: RuntimeEnv, mode: "base" 
 		OPENFGA_API_URL: "http://openfga:8090",
 		MINIKMS_GRPC_ADDR: "minikms:50051",
 		S3_ENDPOINT: "http://rustfs:9000",
-		S3_BUCKET_URL: `https://${hosts.s3}`,
+		S3_BUCKET_URL: publicHttpsUrl(config, hosts.s3),
 	};
 
 	return `
@@ -1264,9 +1276,9 @@ ${renderEnvList({
     image: ${config.images.clickstack}
     environment:
 ${renderEnvList({
-		HYPERDX_APP_URL: `https://${hosts.obs}`,
-		HYPERDX_API_URL: `https://${hosts.obs}`,
-		FRONTEND_URL: `https://${hosts.obs}`,
+		HYPERDX_APP_URL: publicHttpsUrl(config, hosts.obs),
+		HYPERDX_API_URL: publicHttpsUrl(config, hosts.obs),
+		FRONTEND_URL: publicHttpsUrl(config, hosts.obs),
 	})}
     volumes:
       - clickstack_data:/data/db
@@ -2394,20 +2406,20 @@ async function cmdHealth(asJson: boolean) {
 		observability: {
 			service: serviceHealth(services, `${stackName}_clickstack`),
 			obs_ui: {
-				url: `https://${hosts.obs}`,
+				url: publicHttpsUrl(config, hosts.obs),
 				configured: traefikDynamic.includes("obs-ui-router"),
 			},
 			obs_api: {
-				url: `https://${hosts.obs}/api`,
+				url: publicHttpsUrl(config, hosts.obs, "/api"),
 				configured: traefikDynamic.includes("obs-api-router"),
 			},
 			obs_otlp: {
-				url: `https://${hosts.obs}/v1/traces`,
+				url: publicHttpsUrl(config, hosts.obs, "/v1/traces"),
 				configured: traefikDynamic.includes("obs-otlp-router"),
 			},
 			frontend_otel_endpoint: {
-				web: `https://${hosts.obs}`,
-				landing: `https://${hosts.obs}`,
+				web: publicHttpsUrl(config, hosts.obs),
+				landing: publicHttpsUrl(config, hosts.obs),
 			},
 			browser_replay_runtime: {
 				web: {
@@ -2434,11 +2446,11 @@ async function cmdHealth(asJson: boolean) {
 			},
 		},
 		public: {
-			landing: `https://${hosts.landing}`,
-			app: `https://${hosts.app}`,
-			api: `https://${hosts.api}/health`,
-			auth: `https://${hosts.auth}/realms/${config.auth.keycloak_realm}/.well-known/openid-configuration`,
-			obs: `https://${hosts.obs}`,
+			landing: publicHttpsUrl(config, hosts.landing),
+			app: publicHttpsUrl(config, hosts.app),
+			api: publicHttpsUrl(config, hosts.api, "/health"),
+			auth: publicHttpsUrl(config, hosts.auth, `/realms/${config.auth.keycloak_realm}/.well-known/openid-configuration`),
+			obs: publicHttpsUrl(config, hosts.obs),
 		},
 	};
 	if (asJson) {

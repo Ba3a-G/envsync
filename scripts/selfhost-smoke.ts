@@ -23,7 +23,6 @@ const stackPath = path.join(deployRoot, "docker-stack.yaml");
 const keepFailed = process.argv.includes("--keep-failed");
 const version = JSON.parse(fs.readFileSync(path.join(rootDir, "package.json"), "utf8")).version as string;
 const rootDomain = "127.0.0.1.sslip.io";
-const otelEndpoint = `https://obs.${rootDomain}`;
 const localApiImage = `envsync-selfhost-smoke-api:${runId}`;
 const localWebImage = `envsync-selfhost-smoke-web-static:${runId}`;
 const localLandingImage = `envsync-selfhost-smoke-landing-static:${runId}`;
@@ -107,6 +106,10 @@ function envForSmoke() {
 		ENVSYNC_TRAEFIK_STATE_ROOT: traefikStateRoot,
 		ENVSYNC_REPO_ROOT: rootDir,
 	};
+}
+
+function publicHttpsUrl(host: string, pathName = "") {
+	return `https://${host}${publicHttpsPort === 443 ? "" : `:${publicHttpsPort}`}${pathName}`;
 }
 
 function writeConfig() {
@@ -320,7 +323,7 @@ function assertObservabilityHealth() {
 
 function assertObsRouting() {
 	const obsHost = `obs.${rootDomain}`;
-	const obsBase = `https://${obsHost}:${publicHttpsPort}`;
+	const obsBase = publicHttpsUrl(obsHost);
 	const resolveArg = `${obsHost}:${publicHttpsPort}:127.0.0.1`;
 	let apiConfig = "";
 	let otlpPreflight = "";
@@ -339,7 +342,7 @@ function assertObsRouting() {
 				"OPTIONS",
 				`${obsBase}/v1/traces`,
 				"-H",
-				`Origin: https://${rootDomain}${publicHttpsPort === 443 ? "" : `:${publicHttpsPort}`}`,
+				`Origin: ${publicHttpsUrl(rootDomain)}`,
 				"-H",
 				"Access-Control-Request-Method: POST",
 				"-H",
@@ -349,7 +352,7 @@ function assertObsRouting() {
 				(apiConfig.includes("HTTP/2 200") || apiConfig.includes("HTTP/1.1 200")) &&
 				apiConfig.includes("collectorUrl") &&
 				otlpPreflight.includes(
-					`access-control-allow-origin: https://${rootDomain}${publicHttpsPort === 443 ? "" : `:${publicHttpsPort}`}`,
+					`access-control-allow-origin: ${publicHttpsUrl(rootDomain)}`,
 				) &&
 				otlpPreflight.toLowerCase().includes("access-control-allow-credentials: true")
 			) {
@@ -364,7 +367,7 @@ function assertObsRouting() {
 	assert(apiConfig.includes("collectorUrl"), "obs /api/config did not return HyperDX config");
 	assert(
 		otlpPreflight.includes(
-			`access-control-allow-origin: https://${rootDomain}${publicHttpsPort === 443 ? "" : `:${publicHttpsPort}`}`,
+			`access-control-allow-origin: ${publicHttpsUrl(rootDomain)}`,
 		),
 		lastError ? `obs OTLP preflight is missing access-control-allow-origin\n${lastError}` : "obs OTLP preflight is missing access-control-allow-origin",
 	);
@@ -376,11 +379,11 @@ function assertObsRouting() {
 
 function assertApiAuthAndOtel() {
 	const apiHost = `api.${rootDomain}`;
-	const apiBase = `https://${apiHost}:${publicHttpsPort}`;
+	const apiBase = publicHttpsUrl(apiHost);
 	const resolveArg = `${apiHost}:${publicHttpsPort}:127.0.0.1`;
 	const loginResponse = curl(["-ksS", "--resolve", resolveArg, `${apiBase}/api/access/web`]);
 	assert(
-		loginResponse.includes(`https://auth.${rootDomain}/realms/envsync/protocol/openid-connect/auth`),
+		loginResponse.includes(publicHttpsUrl(`auth.${rootDomain}`, "/realms/envsync/protocol/openid-connect/auth")),
 		"API web login URL did not use the public auth host",
 	);
 
@@ -453,7 +456,7 @@ async function main() {
 			bootstrap: { completed: boolean };
 		};
 		assert(health.bootstrap.completed === true, "health --json did not report bootstrap completed");
-		assertBootstrapArtifacts(otelEndpoint);
+		assertBootstrapArtifacts(publicHttpsUrl(`obs.${rootDomain}`));
 		assertObservabilityHealth();
 		assertObsRouting();
 		assertApiAuthAndOtel();

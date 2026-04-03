@@ -719,26 +719,29 @@ function main() {
 		const existingId = dashboardsByName.get(definition.name);
 		if (existingId) {
 			clickstackApi(containerId, accessKey, "PUT", `/dashboards/${existingId}`, definition);
-			console.log(`Updated dashboard: ${definition.name}`);
+			console.error(`Updated dashboard: ${definition.name}`);
 			continue;
 		}
 		clickstackApi(containerId, accessKey, "POST", "/dashboards", definition);
-		console.log(`Created dashboard: ${definition.name}`);
+		console.error(`Created dashboard: ${definition.name}`);
 	}
 
 	const savedSearches = ensureSelfHostedSavedSearches(containerId, sourceIds);
 	for (const name of savedSearches) {
-		console.log(`Upserted saved search: ${name}`);
+		console.error(`Upserted saved search: ${name}`);
 	}
 
 	const alertWebhook = ensureSelfHostedAlertWebhook(containerId);
 	if (alertWebhook) {
-		console.log(`Upserted alert webhook: ${alertWebhook.name}`);
+		console.error(`Upserted alert webhook: ${alertWebhook.name}`);
 	}
 
-	console.log(`ClickStack operator email: ${operator.email}`);
-	console.log(`ClickStack operator password: ${SELFHOST_OPERATOR_PASSWORD}`);
-	console.log(`ClickStack access key: ${accessKey}`);
+	console.error(`ClickStack operator email: ${operator.email}`);
+	console.error(`ClickStack operator password: ${SELFHOST_OPERATOR_PASSWORD}`);
+	console.error(`ClickStack access key: ${accessKey}`);
+	if (browserApiKey) {
+		console.error(`ClickStack browser API key: ${browserApiKey}`);
+	}
 	console.log(JSON.stringify({
 		operatorEmail: operator.email,
 		accessKey,
