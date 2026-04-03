@@ -2,10 +2,14 @@
 
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import net from "node:net";
 import path from "node:path";
 
 const rootDir = path.resolve(import.meta.dir, "..");
-const tmpRoot = path.join(rootDir, ".tmp", "selfhost-smoke");
+const smokeRoot = path.join(rootDir, ".tmp", "selfhost-smoke");
+const runId = Date.now().toString(36);
+const stackName = `envsync-smoke-${runId}`;
+const tmpRoot = path.join(smokeRoot, stackName);
 const hostRoot = path.join(tmpRoot, "opt");
 const etcRoot = path.join(tmpRoot, "etc");
 const traefikStateRoot = path.join(tmpRoot, "var", "lib", "envsync", "traefik");
@@ -18,10 +22,10 @@ const traefikDynamicPath = path.join(deployRoot, "traefik-dynamic.yaml");
 const stackPath = path.join(deployRoot, "docker-stack.yaml");
 const keepFailed = process.argv.includes("--keep-failed");
 const version = JSON.parse(fs.readFileSync(path.join(rootDir, "package.json"), "utf8")).version as string;
-const runId = Date.now().toString(36);
-const stackName = `envsync-smoke-${runId}`;
 const rootDomain = "127.0.0.1.sslip.io";
 const otelEndpoint = `https://obs.${rootDomain}`;
+let publicHttpPort = 18080;
+let publicHttpsPort = 18443;
 const managedVolumes = [
 	"postgres_data",
 	"redis_data",
@@ -70,6 +74,29 @@ function removeDir(dir: string) {
 	fs.rmSync(dir, { recursive: true, force: true });
 }
 
+async function reserveFreePort() {
+	return await new Promise<number>((resolve, reject) => {
+		const server = net.createServer();
+		server.unref();
+		server.on("error", reject);
+		server.listen(0, "127.0.0.1", () => {
+			const address = server.address();
+			if (!address || typeof address === "string") {
+				server.close(() => reject(new Error("Could not resolve free TCP port")));
+				return;
+			}
+			const { port } = address;
+			server.close(error => {
+				if (error) {
+					reject(error);
+					return;
+				}
+				resolve(port);
+			});
+		});
+	});
+}
+
 function envForSmoke() {
 	return {
 		ENVSYNC_HOST_ROOT: hostRoot,
@@ -100,8 +127,8 @@ function writeConfig() {
 		services: {
 			stack_name: stackName,
 			api_port: 4000,
-			public_http_port: 18080,
-			public_https_port: 18443,
+			public_http_port: publicHttpPort,
+			public_https_port: publicHttpsPort,
 			clickstack_ui_port: 8080,
 			clickstack_otlp_http_port: 4318,
 			clickstack_otlp_grpc_port: 4317,
@@ -166,6 +193,15 @@ function readJson<T>(filePath: string): T {
 	return JSON.parse(fs.readFileSync(filePath, "utf8")) as T;
 }
 
+function readRuntimeConfig(filePath: string) {
+	const source = fs.readFileSync(filePath, "utf8").trim();
+	const prefix = "window.__ENVSYNC_RUNTIME_CONFIG__ = ";
+	if (!source.startsWith(prefix) || !source.endsWith(";")) {
+		throw new Error(`Unexpected runtime-config format in ${filePath}`);
+	}
+	return JSON.parse(source.slice(prefix.length, -1)) as { otelEndpoint?: string };
+}
+
 function assert(condition: unknown, message: string) {
 	if (!condition) {
 		throw new Error(message);
@@ -182,8 +218,8 @@ function assertBootstrapArtifacts(expectedOtelEndpoint: string) {
 	}>(internalConfigPath);
 	const traefikDynamic = fs.readFileSync(traefikDynamicPath, "utf8");
 	const stackFile = fs.readFileSync(stackPath, "utf8");
-	const webRuntime = fs.readFileSync(path.join(releasesRoot, "web", "current", "runtime-config.js"), "utf8");
-	const landingRuntime = fs.readFileSync(path.join(releasesRoot, "landing", "current", "runtime-config.js"), "utf8");
+	const webRuntime = readRuntimeConfig(path.join(releasesRoot, "web", "current", "runtime-config.js"));
+	const landingRuntime = readRuntimeConfig(path.join(releasesRoot, "landing", "current", "runtime-config.js"));
 	assert(/OPENFGA_STORE_ID=.+/.test(deployEnv), "deploy.env is missing OPENFGA_STORE_ID");
 	assert(/OPENFGA_MODEL_ID=.+/.test(deployEnv), "deploy.env is missing OPENFGA_MODEL_ID");
 	assert(internal.generated.openfga.store_id.length > 0, "config.json is missing generated OpenFGA store_id");
@@ -194,8 +230,8 @@ function assertBootstrapArtifacts(expectedOtelEndpoint: string) {
 	assert(traefikDynamic.includes("obs-otlp-router"), "traefik-dynamic.yaml is missing obs-otlp-router");
 	assert(stackFile.includes(`${stackName}-s3-router`), "stack file is missing explicit S3 router name");
 	assert(stackFile.includes(`${stackName}-s3-console-router`), "stack file is missing explicit S3 console router name");
-	assert(webRuntime.includes(`otelEndpoint: ${JSON.stringify(expectedOtelEndpoint)}`), "web runtime-config has the wrong OTel endpoint");
-	assert(landingRuntime.includes(`otelEndpoint: ${JSON.stringify(expectedOtelEndpoint)}`), "landing runtime-config has the wrong OTel endpoint");
+	assert(webRuntime.otelEndpoint === expectedOtelEndpoint, "web runtime-config has the wrong OTel endpoint");
+	assert(landingRuntime.otelEndpoint === expectedOtelEndpoint, "landing runtime-config has the wrong OTel endpoint");
 }
 
 function runDiagnostics() {
@@ -241,7 +277,8 @@ function cleanup() {
 async function main() {
 	console.log("Self-host smoke test\n");
 	ensureSwarmManager();
-	removeDir(tmpRoot);
+	publicHttpPort = await reserveFreePort();
+	publicHttpsPort = await reserveFreePort();
 	writeConfig();
 
 	let firstStoreId = "";

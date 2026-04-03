@@ -1167,9 +1167,7 @@ ${renderEnvList({
     environment:
 ${renderEnvList({
 		HYPERDX_APP_URL: `https://${hosts.obs}`,
-		HYPERDX_APP_PORT: "443",
 		HYPERDX_API_URL: `https://${hosts.obs}`,
-		HYPERDX_API_PORT: "443",
 		FRONTEND_URL: `https://${hosts.obs}`,
 	})}
     volumes:
