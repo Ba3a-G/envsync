@@ -77,6 +77,11 @@ interface DeployGeneratedState {
 		store_id: string;
 		model_id: string;
 	};
+	clickstack: {
+		operator_email: string;
+		operator_password: string;
+		access_key: string;
+	};
 	secrets: {
 		s3_secret_key: string;
 		keycloak_db_password: string;
@@ -266,6 +271,10 @@ function exists(target: string) {
 
 function randomSecret(bytes = 24) {
 	return randomBytes(bytes).toString("hex");
+}
+
+function randomStrongPassword() {
+	return `EnvSync!${randomBytes(8).toString("hex")}Aa1`;
 }
 
 function yamlScalar(value: string | number | boolean): string {
@@ -505,10 +514,10 @@ function normalizeConfig(raw: Partial<DeployConfig>): DeployConfig {
 			acme_email: acmeEmail,
 		},
 		images: {
-			api: derivedImages.api,
-			keycloak: derivedImages.keycloak,
-			web: derivedImages.web,
-			landing: derivedImages.landing,
+			api: raw.images?.api ?? derivedImages.api,
+			keycloak: raw.images?.keycloak ?? derivedImages.keycloak,
+			web: raw.images?.web ?? derivedImages.web,
+			landing: raw.images?.landing ?? derivedImages.landing,
 			clickstack: raw.images?.clickstack ?? "clickhouse/clickstack-all-in-one:latest",
 			traefik: raw.images?.traefik ?? "traefik:v3.6.6",
 			otel_agent: raw.images?.otel_agent ?? "otel/opentelemetry-collector-contrib:0.111.0",
@@ -565,6 +574,11 @@ function emptyGeneratedState(): DeployGeneratedState {
 			store_id: "",
 			model_id: "",
 		},
+		clickstack: {
+			operator_email: "",
+			operator_password: "",
+			access_key: "",
+		},
 		secrets: {
 			s3_secret_key: "",
 			keycloak_db_password: "",
@@ -586,6 +600,11 @@ function normalizeGeneratedState(raw?: Partial<DeployGeneratedState>): DeployGen
 		openfga: {
 			store_id: raw?.openfga?.store_id ?? defaults.openfga.store_id,
 			model_id: raw?.openfga?.model_id ?? defaults.openfga.model_id,
+		},
+		clickstack: {
+			operator_email: raw?.clickstack?.operator_email ?? defaults.clickstack.operator_email,
+			operator_password: raw?.clickstack?.operator_password ?? defaults.clickstack.operator_password,
+			access_key: raw?.clickstack?.access_key ?? defaults.clickstack.access_key,
 		},
 		secrets: {
 			s3_secret_key: raw?.secrets?.s3_secret_key ?? defaults.secrets.s3_secret_key,
@@ -634,6 +653,11 @@ function mergeGeneratedState(env: RuntimeEnv, generated?: Partial<DeployGenerate
 			store_id: env.OPENFGA_STORE_ID ?? normalized.openfga.store_id,
 			model_id: env.OPENFGA_MODEL_ID ?? normalized.openfga.model_id,
 		},
+		clickstack: {
+			operator_email: env.CLICKSTACK_OPERATOR_EMAIL ?? normalized.clickstack.operator_email,
+			operator_password: env.CLICKSTACK_OPERATOR_PASSWORD ?? normalized.clickstack.operator_password,
+			access_key: env.CLICKSTACK_ACCESS_KEY ?? normalized.clickstack.access_key,
+		},
 		secrets: {
 			s3_secret_key: env.S3_SECRET_KEY ?? normalized.secrets.s3_secret_key,
 			keycloak_db_password: env.KEYCLOAK_DB_PASSWORD ?? normalized.secrets.keycloak_db_password,
@@ -654,9 +678,14 @@ function loadState() {
 	return { config, generated };
 }
 
-function ensureGeneratedRuntimeState(generated: DeployGeneratedState) {
+function ensureGeneratedRuntimeState(config: DeployConfig, generated: DeployGeneratedState) {
 	return normalizeGeneratedState({
 		openfga: generated.openfga,
+		clickstack: {
+			operator_email: generated.clickstack.operator_email || `operator@${config.domain.root_domain}`,
+			operator_password: generated.clickstack.operator_password || randomStrongPassword(),
+			access_key: generated.clickstack.access_key || `envsync-selfhost-${config.domain.root_domain}-dashboard-access-key`,
+		},
 		secrets: {
 			s3_secret_key: generated.secrets.s3_secret_key || randomSecret(16),
 			keycloak_db_password: generated.secrets.keycloak_db_password || "",
@@ -676,6 +705,7 @@ function resetBootstrapGeneratedState(generated: DeployGeneratedState) {
 			store_id: "",
 			model_id: "",
 		},
+		clickstack: generated.clickstack,
 		secrets: generated.secrets,
 		bootstrap: {
 			completed_at: "",
@@ -714,6 +744,7 @@ function buildRuntimeEnv(config: DeployConfig, generated: DeployGeneratedState):
 		SMTP_PASS: config.smtp.pass,
 		SMTP_FROM: config.smtp.from,
 		KEYCLOAK_URL: "http://keycloak:8080",
+		KEYCLOAK_PUBLIC_URL: `https://${hosts.auth}`,
 		KEYCLOAK_REALM: config.auth.keycloak_realm,
 		KEYCLOAK_ADMIN_USER: config.auth.admin_user,
 		KEYCLOAK_ADMIN_PASSWORD: config.auth.admin_password,
@@ -732,6 +763,9 @@ function buildRuntimeEnv(config: DeployConfig, generated: DeployGeneratedState):
 		OPENFGA_STORE_ID: generated.openfga.store_id,
 		OPENFGA_MODEL_ID: generated.openfga.model_id,
 		OPENFGA_DB_PASSWORD: generated.secrets.openfga_db_password,
+		CLICKSTACK_OPERATOR_EMAIL: generated.clickstack.operator_email,
+		CLICKSTACK_OPERATOR_PASSWORD: generated.clickstack.operator_password,
+		CLICKSTACK_ACCESS_KEY: generated.clickstack.access_key,
 		MINIKMS_GRPC_ADDR: "minikms:50051",
 		MINIKMS_TLS_ENABLED: "false",
 		MINIKMS_ROOT_KEY: generated.secrets.minikms_root_key,
@@ -959,7 +993,9 @@ function renderOtelAgentConfig(config: DeployConfig) {
 		"  otlp:",
 		"    protocols:",
 		"      grpc:",
+		"        endpoint: 0.0.0.0:4317",
 		"      http:",
+		"        endpoint: 0.0.0.0:4318",
 		"processors:",
 		"  batch: {}",
 		"  resource:",
@@ -1121,6 +1157,7 @@ ${renderEnvList({
 		KC_HTTP_ENABLED: "true",
 		KC_HEALTH_ENABLED: "true",
 		KC_PROXY_HEADERS: "xforwarded",
+		KC_HOSTNAME: hosts.auth,
 		KC_HOSTNAME_STRICT: "false",
 	})}
     configs:
@@ -1615,6 +1652,7 @@ function runBootstrapInit(config: DeployConfig) {
 
 function runClickstackBootstrap(config: DeployConfig) {
 	logStep("Running ClickStack self-host bootstrap");
+	const { generated } = loadState();
 	if (currentOptions.dryRun) {
 		logDryRun("Would bootstrap ClickStack sources and dashboards");
 		logCommand("node", [path.join(REPO_ROOT, "scripts/bootstrap-clickstack-selfhost.mjs")]);
@@ -1628,6 +1666,9 @@ function runClickstackBootstrap(config: DeployConfig) {
 				env: {
 					ENVSYNC_STACK_NAME: config.services.stack_name,
 					ENVSYNC_ROOT_DOMAIN: config.domain.root_domain,
+					ENVSYNC_CLICKSTACK_OPERATOR_EMAIL: generated.clickstack.operator_email,
+					ENVSYNC_CLICKSTACK_OPERATOR_PASSWORD: generated.clickstack.operator_password,
+					ENVSYNC_CLICKSTACK_ACCESS_KEY: generated.clickstack.access_key,
 				},
 			});
 			logSuccess("ClickStack self-host bootstrap completed");
@@ -1638,6 +1679,12 @@ function runClickstackBootstrap(config: DeployConfig) {
 		}
 	}
 	throw new Error(`Timed out bootstrapping ClickStack: ${lastError}`);
+}
+
+function logClickstackCredentials(generated: DeployGeneratedState) {
+	logInfo(`ClickStack operator email: ${generated.clickstack.operator_email}`);
+	logInfo(`ClickStack operator password: ${generated.clickstack.operator_password}`);
+	logInfo(`ClickStack access key: ${generated.clickstack.access_key}`);
 }
 
 function parseBootstrapInitJson(output: string) {
@@ -1865,6 +1912,31 @@ function apiHealth(services: Map<string, ServiceHealth>, stackName: string): Ser
 	return "degraded";
 }
 
+function waitForHealthyServices(
+	config: DeployConfig,
+	checks: Array<{ label: string; getHealth: (services: Map<string, ServiceHealth>) => ServiceHealth }>,
+	timeoutSeconds = 180,
+) {
+	if (currentOptions.dryRun) {
+		logDryRun(`Would wait for ${checks.map(check => check.label).join(", ")} service readiness`);
+		return;
+	}
+	const deadline = Date.now() + timeoutSeconds * 1000;
+	while (Date.now() < deadline) {
+		const services = listStackServices(config);
+		const pending = checks.filter(check => check.getHealth(services) !== "healthy");
+		if (pending.length === 0) {
+			return;
+		}
+		sleepSeconds(3);
+	}
+	const services = listStackServices(config);
+	const pending = checks
+		.map(check => `${check.label}=${check.getHealth(services)}`)
+		.join(", ");
+	throw new Error(`Timed out waiting for deployed services to become healthy: ${pending}`);
+}
+
 async function cmdPreinstall() {
 	ensureDir(HOST_ROOT);
 	ensureDir(DEPLOY_ROOT);
@@ -1975,7 +2047,7 @@ async function cmdSetup() {
 async function cmdBootstrap() {
 	logSection("Bootstrap");
 	const { config, generated } = loadState();
-	const nextGenerated = ensureGeneratedRuntimeState(resetBootstrapGeneratedState(generated));
+	const nextGenerated = ensureGeneratedRuntimeState(config, resetBootstrapGeneratedState(generated));
 	const runtimeEnv = buildRuntimeEnv(config, nextGenerated);
 	logReleaseContext(config);
 	assertSwarmManager();
@@ -2022,6 +2094,7 @@ async function cmdBootstrap() {
 			store_id: initResult.openfgaStoreId,
 			model_id: initResult.openfgaModelId,
 		},
+		clickstack: nextGenerated.clickstack,
 		secrets: nextGenerated.secrets,
 		bootstrap: nextGenerated.bootstrap,
 	});
@@ -2039,12 +2112,14 @@ async function cmdBootstrap() {
 			store_id: initResult.openfgaStoreId,
 			model_id: initResult.openfgaModelId,
 		},
+		clickstack: nextGenerated.clickstack,
 		secrets: nextGenerated.secrets,
 		bootstrap: {
 			completed_at: new Date().toISOString(),
 		},
 	});
 	writeDeployArtifacts(config, bootstrappedGenerated);
+	logClickstackCredentials(bootstrappedGenerated);
 	logSuccess("Bootstrap completed");
 }
 
@@ -2089,6 +2164,16 @@ async function cmdDeploy() {
 	logStep("Deploying full stack");
 	logCommand("docker", ["stack", "deploy", "-c", STACK_FILE, config.services.stack_name]);
 	run("docker", ["stack", "deploy", "-c", STACK_FILE, config.services.stack_name]);
+	waitForHealthyServices(config, [
+		{ label: "traefik", getHealth: services => serviceHealth(services, `${config.services.stack_name}_traefik`) },
+		{ label: "keycloak", getHealth: services => serviceHealth(services, `${config.services.stack_name}_keycloak`) },
+		{ label: "openfga", getHealth: services => serviceHealth(services, `${config.services.stack_name}_openfga`) },
+		{ label: "minikms", getHealth: services => serviceHealth(services, `${config.services.stack_name}_minikms`) },
+		{ label: "clickstack", getHealth: services => serviceHealth(services, `${config.services.stack_name}_clickstack`) },
+		{ label: "landing", getHealth: services => serviceHealth(services, `${config.services.stack_name}_landing_nginx`) },
+		{ label: "web", getHealth: services => serviceHealth(services, `${config.services.stack_name}_web_nginx`) },
+		{ label: "api", getHealth: services => apiHealth(services, config.services.stack_name) },
+	]);
 	logSuccess("Deploy completed");
 }
 

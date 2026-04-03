@@ -1,12 +1,14 @@
 import { config } from "@/utils/env";
 
 const base = () => config.KEYCLOAK_URL.replace(/\/$/, "");
+const publicBase = () => (config.KEYCLOAK_PUBLIC_URL || config.KEYCLOAK_URL).replace(/\/$/, "");
 const realm = () => config.KEYCLOAK_REALM;
-const issuer = () => `${base()}/realms/${realm()}`;
+const issuer = () => `${publicBase()}/realms/${realm()}`;
 const adminRealm = () => "master";
 const adminBase = () => `${base()}/admin/realms/${realm()}`;
 
 export const getKeycloakBaseUrl = () => base();
+export const getKeycloakPublicBaseUrl = () => publicBase();
 export const getKeycloakIssuer = () => issuer();
 export const getKeycloakRealm = () => realm();
 
@@ -337,7 +339,7 @@ export async function keycloakTokenExchange(
 	clientId: string,
 	clientSecret: string,
 ): Promise<{ id_token?: string; access_token: string; scope?: string; expires_in?: number; token_type?: string }> {
-	const res = await fetch(`${issuer()}/protocol/openid-connect/token`, {
+	const res = await fetch(`${base()}/realms/${realm()}/protocol/openid-connect/token`, {
 		method: "POST",
 		headers: { "Content-Type": "application/x-www-form-urlencoded" },
 		body: new URLSearchParams({

@@ -24,6 +24,9 @@ const keepFailed = process.argv.includes("--keep-failed");
 const version = JSON.parse(fs.readFileSync(path.join(rootDir, "package.json"), "utf8")).version as string;
 const rootDomain = "127.0.0.1.sslip.io";
 const otelEndpoint = `https://obs.${rootDomain}`;
+const localApiImage = `envsync-selfhost-smoke-api:${runId}`;
+const localWebImage = `envsync-selfhost-smoke-web-static:${runId}`;
+const localLandingImage = `envsync-selfhost-smoke-landing-static:${runId}`;
 let publicHttpPort = 18080;
 let publicHttpsPort = 18443;
 const managedVolumes = [
@@ -124,6 +127,15 @@ function writeConfig() {
 			root_domain: rootDomain,
 			acme_email: "smoke@127.0.0.1.sslip.io",
 		},
+		images: {
+			api: localApiImage,
+			keycloak: `envsync-keycloak:${version}`,
+			web: localWebImage,
+			landing: localLandingImage,
+			clickstack: "clickhouse/clickstack-all-in-one:latest",
+			traefik: "traefik:v3.6.6",
+			otel_agent: "otel/opentelemetry-collector-contrib:0.111.0",
+		},
 		services: {
 			stack_name: stackName,
 			api_port: 4000,
@@ -191,7 +203,7 @@ function runCli(args: string[], capture = false) {
 
 function buildLocalReleaseImages() {
 	console.log("Building local self-host smoke images\n");
-	run("docker", ["build", "-t", `ghcr.io/envsync-cloud/envsync-api:${version}`, "packages/envsync-api"]);
+	run("docker", ["build", "-t", localApiImage, "packages/envsync-api"]);
 	run("bun", ["run", "--filter", "@envsync-cloud/envsync-ts-sdk", "build"]);
 	run("bun", ["run", "--filter", "envsync-web", "build"], {
 		env: {
@@ -202,7 +214,7 @@ function buildLocalReleaseImages() {
 	run("docker", [
 		"build",
 		"-t",
-		`ghcr.io/envsync-cloud/envsync-web-static:${version}`,
+		localWebImage,
 		"-f",
 		"docker/frontend-static.Dockerfile",
 		"apps/envsync-web",
@@ -216,7 +228,7 @@ function buildLocalReleaseImages() {
 	run("docker", [
 		"build",
 		"-t",
-		`ghcr.io/envsync-cloud/envsync-landing-static:${version}`,
+		localLandingImage,
 		"-f",
 		"docker/frontend-static.Dockerfile",
 		"apps/envsync-landing",
@@ -332,6 +344,29 @@ function assertObsRouting() {
 	);
 }
 
+function assertApiAuthAndOtel() {
+	const apiHost = `api.${rootDomain}`;
+	const apiBase = `https://${apiHost}:${publicHttpsPort}`;
+	const resolveArg = `${apiHost}:${publicHttpsPort}:127.0.0.1`;
+	const loginResponse = curl(["-ksS", "--resolve", resolveArg, `${apiBase}/api/access/web`]);
+	assert(
+		loginResponse.includes(`https://auth.${rootDomain}/realms/envsync/protocol/openid-connect/auth`),
+		"API web login URL did not use the public auth host",
+	);
+
+	const otelReady = tryRun("docker", [
+		"run",
+		"--rm",
+		"--network",
+		`${stackName}_envsync`,
+		"alpine:3.20",
+		"sh",
+		"-lc",
+		"nc -z -w 2 otel-agent 4318",
+	]);
+	assert(otelReady.status === 0, "otel-agent was not reachable on port 4318 from the stack network");
+}
+
 function runDiagnostics() {
 	console.error("\nSelf-host smoke diagnostics\n");
 	const commands: Array<[string, string[]]> = [
@@ -390,6 +425,7 @@ async function main() {
 		assert(health.bootstrap.completed === true, "health --json did not report bootstrap completed");
 		assertBootstrapArtifacts(otelEndpoint);
 		assertObsRouting();
+		assertApiAuthAndOtel();
 		firstStoreId = readJson<{ generated: { openfga: { store_id: string } } }>(internalConfigPath).generated.openfga.store_id;
 		assert(firstStoreId.length > 0, "first bootstrap did not persist an OpenFGA store ID");
 		runCli(["bootstrap", "--force"]);

@@ -35,6 +35,8 @@ type DashboardDefinition = {
 
 const CLICKSTACK_CONTAINER = "monorepo-clickstack-1";
 const CLICKSTACK_API_URL = "http://127.0.0.1:8000/api/v2";
+const LOCAL_OPERATOR_EMAIL = "local-operator@envsync.local";
+const LOCAL_OPERATOR_PASSWORD = "EnvSyncLocal!Aa1";
 const LOCAL_DASHBOARD_ACCESS_KEY = "envsync-local-dashboard-access-key";
 
 function run(cmd: string[]) {
@@ -85,7 +87,6 @@ function ensureLocalBootstrap() {
 var now = new Date();
 var accessKey = ${JSON.stringify(LOCAL_DASHBOARD_ACCESS_KEY)};
 var teamName = "EnvSync Local Team";
-var userEmail = "local-operator@envsync.local";
 var connectionName = "Default ClickHouse";
 
 var team = db.teams.findOne({ name: teamName });
@@ -99,19 +100,6 @@ if (!team) {
     updatedAt: now
   });
   team = db.teams.findOne({ name: teamName });
-}
-
-var user = db.users.findOne({ email: userEmail });
-if (!user) {
-  db.users.insertOne({
-    name: "EnvSync Local Operator",
-    email: userEmail,
-    accessKey: accessKey,
-    team: team._id,
-    createdAt: now,
-    updatedAt: now
-  });
-  user = db.users.findOne({ email: userEmail });
 }
 
 var connection = db.connections.findOne({ team: team._id, name: connectionName });
@@ -230,6 +218,90 @@ print(accessKey);
 	}
 
 	return accessKey;
+}
+
+function ensureLocalOperator(accessKey: string) {
+	const authFields = JSON.parse(runClickstackNodeScript(`
+const User = require("/app/packages/api/build/models/user").default;
+
+const accessKey = ${JSON.stringify(accessKey)};
+const email = ${JSON.stringify(LOCAL_OPERATOR_EMAIL)};
+const password = ${JSON.stringify(LOCAL_OPERATOR_PASSWORD)};
+const operatorName = "EnvSync Local Operator";
+
+const user = new User({
+  name: operatorName,
+  email,
+  accessKey,
+});
+
+user.setPassword(password, error => {
+  if (error) {
+    console.error(error instanceof Error ? error.stack || error.message : String(error));
+    process.exit(1);
+    return;
+  }
+  process.stdout.write(JSON.stringify({
+    email,
+    name: operatorName,
+    accessKey,
+    hash: user.hash,
+    salt: user.salt,
+  }));
+});
+`));
+
+	const output = runClickstackMongoScript(`
+var now = new Date();
+var teamName = "EnvSync Local Team";
+var email = ${JSON.stringify(LOCAL_OPERATOR_EMAIL)};
+var operatorName = "EnvSync Local Operator";
+var accessKey = ${JSON.stringify(accessKey)};
+var hash = ${JSON.stringify(authFields.hash)};
+var salt = ${JSON.stringify(authFields.salt)};
+
+var team = db.teams.findOne({ name: teamName });
+if (!team) {
+  throw new Error("Local ClickStack team was not created before operator bootstrap");
+}
+
+var existingUser = db.users.findOne({ email: email });
+if (!existingUser) {
+  db.users.insertOne({
+    name: operatorName,
+    email: email,
+    team: team._id,
+    accessKey: accessKey,
+    hash: hash,
+    salt: salt,
+    createdAt: now,
+    updatedAt: now
+  });
+} else {
+  db.users.updateOne(
+    { _id: existingUser._id },
+    {
+      $set: {
+        name: operatorName,
+        email: email,
+        team: team._id,
+        accessKey: accessKey,
+        hash: hash,
+        salt: salt,
+        updatedAt: now
+      }
+    }
+  );
+}
+
+print(JSON.stringify({ email: email, accessKey: accessKey, teamId: team._id.valueOf() }));
+`);
+
+	const parsed = output.split("\n").map(line => line.trim()).filter(Boolean).at(-1);
+	if (!parsed) {
+		throw new Error("Could not resolve local ClickStack operator output");
+	}
+	return JSON.parse(parsed) as { email: string; accessKey: string; teamId: string };
 }
 
 function clickstackApi<T>(accessKey: string, method: string, path: string, body?: Json): T {
@@ -451,6 +523,7 @@ function getDashboardDefinitions(sourceIds: Record<string, string>): DashboardDe
 
 async function main() {
 	const accessKey = ensureLocalBootstrap();
+	const operator = ensureLocalOperator(accessKey);
 
 	const sourcesResp = clickstackApi<{ data: ClickStackSource[] }>(accessKey, "GET", "/sources");
 	const dashboardsResp = clickstackApi<{ data: ClickStackDashboard[] }>(accessKey, "GET", "/dashboards");
@@ -471,6 +544,10 @@ async function main() {
 		clickstackApi(accessKey, "POST", "/dashboards", definition);
 		console.log(`Created dashboard: ${definition.name}`);
 	}
+
+	console.log(`ClickStack operator email: ${operator.email}`);
+	console.log(`ClickStack operator password: ${LOCAL_OPERATOR_PASSWORD}`);
+	console.log(`ClickStack access key: ${accessKey}`);
 }
 
 await main();

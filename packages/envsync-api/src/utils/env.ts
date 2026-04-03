@@ -35,6 +35,7 @@ export const env = z.object({
 	SMTP_FROM: z.string(),
 	// Keycloak configuration
 	KEYCLOAK_URL: z.string(),
+	KEYCLOAK_PUBLIC_URL: z.string().optional(),
 	KEYCLOAK_REALM: z.string().default("envsync"),
 	KEYCLOAK_ADMIN_USER: z.string(),
 	KEYCLOAK_ADMIN_PASSWORD: z.string(),

@@ -6,7 +6,10 @@ const STACK_NAME = process.env.ENVSYNC_STACK_NAME ?? "envsync";
 const ROOT_DOMAIN = process.env.ENVSYNC_ROOT_DOMAIN ?? "envsync.local";
 const CLICKSTACK_SERVICE_NAME = `${STACK_NAME}_clickstack`;
 const CLICKSTACK_API_URL = "http://127.0.0.1:8000/api/v2";
-const SELFHOST_DASHBOARD_ACCESS_KEY = `envsync-selfhost-${ROOT_DOMAIN}-dashboard-access-key`;
+const SELFHOST_OPERATOR_EMAIL = process.env.ENVSYNC_CLICKSTACK_OPERATOR_EMAIL ?? `operator@${ROOT_DOMAIN}`;
+const SELFHOST_OPERATOR_PASSWORD = process.env.ENVSYNC_CLICKSTACK_OPERATOR_PASSWORD ?? "";
+const SELFHOST_DASHBOARD_ACCESS_KEY =
+	process.env.ENVSYNC_CLICKSTACK_ACCESS_KEY ?? `envsync-selfhost-${ROOT_DOMAIN}-dashboard-access-key`;
 
 function run(cmd, args) {
 	return execFileSync(cmd, args, {
@@ -61,7 +64,6 @@ function ensureSelfHostedBootstrap(containerId) {
 var now = new Date();
 var accessKey = ${JSON.stringify(SELFHOST_DASHBOARD_ACCESS_KEY)};
 var teamName = "EnvSync Self-Hosted Team";
-var userEmail = ${JSON.stringify(`operator@${ROOT_DOMAIN}`)};
 var connectionName = "Default ClickHouse";
 
 var team = db.teams.findOne({ name: teamName });
@@ -75,24 +77,6 @@ if (!team) {
     updatedAt: now
   });
   team = db.teams.findOne({ name: teamName });
-}
-
-var user = db.users.findOne({ email: userEmail });
-if (!user) {
-  db.users.insertOne({
-    name: "EnvSync Self-Hosted Operator",
-    email: userEmail,
-    accessKey: accessKey,
-    team: team._id,
-    createdAt: now,
-    updatedAt: now
-  });
-  user = db.users.findOne({ email: userEmail });
-} else {
-  db.users.updateOne(
-    { _id: user._id },
-    { $set: { accessKey: accessKey, team: team._id, updatedAt: now } }
-  );
 }
 
 var connection = db.connections.findOne({ team: team._id, name: connectionName });
@@ -210,6 +194,94 @@ print(accessKey);
 		throw new Error("Could not resolve self-hosted ClickStack access key");
 	}
 	return accessKey;
+}
+
+function ensureSelfHostedOperator(containerId, accessKey) {
+	if (!SELFHOST_OPERATOR_PASSWORD) {
+		throw new Error("Missing ENVSYNC_CLICKSTACK_OPERATOR_PASSWORD for self-hosted ClickStack bootstrap");
+	}
+
+	const authFields = JSON.parse(runClickstackNodeScript(containerId, `
+const User = require("/app/packages/api/build/models/user").default;
+
+const accessKey = ${JSON.stringify(accessKey)};
+const email = ${JSON.stringify(SELFHOST_OPERATOR_EMAIL.toLowerCase())};
+const password = ${JSON.stringify(SELFHOST_OPERATOR_PASSWORD)};
+const operatorName = "EnvSync Self-Hosted Operator";
+
+const user = new User({
+  name: operatorName,
+  email,
+  accessKey,
+});
+
+user.setPassword(password, error => {
+  if (error) {
+    console.error(error instanceof Error ? error.stack || error.message : String(error));
+    process.exit(1);
+    return;
+  }
+  process.stdout.write(JSON.stringify({
+    email,
+    name: operatorName,
+    accessKey,
+    hash: user.hash,
+    salt: user.salt,
+  }));
+});
+`));
+
+	const output = runClickstackMongoScript(containerId, `
+var now = new Date();
+var teamName = "EnvSync Self-Hosted Team";
+var email = ${JSON.stringify(SELFHOST_OPERATOR_EMAIL.toLowerCase())};
+var operatorName = "EnvSync Self-Hosted Operator";
+var accessKey = ${JSON.stringify(accessKey)};
+var hash = ${JSON.stringify(authFields.hash)};
+var salt = ${JSON.stringify(authFields.salt)};
+
+var team = db.teams.findOne({ name: teamName });
+if (!team) {
+  throw new Error("Self-hosted ClickStack team was not created before operator bootstrap");
+}
+
+var existingUser = db.users.findOne({ email: email });
+if (!existingUser) {
+  db.users.insertOne({
+    name: operatorName,
+    email: email,
+    team: team._id,
+    accessKey: accessKey,
+    hash: hash,
+    salt: salt,
+    createdAt: now,
+    updatedAt: now
+  });
+} else {
+  db.users.updateOne(
+    { _id: existingUser._id },
+    {
+      $set: {
+        name: operatorName,
+        email: email,
+        team: team._id,
+        accessKey: accessKey,
+        hash: hash,
+        salt: salt,
+        updatedAt: now
+      }
+    }
+  );
+}
+
+print(JSON.stringify({ email: email, accessKey: accessKey, teamId: team._id.valueOf() }));
+`);
+
+	const parsed = output.split("\n").map(line => line.trim()).filter(Boolean).at(-1);
+	if (!parsed) {
+		throw new Error("Could not resolve self-hosted ClickStack operator output");
+	}
+	return JSON.parse(parsed);
 }
 
 function clickstackApi(containerId, accessKey, method, routePath, body) {
@@ -366,6 +438,7 @@ function getDashboardDefinitions(sourceIds) {
 function main() {
 	const containerId = resolveClickstackContainerId();
 	const accessKey = ensureSelfHostedBootstrap(containerId);
+	const operator = ensureSelfHostedOperator(containerId, accessKey);
 	const sourcesResp = clickstackApi(containerId, accessKey, "GET", "/sources");
 	const dashboardsResp = clickstackApi(containerId, accessKey, "GET", "/dashboards");
 	const sourceIds = Object.fromEntries(sourcesResp.data.map(source => [source.name, source.id]));
@@ -382,6 +455,10 @@ function main() {
 		clickstackApi(containerId, accessKey, "POST", "/dashboards", definition);
 		console.log(`Created dashboard: ${definition.name}`);
 	}
+
+	console.log(`ClickStack operator email: ${operator.email}`);
+	console.log(`ClickStack operator password: ${SELFHOST_OPERATOR_PASSWORD}`);
+	console.log(`ClickStack access key: ${accessKey}`);
 }
 
 main();

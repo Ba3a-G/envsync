@@ -20,15 +20,41 @@ declare global {
 
 const defaultApiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
 
-const fallbackRuntimeConfig: RuntimeConfig = {
-  apiBaseUrl: defaultApiBaseUrl,
-  appBaseUrl: "http://app.lvh.me:8001",
-  authBaseUrl: "http://auth.lvh.me:8080",
-  keycloakRealm: "envsync",
-  webClientId: "envsync-web",
-  apiDocsUrl: `${defaultApiBaseUrl.replace(/\/$/, "")}/docs`,
-  otelEndpoint: "http://localhost:14318",
-};
+function inferFallbackRuntimeConfig(): RuntimeConfig {
+  if (typeof window === "undefined") {
+    return {
+      apiBaseUrl: defaultApiBaseUrl,
+      appBaseUrl: "http://app.lvh.me:8001",
+      authBaseUrl: "http://auth.lvh.me:8080",
+      keycloakRealm: "envsync",
+      webClientId: "envsync-web",
+      apiDocsUrl: `${defaultApiBaseUrl.replace(/\/$/, "")}/docs`,
+      otelEndpoint: "http://localhost:14318",
+    };
+  }
+
+  const { protocol, hostname, port, origin } = window.location;
+  const host = port ? `${hostname}:${port}` : hostname;
+  const rootHost =
+    host.startsWith("app.") ? host.slice(4) :
+    host.startsWith("api.") ? host.slice(4) :
+    host.startsWith("auth.") ? host.slice(5) :
+    host.startsWith("obs.") ? host.slice(4) :
+    host;
+
+  const apiBaseUrl = `${protocol}//api.${rootHost}`;
+  return {
+    apiBaseUrl,
+    appBaseUrl: host.startsWith("app.") ? origin : `${protocol}//app.${rootHost}`,
+    authBaseUrl: `${protocol}//auth.${rootHost}`,
+    keycloakRealm: "envsync",
+    webClientId: "envsync-web",
+    apiDocsUrl: `${apiBaseUrl}/docs`,
+    otelEndpoint: `${protocol}//obs.${rootHost}`,
+  };
+}
+
+const fallbackRuntimeConfig: RuntimeConfig = inferFallbackRuntimeConfig();
 
 function getRuntimeConfig(): RuntimeConfig {
   try {
