@@ -964,10 +964,12 @@ ${renderEnvList({
         - traefik.http.routers.s3.rule=Host(\`${hosts.s3}\`)
         - traefik.http.routers.s3.entrypoints=websecure
         - traefik.http.routers.s3.tls.certresolver=letsencrypt
+        - traefik.http.routers.s3.service=s3
         - traefik.http.services.s3.loadbalancer.server.port=9000
         - traefik.http.routers.s3-console.rule=Host(\`${hosts.s3Console}\`)
         - traefik.http.routers.s3-console.entrypoints=websecure
         - traefik.http.routers.s3-console.tls.certresolver=letsencrypt
+        - traefik.http.routers.s3-console.service=s3-console
         - traefik.http.services.s3-console.loadbalancer.server.port=9001
 
   keycloak_db:
