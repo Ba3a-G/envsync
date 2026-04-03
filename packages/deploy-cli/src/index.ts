@@ -116,6 +116,7 @@ const KEYCLOAK_REALM_FILE = "/opt/envsync/deploy/keycloak-realm.envsync.json";
 const NGINX_WEB_CONF = "/opt/envsync/deploy/nginx-web.conf";
 const NGINX_LANDING_CONF = "/opt/envsync/deploy/nginx-landing.conf";
 const OTEL_AGENT_CONF = "/opt/envsync/deploy/otel-agent.yaml";
+const CLICKSTACK_CLICKHOUSE_CONF = "/opt/envsync/deploy/clickhouse-listen.xml";
 const INTERNAL_CONFIG_JSON = "/opt/envsync/deploy/config.json";
 
 const STACK_VOLUMES = [
@@ -908,6 +909,15 @@ function renderOtelAgentConfig(config: DeployConfig) {
 	].join("\n") + "\n";
 }
 
+function renderClickstackClickHouseConfig() {
+	return [
+		"<clickhouse>",
+		"  <listen_host>0.0.0.0</listen_host>",
+		"  <listen_try>1</listen_try>",
+		"</clickhouse>",
+	].join("\n") + "\n";
+}
+
 function renderStack(config: DeployConfig, runtimeEnv: RuntimeEnv, mode: "base" | "bootstrap" | "full") {
 	const hosts = domainMap(config.domain.root_domain);
 	const includeRuntimeInfra = mode !== "base";
@@ -1108,7 +1118,14 @@ ${renderEnvList({
       - clickstack_data:/data/db
       - clickstack_ch_data:/var/lib/clickhouse
       - clickstack_ch_logs:/var/log/clickhouse-server
+      - ${CLICKSTACK_CLICKHOUSE_CONF}:/etc/clickhouse-server/config.d/envsync-listen-host.xml:ro
     networks: [envsync]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 180s
 
   otel-agent:
     image: ${config.images.otel_agent}
@@ -1179,6 +1196,7 @@ function writeDeployArtifacts(config: DeployConfig, generated: DeployGeneratedSt
 	writeFileMaybe(NGINX_WEB_CONF, renderNginxConf("web"));
 	writeFileMaybe(NGINX_LANDING_CONF, renderNginxConf("landing"));
 	writeFileMaybe(OTEL_AGENT_CONF, renderOtelAgentConfig(config));
+	writeFileMaybe(CLICKSTACK_CLICKHOUSE_CONF, renderClickstackClickHouseConfig());
 	logSuccess(currentOptions.dryRun ? "Deploy artifacts previewed" : "Deploy artifacts written");
 }
 
@@ -1365,38 +1383,6 @@ function serviceContainerId(config: DeployConfig, serviceName: string) {
 		.find(Boolean) ?? "";
 }
 
-function waitForContainerHealth(config: DeployConfig, serviceName: string, label: string, timeoutSeconds = 180) {
-	if (currentOptions.dryRun) {
-		logDryRun(`Would wait for ${label}`);
-		return;
-	}
-	logStep(`Waiting for ${label}`);
-	const deadline = Date.now() + timeoutSeconds * 1000;
-	while (Date.now() < deadline) {
-		const containerId = serviceContainerId(config, serviceName);
-		if (!containerId) {
-			sleepSeconds(2);
-			continue;
-		}
-		const health = tryRun(
-			"docker",
-			[
-				"inspect",
-				"--format",
-				"{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}",
-				containerId,
-			],
-			{ quiet: true },
-		).trim();
-		if (health === "healthy" || health === "running") {
-			logSuccess(`${label} is ready`);
-			return;
-		}
-		sleepSeconds(2);
-	}
-	throw new Error(`Timed out waiting for ${label}`);
-}
-
 function runOpenFgaMigrate(config: DeployConfig, runtimeEnv: RuntimeEnv) {
 	logStep("Running OpenFGA datastore migrations");
 	if (currentOptions.dryRun) {
@@ -1534,13 +1520,24 @@ function runClickstackBootstrap(config: DeployConfig) {
 		logCommand("node", [path.join(REPO_ROOT, "scripts/bootstrap-clickstack-selfhost.mjs")]);
 		return;
 	}
-	run("node", [path.join(REPO_ROOT, "scripts/bootstrap-clickstack-selfhost.mjs")], {
-		env: {
-			ENVSYNC_STACK_NAME: config.services.stack_name,
-			ENVSYNC_ROOT_DOMAIN: config.domain.root_domain,
-		},
-	});
-	logSuccess("ClickStack self-host bootstrap completed");
+	const deadline = Date.now() + 180 * 1000;
+	let lastError = "unknown error";
+	while (Date.now() < deadline) {
+		try {
+			run("node", [path.join(REPO_ROOT, "scripts/bootstrap-clickstack-selfhost.mjs")], {
+				env: {
+					ENVSYNC_STACK_NAME: config.services.stack_name,
+					ENVSYNC_ROOT_DOMAIN: config.domain.root_domain,
+				},
+			});
+			logSuccess("ClickStack self-host bootstrap completed");
+			return;
+		} catch (error) {
+			lastError = error instanceof Error ? error.message : String(error);
+			sleepSeconds(3);
+		}
+	}
+	throw new Error(`Timed out bootstrapping ClickStack: ${lastError}`);
 }
 
 function parseBootstrapInitJson(output: string) {
@@ -1902,7 +1899,7 @@ async function cmdBootstrap() {
 	waitForHttpService(config, "keycloak management readiness", "http://keycloak:9000/health/ready", 180);
 	waitForHttpService(config, "openfga", "http://openfga:8090/stores");
 	waitForTcpService(config, "minikms", "minikms", 50051);
-	waitForContainerHealth(config, "clickstack", "clickstack container health");
+	waitForHttpService(config, "clickstack ui", "http://clickstack:8080", 180);
 	const initResult = runBootstrapInit(config);
 	const persistedGenerated = normalizeGeneratedState({
 		openfga: {
@@ -2151,6 +2148,7 @@ async function cmdBackup() {
 	writeFile(path.join(staged, "traefik-dynamic.yaml"), fs.readFileSync(TRAEFIK_DYNAMIC_FILE, "utf8"));
 	writeFile(path.join(staged, "keycloak-realm.envsync.json"), fs.readFileSync(KEYCLOAK_REALM_FILE, "utf8"));
 	writeFile(path.join(staged, "otel-agent.yaml"), fs.readFileSync(OTEL_AGENT_CONF, "utf8"));
+	writeFile(path.join(staged, "clickhouse-listen.xml"), fs.readFileSync(CLICKSTACK_CLICKHOUSE_CONF, "utf8"));
 	const volumesDir = path.join(staged, "volumes");
 	for (const volume of STACK_VOLUMES) {
 		backupDockerVolume(stackVolumeName(config, volume), path.join(volumesDir, volume));
@@ -2192,6 +2190,7 @@ async function cmdRestore(archivePath: string) {
 	writeFile(TRAEFIK_DYNAMIC_FILE, fs.readFileSync(path.join(restoreRoot, "traefik-dynamic.yaml"), "utf8"));
 	writeFile(KEYCLOAK_REALM_FILE, fs.readFileSync(path.join(restoreRoot, "keycloak-realm.envsync.json"), "utf8"));
 	writeFile(OTEL_AGENT_CONF, fs.readFileSync(path.join(restoreRoot, "otel-agent.yaml"), "utf8"));
+	writeFile(CLICKSTACK_CLICKHOUSE_CONF, fs.readFileSync(path.join(restoreRoot, "clickhouse-listen.xml"), "utf8"));
 	const config = loadConfig();
 	for (const volume of STACK_VOLUMES) {
 		restoreDockerVolume(stackVolumeName(config, volume), path.join(restoreRoot, "volumes", volume));
