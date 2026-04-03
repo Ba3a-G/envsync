@@ -240,6 +240,10 @@ function curl(args: string[]) {
 	return run("curl", args, { stdio: "pipe" });
 }
 
+function sleep(seconds: number) {
+  spawnSync("sleep", [String(seconds)], { stdio: "ignore" });
+}
+
 function assert(condition: unknown, message: string) {
 	if (!condition) {
 		throw new Error(message);
@@ -273,28 +277,54 @@ function assertBootstrapArtifacts(expectedOtelEndpoint: string) {
 }
 
 function assertObsRouting() {
-	const obsBase = `https://obs.${rootDomain}:${publicHttpsPort}`;
-	const apiConfig = curl(["-ksS", "-D", "-", `${obsBase}/api/config`]);
+	const obsHost = `obs.${rootDomain}`;
+	const obsBase = `https://${obsHost}:${publicHttpsPort}`;
+	const resolveArg = `${obsHost}:${publicHttpsPort}:127.0.0.1`;
+	let apiConfig = "";
+	let otlpPreflight = "";
+	let lastError = "";
+	const deadline = Date.now() + 60_000;
+	while (Date.now() < deadline) {
+		try {
+			apiConfig = curl(["-ksS", "--resolve", resolveArg, "-D", "-", `${obsBase}/api/config`]);
+			otlpPreflight = curl([
+				"-ksS",
+				"--resolve",
+				resolveArg,
+				"-D",
+				"-",
+				"-X",
+				"OPTIONS",
+				`${obsBase}/v1/traces`,
+				"-H",
+				`Origin: https://${rootDomain}${publicHttpsPort === 443 ? "" : `:${publicHttpsPort}`}`,
+				"-H",
+				"Access-Control-Request-Method: POST",
+				"-H",
+				"Access-Control-Request-Headers: content-type",
+			]);
+			if (
+				(apiConfig.includes("HTTP/2 200") || apiConfig.includes("HTTP/1.1 200")) &&
+				apiConfig.includes("collectorUrl") &&
+				otlpPreflight.includes(
+					`access-control-allow-origin: https://${rootDomain}${publicHttpsPort === 443 ? "" : `:${publicHttpsPort}`}`,
+				) &&
+				otlpPreflight.toLowerCase().includes("access-control-allow-credentials: true")
+			) {
+				break;
+			}
+		} catch (error) {
+			lastError = error instanceof Error ? error.message : String(error);
+		}
+		sleep(2);
+	}
 	assert(apiConfig.includes("HTTP/2 200") || apiConfig.includes("HTTP/1.1 200"), "obs /api/config did not return 200");
 	assert(apiConfig.includes("collectorUrl"), "obs /api/config did not return HyperDX config");
-
-	const otlpPreflight = curl([
-		"-ksS",
-		"-D",
-		"-",
-		"-X",
-		"OPTIONS",
-		`${obsBase}/v1/traces`,
-		"-H",
-		`Origin: https://${rootDomain}:${publicHttpsPort}`,
-		"-H",
-		"Access-Control-Request-Method: POST",
-		"-H",
-		"Access-Control-Request-Headers: content-type",
-	]);
 	assert(
-		otlpPreflight.includes(`access-control-allow-origin: https://${rootDomain}:${publicHttpsPort}`),
-		"obs OTLP preflight is missing access-control-allow-origin",
+		otlpPreflight.includes(
+			`access-control-allow-origin: https://${rootDomain}${publicHttpsPort === 443 ? "" : `:${publicHttpsPort}`}`,
+		),
+		lastError ? `obs OTLP preflight is missing access-control-allow-origin\n${lastError}` : "obs OTLP preflight is missing access-control-allow-origin",
 	);
 	assert(
 		otlpPreflight.toLowerCase().includes("access-control-allow-credentials: true"),

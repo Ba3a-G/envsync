@@ -8,6 +8,14 @@ import type { TelemetryConfig } from "./config";
 
 let loggerProvider: LoggerProvider | null = null;
 
+function canAddLogRecordProcessor(
+  provider: LoggerProvider,
+): provider is LoggerProvider & {
+  addLogRecordProcessor: (recordProcessor: BatchLogRecordProcessor) => void;
+} {
+  return typeof (provider as { addLogRecordProcessor?: unknown }).addLogRecordProcessor === "function";
+}
+
 export function initLogs(config: TelemetryConfig): LoggerProvider {
   const resource = resourceFromAttributes({
     [ATTR_SERVICE_NAME]: config.serviceName,
@@ -24,13 +32,16 @@ export function initLogs(config: TelemetryConfig): LoggerProvider {
     resource,
   });
 
-  (provider as LoggerProvider & {
-    addLogRecordProcessor: (recordProcessor: BatchLogRecordProcessor) => void;
-  }).addLogRecordProcessor(processor);
+  if (canAddLogRecordProcessor(provider)) {
+    provider.addLogRecordProcessor(processor);
+  } else {
+    console.warn("OpenTelemetry LoggerProvider does not support addLogRecordProcessor; browser log export disabled");
+  }
 
   loggerProvider = provider;
-
-  interceptConsoleErrors();
+  if (canAddLogRecordProcessor(provider)) {
+    interceptConsoleErrors();
+  }
 
   return loggerProvider;
 }
