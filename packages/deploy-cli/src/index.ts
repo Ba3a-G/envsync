@@ -1121,11 +1121,7 @@ ${renderEnvList({
       - ${CLICKSTACK_CLICKHOUSE_CONF}:/etc/clickhouse-server/config.d/envsync-listen-host.xml:ro
     networks: [envsync]
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080 || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 10
-      start_period: 180s
+      disable: true
 
   otel-agent:
     image: ${config.images.otel_agent}
@@ -1899,7 +1895,7 @@ async function cmdBootstrap() {
 	waitForHttpService(config, "keycloak management readiness", "http://keycloak:9000/health/ready", 180);
 	waitForHttpService(config, "openfga", "http://openfga:8090/stores");
 	waitForTcpService(config, "minikms", "minikms", 50051);
-	waitForHttpService(config, "clickstack ui", "http://clickstack:8080", 180);
+	waitForTcpService(config, "clickstack ui", "clickstack", 8080, 180);
 	const initResult = runBootstrapInit(config);
 	const persistedGenerated = normalizeGeneratedState({
 		openfga: {
