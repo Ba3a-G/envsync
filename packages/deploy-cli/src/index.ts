@@ -398,6 +398,18 @@ function domainMap(rootDomain: string) {
 	};
 }
 
+function publicHttpsOrigin(config: DeployConfig, host: string) {
+	return `https://${host}${config.services.public_https_port === 443 ? "" : `:${config.services.public_https_port}`}`;
+}
+
+function publicHttpsOriginVariants(config: DeployConfig, host: string) {
+	const canonical = `https://${host}`;
+	if (config.services.public_https_port === 443) {
+		return [canonical];
+	}
+	return [canonical, publicHttpsOrigin(config, host)];
+}
+
 function getDeployCliVersion() {
 	try {
 		const packageJsonPath = new URL("../package.json", import.meta.url);
@@ -807,6 +819,10 @@ function renderKeycloakRealm(config: DeployConfig, runtimeEnv: RuntimeEnv) {
 
 function renderTraefikDynamicConfig(config: DeployConfig) {
 	const hosts = domainMap(config.domain.root_domain);
+	const otelAllowedOrigins = [
+		...publicHttpsOriginVariants(config, hosts.landing),
+		...publicHttpsOriginVariants(config, hosts.app),
+	];
 	return [
 		"http:",
 		"  middlewares:",
@@ -821,8 +837,7 @@ function renderTraefikDynamicConfig(config: DeployConfig) {
 		"    otel-cors:",
 		"      headers:",
 		"        accessControlAllowOriginList:",
-		`          - https://${hosts.landing}`,
-		`          - https://${hosts.app}`,
+		...otelAllowedOrigins.map(origin => `          - ${origin}`),
 		"        accessControlAllowMethods:",
 		"          - POST",
 		"          - OPTIONS",
@@ -831,7 +846,7 @@ function renderTraefikDynamicConfig(config: DeployConfig) {
 		"          - content-type",
 		"          - Authorization",
 		"          - authorization",
-		"        accessControlAllowCredentials: false",
+		"        accessControlAllowCredentials: true",
 		"        accessControlMaxAge: 600",
 		"        addVaryHeader: true",
 		"  services:",
@@ -862,10 +877,6 @@ function renderTraefikDynamicConfig(config: DeployConfig) {
 		"      loadBalancer:",
 		"        servers:",
 		"          - url: http://clickstack:8080",
-		"    clickstack-api:",
-		"      loadBalancer:",
-		"        servers:",
-		"          - url: http://clickstack:8000",
 		"    clickstack-otlp:",
 		"      loadBalancer:",
 		"        servers:",
@@ -893,7 +904,7 @@ function renderTraefikDynamicConfig(config: DeployConfig) {
 		"        certResolver: letsencrypt",
 		"    obs-api-router:",
 		`      rule: Host(\`${hosts.obs}\`) && PathPrefix(\`/api\`)`,
-		"      service: clickstack-api",
+		"      service: clickstack-ui",
 		"      priority: 90",
 		"      entryPoints: [websecure]",
 		"      tls:",

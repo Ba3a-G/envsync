@@ -236,6 +236,10 @@ function readRuntimeConfig(filePath: string) {
 	return JSON.parse(source.slice(prefix.length, -1)) as { otelEndpoint?: string };
 }
 
+function curl(args: string[]) {
+	return run("curl", args, { stdio: "pipe" });
+}
+
 function assert(condition: unknown, message: string) {
 	if (!condition) {
 		throw new Error(message);
@@ -266,6 +270,36 @@ function assertBootstrapArtifacts(expectedOtelEndpoint: string) {
 	assert(stackFile.includes(`${stackName}-s3-console-router`), "stack file is missing explicit S3 console router name");
 	assert(webRuntime.otelEndpoint === expectedOtelEndpoint, "web runtime-config has the wrong OTel endpoint");
 	assert(landingRuntime.otelEndpoint === expectedOtelEndpoint, "landing runtime-config has the wrong OTel endpoint");
+}
+
+function assertObsRouting() {
+	const obsBase = `https://obs.${rootDomain}:${publicHttpsPort}`;
+	const apiConfig = curl(["-ksS", "-D", "-", `${obsBase}/api/config`]);
+	assert(apiConfig.includes("HTTP/2 200") || apiConfig.includes("HTTP/1.1 200"), "obs /api/config did not return 200");
+	assert(apiConfig.includes("collectorUrl"), "obs /api/config did not return HyperDX config");
+
+	const otlpPreflight = curl([
+		"-ksS",
+		"-D",
+		"-",
+		"-X",
+		"OPTIONS",
+		`${obsBase}/v1/traces`,
+		"-H",
+		`Origin: https://${rootDomain}:${publicHttpsPort}`,
+		"-H",
+		"Access-Control-Request-Method: POST",
+		"-H",
+		"Access-Control-Request-Headers: content-type",
+	]);
+	assert(
+		otlpPreflight.includes(`access-control-allow-origin: https://${rootDomain}:${publicHttpsPort}`),
+		"obs OTLP preflight is missing access-control-allow-origin",
+	);
+	assert(
+		otlpPreflight.toLowerCase().includes("access-control-allow-credentials: true"),
+		"obs OTLP preflight is missing access-control-allow-credentials",
+	);
 }
 
 function runDiagnostics() {
@@ -325,6 +359,7 @@ async function main() {
 		};
 		assert(health.bootstrap.completed === true, "health --json did not report bootstrap completed");
 		assertBootstrapArtifacts(otelEndpoint);
+		assertObsRouting();
 		firstStoreId = readJson<{ generated: { openfga: { store_id: string } } }>(internalConfigPath).generated.openfga.store_id;
 		assert(firstStoreId.length > 0, "first bootstrap did not persist an OpenFGA store ID");
 		runCli(["bootstrap", "--force"]);
