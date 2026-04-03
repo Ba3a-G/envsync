@@ -11,6 +11,7 @@ import { useParams } from "react-router-dom";
 import { CheckCircle, ArrowRight, Shield, Loader2, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { api } from "@/helpers/api";
+import { trackAction } from "@/telemetry";
 
 const AcceptOrgInvite = () => {
   const { invite_code } = useParams();
@@ -62,6 +63,23 @@ const AcceptOrgInvite = () => {
     },
     onSuccess: (data) => {
       console.log("Organization invite accepted successfully:", data);
+      trackAction("org_signup_completed", {
+        "envsync.event_name": "org_signup_completed",
+        "envsync.event_category": "onboarding",
+        "envsync.surface": "landing",
+        "envsync.success": true,
+        org_name: orgName,
+        company_size: companySize,
+        has_website: Boolean(website),
+      });
+      trackAction("org_onboarding_completed", {
+        "envsync.event_name": "org_onboarding_completed",
+        "envsync.event_category": "onboarding",
+        "envsync.surface": "landing",
+        "envsync.success": true,
+        org_name: orgName,
+        user_email_domain: inviteData?.invite?.email?.split("@")[1] || undefined,
+      });
     },
     onError: (error) => {
       console.error("Failed to accept organization invite:", error);
@@ -80,6 +98,15 @@ const AcceptOrgInvite = () => {
     setFullNameError("");
     
     if (invite_code && orgName && companySize && fullName && password && !acceptOrgInviteMutation.isPending) {
+      trackAction("org_signup_started", {
+        "envsync.event_name": "org_signup_started",
+        "envsync.event_category": "onboarding",
+        "envsync.surface": "landing",
+        "envsync.success": true,
+        invite_code_present: Boolean(invite_code),
+        company_size: companySize,
+        has_website: Boolean(website),
+      });
       acceptOrgInviteMutation.mutate({
         invite_code,
         org_data: {

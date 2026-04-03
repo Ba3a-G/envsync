@@ -12,6 +12,16 @@ export const getKeycloakPublicBaseUrl = () => publicBase();
 export const getKeycloakIssuer = () => issuer();
 export const getKeycloakRealm = () => realm();
 
+export interface KeycloakTokenSet {
+	id_token?: string;
+	access_token: string;
+	refresh_token?: string;
+	scope?: string;
+	expires_in?: number;
+	refresh_expires_in?: number;
+	token_type?: string;
+}
+
 let adminTokenCache: { accessToken: string; expiresAt: number } | null = null;
 
 function isLocalHttpAdminFailure(error: unknown) {
@@ -338,7 +348,7 @@ export async function keycloakTokenExchange(
 	redirectUri: string,
 	clientId: string,
 	clientSecret: string,
-): Promise<{ id_token?: string; access_token: string; scope?: string; expires_in?: number; token_type?: string }> {
+): Promise<KeycloakTokenSet> {
 	const res = await fetch(`${base()}/realms/${realm()}/protocol/openid-connect/token`, {
 		method: "POST",
 		headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -356,11 +366,29 @@ export async function keycloakTokenExchange(
 		throw new Error(`Keycloak token exchange failed: ${res.status} ${await res.text()}`);
 	}
 
-	return (await res.json()) as {
-		id_token?: string;
-		access_token: string;
-		scope?: string;
-		expires_in?: number;
-		token_type?: string;
-	};
+	return (await res.json()) as KeycloakTokenSet;
+}
+
+export async function keycloakRefreshToken(
+	refreshToken: string,
+	clientId: string,
+	clientSecret: string,
+): Promise<KeycloakTokenSet> {
+	const res = await fetch(`${base()}/realms/${realm()}/protocol/openid-connect/token`, {
+		method: "POST",
+		headers: { "Content-Type": "application/x-www-form-urlencoded" },
+		body: new URLSearchParams({
+			grant_type: "refresh_token",
+			refresh_token: refreshToken,
+			client_id: clientId,
+			client_secret: clientSecret,
+		}),
+		signal: AbortSignal.timeout(10_000),
+	});
+
+	if (!res.ok) {
+		throw new Error(`Keycloak refresh failed: ${res.status} ${await res.text()}`);
+	}
+
+	return (await res.json()) as KeycloakTokenSet;
 }

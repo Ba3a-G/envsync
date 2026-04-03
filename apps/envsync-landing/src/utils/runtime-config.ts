@@ -8,6 +8,11 @@ const runtimeConfigSchema = z.object({
   webClientId: z.string().min(1),
   apiDocsUrl: z.string().url(),
   otelEndpoint: z.string().url().optional(),
+  hyperdxApiKey: z.string().min(1).optional(),
+  hyperdxUrl: z.string().url().optional(),
+  hyperdxDisabled: z.boolean().optional(),
+  hyperdxAdvancedNetworkCapture: z.boolean().optional(),
+  releaseVersion: z.string().min(1).optional(),
 });
 
 export type RuntimeConfig = z.infer<typeof runtimeConfigSchema>;
@@ -30,6 +35,10 @@ function inferFallbackRuntimeConfig(): RuntimeConfig {
       webClientId: "envsync-web",
       apiDocsUrl: `${defaultApiBaseUrl.replace(/\/$/, "")}/docs`,
       otelEndpoint: "http://localhost:14318",
+      hyperdxApiKey: import.meta.env.VITE_HYPERDX_API_KEY || undefined,
+      hyperdxUrl: import.meta.env.VITE_HYPERDX_URL || undefined,
+      hyperdxDisabled: import.meta.env.VITE_HYPERDX_DISABLED === "true",
+      hyperdxAdvancedNetworkCapture: false,
     };
   }
 
@@ -51,6 +60,10 @@ function inferFallbackRuntimeConfig(): RuntimeConfig {
     webClientId: "envsync-web",
     apiDocsUrl: `${apiBaseUrl}/docs`,
     otelEndpoint: `${protocol}//obs.${rootHost}`,
+    hyperdxApiKey: import.meta.env.VITE_HYPERDX_API_KEY || undefined,
+    hyperdxUrl: import.meta.env.VITE_HYPERDX_URL || `${protocol}//obs.${rootHost}`,
+    hyperdxDisabled: import.meta.env.VITE_HYPERDX_DISABLED === "true",
+    hyperdxAdvancedNetworkCapture: false,
   };
 }
 

@@ -245,7 +245,12 @@ function readRuntimeConfig(filePath: string) {
 	if (!source.startsWith(prefix) || !source.endsWith(";")) {
 		throw new Error(`Unexpected runtime-config format in ${filePath}`);
 	}
-	return JSON.parse(source.slice(prefix.length, -1)) as { otelEndpoint?: string };
+	return JSON.parse(source.slice(prefix.length, -1)) as {
+		otelEndpoint?: string;
+		hyperdxApiKey?: string;
+		hyperdxUrl?: string;
+		hyperdxDisabled?: boolean;
+	};
 }
 
 function curl(args: string[]) {
@@ -286,6 +291,31 @@ function assertBootstrapArtifacts(expectedOtelEndpoint: string) {
 	assert(stackFile.includes(`${stackName}-s3-console-router`), "stack file is missing explicit S3 console router name");
 	assert(webRuntime.otelEndpoint === expectedOtelEndpoint, "web runtime-config has the wrong OTel endpoint");
 	assert(landingRuntime.otelEndpoint === expectedOtelEndpoint, "landing runtime-config has the wrong OTel endpoint");
+	assert(webRuntime.hyperdxUrl === expectedOtelEndpoint, "web runtime-config is missing HyperDX URL");
+	assert(landingRuntime.hyperdxUrl === expectedOtelEndpoint, "landing runtime-config is missing HyperDX URL");
+	assert(Boolean(webRuntime.hyperdxApiKey), "web runtime-config is missing HyperDX API key");
+	assert(Boolean(landingRuntime.hyperdxApiKey), "landing runtime-config is missing HyperDX API key");
+	assert(webRuntime.hyperdxDisabled === false, "web runtime-config unexpectedly disables HyperDX");
+	assert(landingRuntime.hyperdxDisabled === false, "landing runtime-config unexpectedly disables HyperDX");
+}
+
+function assertObservabilityHealth() {
+	const health = JSON.parse(runCli(["health", "--json"], true)) as {
+		observability?: {
+			browser_replay_runtime?: {
+				web?: { configured?: boolean };
+				landing?: { configured?: boolean };
+			};
+			sessions_source?: { configured?: boolean };
+			saved_searches?: { configured?: boolean; missing?: string[] };
+			tags?: { configured?: boolean; missing?: string[] };
+		};
+	};
+	assert(health.observability?.browser_replay_runtime?.web?.configured, "health --json reports web replay runtime is not configured");
+	assert(health.observability?.browser_replay_runtime?.landing?.configured, "health --json reports landing replay runtime is not configured");
+	assert(health.observability?.sessions_source?.configured, "health --json reports Sessions source is not configured");
+	assert(health.observability?.saved_searches?.configured, `health --json reports saved searches missing: ${(health.observability?.saved_searches?.missing ?? []).join(", ")}`);
+	assert(health.observability?.tags?.configured, `health --json reports tags missing: ${(health.observability?.tags?.missing ?? []).join(", ")}`);
 }
 
 function assertObsRouting() {
@@ -424,6 +454,7 @@ async function main() {
 		};
 		assert(health.bootstrap.completed === true, "health --json did not report bootstrap completed");
 		assertBootstrapArtifacts(otelEndpoint);
+		assertObservabilityHealth();
 		assertObsRouting();
 		assertApiAuthAndOtel();
 		firstStoreId = readJson<{ generated: { openfga: { store_id: string } } }>(internalConfigPath).generated.openfga.store_id;

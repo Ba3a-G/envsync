@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { trackAction } from "@/telemetry";
 import {
   TooltipTrigger,
   Tooltip,
@@ -204,6 +205,16 @@ export const CreateProject = () => {
           public_key: formData.enableSecrets
             ? formData.publicKey.trim()
             : undefined,
+        });
+        trackAction("app_created", {
+          "envsync.event_name": "app_created",
+          "envsync.event_category": "application",
+          "envsync.surface": "dashboard",
+          "envsync.success": true,
+          "app.id": response.id,
+          "app.name": formData.name.trim(),
+          "app.enable_secrets": formData.enableSecrets,
+          "app.env_type_count": pendingEnvTypes.length,
         });
 
         // Step 2: Create environment types sequentially

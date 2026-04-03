@@ -57,6 +57,7 @@ export const apiResponseLogger = pino(
 function emitOtelLog(body: string, severityNumber: SeverityNumber, severityText: string, generatedBy: string) {
 	const otelLogger = logs.getLogger("envsync-api");
 	const span = trace.getSpan(context.active());
+	const isError = severityText === "ERROR";
 
 	otelLogger.emit({
 		severityNumber,
@@ -65,6 +66,12 @@ function emitOtelLog(body: string, severityNumber: SeverityNumber, severityText:
 		attributes: {
 			"log.source": "pino",
 			"log.generated_by": generatedBy,
+			...(isError
+				? {
+						"envsync.event_name": "api_error",
+						"envsync.event_category": "api_error",
+					}
+				: {}),
 			...(span
 				? {
 						"trace.id": span.spanContext().traceId,

@@ -18,10 +18,13 @@ let provider: WebTracerProvider | null = null;
 export function initTracing(config: TelemetryConfig): WebTracerProvider {
   const resource = resourceFromAttributes({
     [ATTR_SERVICE_NAME]: config.serviceName,
+    "service.version": import.meta.env.VITE_APP_VERSION || "unknown",
+    "deployment.environment": import.meta.env.MODE || "production",
   });
 
   const exporter = new OTLPTraceExporter({
     url: `${config.endpoint}/v1/traces`,
+    headers: config.apiKey ? { Authorization: config.apiKey } : undefined,
   });
 
   provider = new WebTracerProvider(

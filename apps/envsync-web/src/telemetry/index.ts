@@ -3,7 +3,7 @@ import { initTracing, getTracerProvider } from "./tracing";
 import { initMetrics, getMeterProvider } from "./metrics";
 import { initLogs, getLoggerProvider } from "./logs";
 import { initErrorTracking } from "./error-tracking";
-import { initSessionReplay, isHyperDXActive } from "./session-replay";
+import { initSessionReplay } from "./session-replay";
 
 let initialized = false;
 
@@ -53,4 +53,4 @@ export function initTelemetry(): void {
 }
 
 export { RouteChangeTracker } from "./route-instrumentation";
-export { identifyUser } from "./session-replay";
+export { identifyUser, trackAction } from "./session-replay";

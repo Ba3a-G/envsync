@@ -10,6 +10,7 @@ import { useParams } from "react-router-dom";
 import { CheckCircle, ArrowRight, Users, Loader2, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { api } from "@/helpers/api";
+import { trackAction } from "@/telemetry";
 
 const AcceptUserInvite = () => {
   const { invite_code } = useParams();
@@ -49,6 +50,13 @@ const AcceptUserInvite = () => {
     },
     onSuccess: (data) => {
       console.log("User invite accepted successfully:", data);
+      trackAction("user_invite_accept_completed", {
+        "envsync.event_name": "user_invite_accept_completed",
+        "envsync.event_category": "onboarding",
+        "envsync.surface": "landing",
+        "envsync.success": true,
+        invite_email_domain: inviteData?.invite?.email?.split("@")[1] || undefined,
+      });
     },
     onError: (error) => {
       console.error("Failed to accept user invite:", error);
@@ -58,6 +66,13 @@ const AcceptUserInvite = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (invite_code && fullName && password && !acceptUserInviteMutation.isPending) {
+      trackAction("user_invite_accept_started", {
+        "envsync.event_name": "user_invite_accept_started",
+        "envsync.event_category": "onboarding",
+        "envsync.surface": "landing",
+        "envsync.success": true,
+        invite_code_present: Boolean(invite_code),
+      });
       acceptUserInviteMutation.mutate({
         invite_code,
         full_name: fullName,

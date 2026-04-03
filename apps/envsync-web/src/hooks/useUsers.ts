@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { API_KEYS } from "@/constants";
+import { trackAction } from "@/telemetry";
 
 interface User {
   id: string;
@@ -122,10 +123,18 @@ export const useUsers = () => {
     }) => {
       return await api.onboarding.createUserInvite({ email, role_id });
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: [API_KEYS.ALL_USERS] });
       resetInviteForm();
       console.log("User invited successfully");
+      trackAction("user_invited", {
+        "envsync.event_name": "user_invited",
+        "envsync.event_category": "team",
+        "envsync.surface": "dashboard",
+        "envsync.success": true,
+        role_id: variables.role_id,
+        email_domain: variables.email.split("@")[1] || undefined,
+      });
     },
     onError: (error) => {
       console.error("Error inviting user:", error);

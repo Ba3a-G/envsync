@@ -1,30 +1,79 @@
-import { EnvSyncAPISDK } from "@envsync-cloud/envsync-ts-sdk";
+import { ApiError, EnvSyncAPISDK } from "@envsync-cloud/envsync-ts-sdk";
 import { env, type Function } from "@/utils/env";
+import { runtimeConfig } from "@/utils/runtime-config";
+
+let loginRedirectInFlight = false;
+
+const CSRF_COOKIE = "envsync_csrf";
+
+function readCookie(name: string) {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie
+    .split("; ")
+    .find((entry) => entry.startsWith(`${name}=`));
+  return match ? decodeURIComponent(match.split("=").slice(1).join("=")) : null;
+}
+
+function isUnsafeMethod(method: string) {
+  return ["POST", "PUT", "PATCH", "DELETE"].includes(method.toUpperCase());
+}
+
+export function isReloginError(error: unknown) {
+  return error instanceof ApiError &&
+    error.status === 401 &&
+    ["AUTH_MISSING", "AUTH_INVALID", "AUTH_RELOGIN_REQUIRED"].includes(
+      String(error.body?.code ?? "")
+    );
+}
+
+export async function redirectToLogin() {
+  if (loginRedirectInFlight) return;
+  loginRedirectInFlight = true;
+  try {
+    const response = await getSDK().access.createWebLogin();
+    if (response?.loginUrl) {
+      window.location.href = response.loginUrl;
+      return;
+    }
+  } catch (error) {
+    console.error("Failed to create web login:", error);
+  }
+  loginRedirectInFlight = false;
+}
+
+export async function logoutWebSession() {
+  const csrfToken = readCookie(CSRF_COOKIE) ?? "";
+  const response = await fetch(`${runtimeConfig.apiBaseUrl}/api/access/web/logout`, {
+    method: "POST",
+    credentials: "include",
+    headers: csrfToken ? { "X-CSRF-Token": csrfToken } : {},
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data?.logoutUrl) {
+    throw new Error("Failed to prepare logout");
+  }
+
+  window.location.href = data.logoutUrl;
+}
 
 /**
  *
- * Creates an instance of the EnvSync API SDK with the provided access token.
- * @param accessToken - Optional access token to use for API requests. If not provided, it will attempt to retrieve it from localStorage.
- * @returns An instance of the EnvSyncAPISDK configured with the base URL and token.
+ * Creates an instance of the EnvSync API SDK using credentialed browser requests.
+ * The API owns the session via secure cookies, so the browser never stores bearer tokens.
  */
-export const getSDK = (accessToken?: string) => {
-  const getAccessToken = async () => {
-    try {
-      const token = accessToken || localStorage.getItem("access_token");
-      if (token.length === 0) {
-        throw new Error("Access token is empty");
-      }
-
-      return token;
-    } catch (error) {
-      console.warn("Failed to retrieve access token from localStorage:", error);
-      return "";
-    }
+export const getSDK = () => {
+  const resolveHeaders = async (options: { method: string }) => {
+    if (!isUnsafeMethod(options.method)) return {};
+    const csrfToken = readCookie(CSRF_COOKIE);
+    return csrfToken ? { "X-CSRF-Token": csrfToken } : {};
   };
 
   return new EnvSyncAPISDK({
     BASE: env.VITE_API_BASE_URL,
-    TOKEN: getAccessToken,
+    WITH_CREDENTIALS: true,
+    CREDENTIALS: "include",
+    HEADERS: resolveHeaders,
   });
 };
 

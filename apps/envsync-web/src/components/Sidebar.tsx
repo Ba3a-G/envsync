@@ -4,7 +4,7 @@ import { Link, useLocation } from "react-router-dom";
 import { useMemo } from "react";
 import { navGroups } from "@/constants";
 import { useAuthContext } from "@/contexts/auth";
-import { runtimeConfig } from "@/utils/runtime-config";
+import { logoutWebSession } from "@/api";
 
 interface SidebarProps {
   expanded: boolean;
@@ -28,14 +28,12 @@ export const Sidebar = ({ expanded, onToggle }: SidebarProps) => {
 
   const activeView = pathname === "/" ? "dashboard" : pathname.split("/")[1] || "dashboard";
 
-  const handleLogout = () => {
-    localStorage.removeItem("access_token");
-    const logoutUrl = new URL(
-      `${runtimeConfig.authBaseUrl}/realms/${runtimeConfig.keycloakRealm}/protocol/openid-connect/logout`
-    );
-    logoutUrl.searchParams.set("client_id", runtimeConfig.webClientId);
-    logoutUrl.searchParams.set("post_logout_redirect_uri", window.location.origin);
-    window.location.href = logoutUrl.toString();
+  const handleLogout = async () => {
+    try {
+      await logoutWebSession();
+    } catch (error) {
+      console.error("Failed to logout cleanly:", error);
+    }
   };
 
   return (

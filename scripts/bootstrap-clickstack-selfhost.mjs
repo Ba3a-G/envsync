@@ -9,7 +9,32 @@ const CLICKSTACK_API_URL = "http://127.0.0.1:8000/api/v2";
 const SELFHOST_OPERATOR_EMAIL = process.env.ENVSYNC_CLICKSTACK_OPERATOR_EMAIL ?? `operator@${ROOT_DOMAIN}`;
 const SELFHOST_OPERATOR_PASSWORD = process.env.ENVSYNC_CLICKSTACK_OPERATOR_PASSWORD ?? "";
 const SELFHOST_DASHBOARD_ACCESS_KEY =
-	process.env.ENVSYNC_CLICKSTACK_ACCESS_KEY ?? `envsync-selfhost-${ROOT_DOMAIN}-dashboard-access-key`;
+	process.env.ENVSYNC_CLICKSTACK_ACCESS_KEY?.trim() || `envsync-selfhost-${ROOT_DOMAIN}-dashboard-access-key`;
+const SELFHOST_BROWSER_API_KEY =
+	process.env.ENVSYNC_CLICKSTACK_BROWSER_API_KEY?.trim() || `envsync-selfhost-${ROOT_DOMAIN}-browser-api-key`;
+const ALERT_WEBHOOK_URL = process.env.ENVSYNC_CLICKSTACK_ALERT_WEBHOOK_URL ?? "";
+const ALERT_WEBHOOK_HEADERS = parseJsonObject(process.env.ENVSYNC_CLICKSTACK_ALERT_WEBHOOK_HEADERS);
+const REQUIRED_SAVED_SEARCHES = [
+	"Frontend Errors - Web",
+	"Frontend Errors - Landing",
+	"API Errors",
+	"Org Onboarding Completed",
+	"Apps Created",
+	"Users Invited",
+	"Webhooks Created",
+	"Slow API Traces",
+	"Frontend API Calls",
+];
+
+function parseJsonObject(raw) {
+	if (!raw) return {};
+	try {
+		const parsed = JSON.parse(raw);
+		return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+	} catch {
+		return {};
+	}
+}
 
 function run(cmd, args) {
 	return execFileSync(cmd, args, {
@@ -31,6 +56,18 @@ function resolveClickstackContainerId() {
 		throw new Error(`Could not resolve running ClickStack container for service ${CLICKSTACK_SERVICE_NAME}`);
 	}
 	return containerId;
+}
+
+function getClickstackBrowserApiKey(containerId) {
+	try {
+		const output = runClickstackMongoScript(containerId, `
+var team = db.teams.findOne({ name: "EnvSync Self-Hosted Team" });
+print(team && team.apiKey ? team.apiKey : "");
+`);
+		return output.split("\n").map(line => line.trim()).filter(Boolean).at(-1) ?? "";
+	} catch {
+		return "";
+	}
 }
 
 function runClickstackNodeScript(containerId, script) {
@@ -63,6 +100,7 @@ function ensureSelfHostedBootstrap(containerId) {
 	const output = runClickstackMongoScript(containerId, `
 var now = new Date();
 var accessKey = ${JSON.stringify(SELFHOST_DASHBOARD_ACCESS_KEY)};
+var browserApiKey = ${JSON.stringify(SELFHOST_BROWSER_API_KEY)};
 var teamName = "EnvSync Self-Hosted Team";
 var connectionName = "Default ClickHouse";
 
@@ -71,12 +109,23 @@ if (!team) {
   db.teams.insertOne({
     name: teamName,
     hookId: "envsync-selfhost-hook-id",
-    apiKey: "envsync-selfhost-team-api-key",
+    apiKey: browserApiKey,
     collectorAuthenticationEnforced: false,
     createdAt: now,
     updatedAt: now
   });
   team = db.teams.findOne({ name: teamName });
+} else {
+  db.teams.updateOne(
+    { _id: team._id },
+    {
+      $set: {
+        apiKey: browserApiKey,
+        updatedAt: now
+      }
+    }
+  );
+  team = db.teams.findOne({ _id: team._id });
 }
 
 var connection = db.connections.findOne({ team: team._id, name: connectionName });
@@ -131,14 +180,20 @@ var traces = ensureSource("Traces", "trace", {
   spanEventsValueExpression: "Events",
   resourceAttributesExpression: "ResourceAttributes",
   highlightedTraceAttributeExpressions: [
-    { sqlExpression: "ServiceName", alias: "ServiceName", luceneExpression: "ServiceName" },
+    { sqlExpression: "ServiceName", alias: "service.name", luceneExpression: "ServiceName" },
     { sqlExpression: "ResourceAttributes['host.name']", alias: "host.name", luceneExpression: "ResourceAttributes.host.name" }
   ],
   highlightedRowAttributeExpressions: [
     { sqlExpression: "SpanAttributes['db.system']", alias: "db.system", luceneExpression: "SpanAttributes.db.system" },
     { sqlExpression: "SpanAttributes['db.operation.name']", alias: "db.operation.name", luceneExpression: "SpanAttributes.db.operation.name" },
     { sqlExpression: "SpanAttributes['http.method']", alias: "http.method", luceneExpression: "SpanAttributes.http.method" },
-    { sqlExpression: "SpanAttributes['http.route']", alias: "http.route", luceneExpression: "SpanAttributes.http.route" }
+    { sqlExpression: "SpanAttributes['http.route']", alias: "http.route", luceneExpression: "SpanAttributes.http.route" },
+    { sqlExpression: "SpanAttributes['http.status_code']", alias: "http.status_code", luceneExpression: "SpanAttributes.http.status_code" },
+    { sqlExpression: "SpanAttributes['envsync.event_name']", alias: "envsync.event_name", luceneExpression: "SpanAttributes.envsync.event_name" },
+    { sqlExpression: "SpanAttributes['envsync.event_category']", alias: "envsync.event_category", luceneExpression: "SpanAttributes.envsync.event_category" },
+    { sqlExpression: "SpanAttributes['envsync.org_id']", alias: "envsync.org_id", luceneExpression: "SpanAttributes.envsync.org_id" },
+    { sqlExpression: "SpanAttributes['envsync.role_name']", alias: "envsync.role_name", luceneExpression: "SpanAttributes.envsync.role_name" },
+    { sqlExpression: "SpanAttributes['envsync.user_id']", alias: "envsync.user_id", luceneExpression: "SpanAttributes.envsync.user_id" }
   ],
   materializedViews: [],
   querySettings: []
@@ -171,7 +226,43 @@ var logs = ensureSource("Logs", "log", {
   spanIdExpression: "SpanId",
   implicitColumnExpression: "Body",
   highlightedTraceAttributeExpressions: [],
-  highlightedRowAttributeExpressions: [],
+  highlightedRowAttributeExpressions: [
+    { sqlExpression: "ServiceName", alias: "service.name", luceneExpression: "ServiceName" },
+    { sqlExpression: "LogAttributes['http.method']", alias: "http.method", luceneExpression: "LogAttributes.http.method" },
+    { sqlExpression: "LogAttributes['http.route']", alias: "http.route", luceneExpression: "LogAttributes.http.route" },
+    { sqlExpression: "LogAttributes['http.status_code']", alias: "http.status_code", luceneExpression: "LogAttributes.http.status_code" },
+    { sqlExpression: "LogAttributes['envsync.event_name']", alias: "envsync.event_name", luceneExpression: "LogAttributes.envsync.event_name" },
+    { sqlExpression: "LogAttributes['envsync.event_category']", alias: "envsync.event_category", luceneExpression: "LogAttributes.envsync.event_category" },
+    { sqlExpression: "LogAttributes['envsync.org_id']", alias: "envsync.org_id", luceneExpression: "LogAttributes.envsync.org_id" },
+    { sqlExpression: "LogAttributes['envsync.role_name']", alias: "envsync.role_name", luceneExpression: "LogAttributes.envsync.role_name" },
+    { sqlExpression: "LogAttributes['envsync.user_id']", alias: "envsync.user_id", luceneExpression: "LogAttributes.envsync.user_id" },
+    { sqlExpression: "LogAttributes['log.source']", alias: "log.source", luceneExpression: "LogAttributes.log.source" }
+  ],
+  materializedViews: [],
+  querySettings: []
+});
+
+var sessions = ensureSource("Sessions", "session", {
+  from: { databaseName: "default", tableName: "hyperdx_sessions" },
+  timestampValueExpression: "Timestamp",
+  displayedTimestampValueExpression: "TimestampTime",
+  defaultTableSelectExpression: "TimestampTime, ServiceName, Body",
+  serviceNameExpression: "ServiceName",
+  bodyExpression: "Body",
+  eventAttributesExpression: "LogAttributes",
+  resourceAttributesExpression: "ResourceAttributes",
+  traceIdExpression: "TraceId",
+  spanIdExpression: "SpanId",
+  implicitColumnExpression: "Body",
+  highlightedTraceAttributeExpressions: [],
+  highlightedRowAttributeExpressions: [
+    { sqlExpression: "ServiceName", alias: "service.name", luceneExpression: "ServiceName" },
+    { sqlExpression: "LogAttributes['envsync.event_name']", alias: "envsync.event_name", luceneExpression: "LogAttributes.envsync.event_name" },
+    { sqlExpression: "LogAttributes['envsync.event_category']", alias: "envsync.event_category", luceneExpression: "LogAttributes.envsync.event_category" },
+    { sqlExpression: "LogAttributes['envsync.org_id']", alias: "envsync.org_id", luceneExpression: "LogAttributes.envsync.org_id" },
+    { sqlExpression: "LogAttributes['envsync.role_name']", alias: "envsync.role_name", luceneExpression: "LogAttributes.envsync.role_name" },
+    { sqlExpression: "LogAttributes['envsync.user_id']", alias: "envsync.user_id", luceneExpression: "LogAttributes.envsync.user_id" }
+  ],
   materializedViews: [],
   querySettings: []
 });
@@ -183,7 +274,12 @@ db.sources.updateOne(
 
 db.sources.updateOne(
   { _id: traces._id },
-  { $set: { logSourceId: logs._id.valueOf(), metricSourceId: metrics._id.valueOf(), updatedAt: now } }
+  { $set: { logSourceId: logs._id.valueOf(), metricSourceId: metrics._id.valueOf(), sessionSourceId: sessions._id.valueOf(), updatedAt: now } }
+);
+
+db.sources.updateOne(
+  { _id: sessions._id },
+  { $set: { traceSourceId: traces._id.valueOf(), updatedAt: now } }
 );
 
 print(accessKey);
@@ -435,9 +531,183 @@ function getDashboardDefinitions(sourceIds) {
 	];
 }
 
+function getSavedSearchDefinitions(sourceIds) {
+	const logs = sourceIds.Logs;
+	const traces = sourceIds.Traces;
+	const sessions = sourceIds.Sessions;
+	if (!logs || !traces || !sessions) {
+		throw new Error(`Missing required ClickStack sources for saved searches: ${JSON.stringify(sourceIds)}`);
+	}
+
+	return [
+		{
+			name: "Frontend Errors - Web",
+			source: logs,
+			select: "TimestampTime, ServiceName, SeverityText, Body",
+			where: "ServiceName:envsync-web AND (LogAttributes.error.type:* OR \"App error\" OR LogAttributes.log.source:console.error)",
+			whereLanguage: "lucene",
+			tags: ["envsync", "frontend", "errors", "alerts"],
+		},
+		{
+			name: "Frontend Errors - Landing",
+			source: logs,
+			select: "TimestampTime, ServiceName, SeverityText, Body",
+			where: "ServiceName:envsync-landing AND (LogAttributes.error.type:* OR LogAttributes.log.source:console.error)",
+			whereLanguage: "lucene",
+			tags: ["envsync", "frontend", "errors", "alerts"],
+		},
+		{
+			name: "API Errors",
+			source: traces,
+			select: "Timestamp, ServiceName, SpanName, Duration, StatusCode",
+			where: "ServiceName:envsync-api AND (SpanAttributes.http.status_code:>=500 OR StatusCode:error)",
+			whereLanguage: "lucene",
+			tags: ["envsync", "backend", "errors", "alerts"],
+		},
+		{
+			name: "Org Onboarding Completed",
+			source: sessions,
+			select: "TimestampTime, ServiceName, Body",
+			where: "LogAttributes.envsync.event_name:org_onboarding_completed",
+			whereLanguage: "lucene",
+			tags: ["envsync", "onboarding", "alerts"],
+		},
+		{
+			name: "Apps Created",
+			source: sessions,
+			select: "TimestampTime, ServiceName, Body",
+			where: "LogAttributes.envsync.event_name:app_created",
+			whereLanguage: "lucene",
+			tags: ["envsync", "applications", "alerts"],
+		},
+		{
+			name: "Users Invited",
+			source: sessions,
+			select: "TimestampTime, ServiceName, Body",
+			where: "LogAttributes.envsync.event_name:user_invited",
+			whereLanguage: "lucene",
+			tags: ["envsync", "alerts"],
+		},
+		{
+			name: "Webhooks Created",
+			source: sessions,
+			select: "TimestampTime, ServiceName, Body",
+			where: "LogAttributes.envsync.event_name:webhook_created",
+			whereLanguage: "lucene",
+			tags: ["envsync", "webhooks", "alerts"],
+		},
+		{
+			name: "Slow API Traces",
+			source: traces,
+			select: "Timestamp, ServiceName, SpanName, Duration, StatusCode",
+			where: "ServiceName:envsync-api AND Duration:>1000",
+			whereLanguage: "lucene",
+			tags: ["envsync", "backend", "performance", "alerts"],
+		},
+		{
+			name: "Frontend API Calls",
+			source: traces,
+			select: "Timestamp, ServiceName, SpanName, Duration, StatusCode",
+			where: "(ServiceName:envsync-web OR ServiceName:envsync-landing) AND SpanAttributes.http.route:*",
+			whereLanguage: "lucene",
+			tags: ["envsync", "frontend", "performance"],
+		},
+	];
+}
+
+function ensureSelfHostedSavedSearches(containerId, sourceIds) {
+	const definitions = getSavedSearchDefinitions(sourceIds);
+	const output = runClickstackMongoScript(containerId, `
+var now = new Date();
+var teamName = "EnvSync Self-Hosted Team";
+var definitions = ${JSON.stringify(definitions)};
+var team = db.teams.findOne({ name: teamName });
+if (!team) {
+  throw new Error("Self-hosted ClickStack team was not created before saved search bootstrap");
+}
+
+definitions.forEach(function(definition) {
+  var existing = db.savedsearches.findOne({ team: team._id, name: definition.name });
+  var doc = {
+    team: team._id,
+    name: definition.name,
+    select: definition.select,
+    where: definition.where,
+    whereLanguage: definition.whereLanguage,
+    orderBy: definition.orderBy || undefined,
+    source: ObjectId(definition.source),
+    tags: Array.isArray(definition.tags) ? definition.tags : [],
+    filters: Array.isArray(definition.filters) ? definition.filters : [],
+    updatedAt: now
+  };
+  if (!existing) {
+    doc.createdAt = now;
+    db.savedsearches.insertOne(doc);
+  } else {
+    db.savedsearches.updateOne({ _id: existing._id }, { $set: doc });
+  }
+});
+
+print(JSON.stringify(definitions.map(function(definition) {
+  return definition.name;
+})));
+`);
+
+	const parsed = output.split("\n").map(line => line.trim()).filter(Boolean).at(-1);
+	if (!parsed) {
+		throw new Error("Could not resolve self-hosted ClickStack saved search output");
+	}
+	return JSON.parse(parsed);
+}
+
+function ensureSelfHostedAlertWebhook(containerId) {
+	if (!ALERT_WEBHOOK_URL) return null;
+	const output = runClickstackMongoScript(containerId, `
+var now = new Date();
+var teamName = "EnvSync Self-Hosted Team";
+var webhookName = "EnvSync Alerts";
+var team = db.teams.findOne({ name: teamName });
+if (!team) {
+  throw new Error("Self-hosted ClickStack team was not created before webhook bootstrap");
+}
+
+var existing = db.webhooks.findOne({ team: team._id, service: "generic", name: webhookName });
+var doc = {
+  team: team._id,
+  service: "generic",
+  name: webhookName,
+  url: ${JSON.stringify(ALERT_WEBHOOK_URL)},
+  description: "EnvSync self-host alert notifications",
+  headers: ${JSON.stringify(ALERT_WEBHOOK_HEADERS)},
+  updatedAt: now
+};
+
+if (!existing) {
+  doc.createdAt = now;
+  db.webhooks.insertOne(doc);
+  existing = db.webhooks.findOne({ team: team._id, service: "generic", name: webhookName });
+} else {
+  db.webhooks.updateOne({ _id: existing._id }, { $set: doc });
+  existing = db.webhooks.findOne({ _id: existing._id });
+}
+
+print(JSON.stringify({
+  id: existing._id.valueOf(),
+  name: existing.name,
+  url: existing.url
+}));
+`);
+	const parsed = output.split("\n").map(line => line.trim()).filter(Boolean).at(-1);
+	if (!parsed) {
+		throw new Error("Could not resolve self-hosted ClickStack alert webhook output");
+	}
+	return JSON.parse(parsed);
+}
+
 function main() {
 	const containerId = resolveClickstackContainerId();
 	const accessKey = ensureSelfHostedBootstrap(containerId);
+	const browserApiKey = getClickstackBrowserApiKey(containerId);
 	const operator = ensureSelfHostedOperator(containerId, accessKey);
 	const sourcesResp = clickstackApi(containerId, accessKey, "GET", "/sources");
 	const dashboardsResp = clickstackApi(containerId, accessKey, "GET", "/dashboards");
@@ -456,9 +726,26 @@ function main() {
 		console.log(`Created dashboard: ${definition.name}`);
 	}
 
+	const savedSearches = ensureSelfHostedSavedSearches(containerId, sourceIds);
+	for (const name of savedSearches) {
+		console.log(`Upserted saved search: ${name}`);
+	}
+
+	const alertWebhook = ensureSelfHostedAlertWebhook(containerId);
+	if (alertWebhook) {
+		console.log(`Upserted alert webhook: ${alertWebhook.name}`);
+	}
+
 	console.log(`ClickStack operator email: ${operator.email}`);
 	console.log(`ClickStack operator password: ${SELFHOST_OPERATOR_PASSWORD}`);
 	console.log(`ClickStack access key: ${accessKey}`);
+	console.log(JSON.stringify({
+		operatorEmail: operator.email,
+		accessKey,
+		browserApiKey,
+		savedSearches,
+		alertWebhook,
+	}));
 }
 
 main();

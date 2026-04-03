@@ -3,6 +3,7 @@ import { initTracing, getTracerProvider } from "./tracing";
 import { initMetrics, getMeterProvider } from "./metrics";
 import { initLogs, getLoggerProvider } from "./logs";
 import { initErrorTracking } from "./error-tracking";
+import { initSessionReplay } from "./session-replay";
 
 let initialized = false;
 
@@ -12,6 +13,7 @@ export function initTelemetry(): void {
   if (config.disabled || initialized) return;
   initialized = true;
 
+  initSessionReplay();
   initTracing(config);
   initMetrics(config);
   initLogs(config);
@@ -42,3 +44,4 @@ export function initTelemetry(): void {
 }
 
 export { RouteChangeTracker } from "./route-instrumentation";
+export { trackAction } from "./session-replay";

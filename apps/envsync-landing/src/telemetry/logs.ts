@@ -7,6 +7,7 @@ import { trace, context } from "@opentelemetry/api";
 import type { TelemetryConfig } from "./config";
 
 let loggerProvider: LoggerProvider | null = null;
+let currentSurface: TelemetryConfig["surface"] = "landing";
 
 function canAddLogRecordProcessor(
   provider: LoggerProvider,
@@ -17,6 +18,7 @@ function canAddLogRecordProcessor(
 }
 
 export function initLogs(config: TelemetryConfig): LoggerProvider {
+  currentSurface = config.surface;
   const resource = resourceFromAttributes({
     [ATTR_SERVICE_NAME]: config.serviceName,
   });
@@ -24,6 +26,7 @@ export function initLogs(config: TelemetryConfig): LoggerProvider {
   const processor = new BatchLogRecordProcessor(
     new OTLPLogExporter({
       url: `${config.endpoint}/v1/logs`,
+      headers: config.apiKey ? { Authorization: config.apiKey } : undefined,
     }),
   );
 
@@ -62,6 +65,9 @@ function interceptConsoleErrors() {
       body: args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" "),
       attributes: {
         "log.source": "console.error",
+        "envsync.event_name": "frontend_error",
+        "envsync.event_category": "frontend_error",
+        "envsync.surface": currentSurface,
         ...(activeSpan
           ? {
               "trace.id": activeSpan.spanContext().traceId,

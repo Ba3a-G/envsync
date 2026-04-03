@@ -11,6 +11,16 @@ export const loginUrlResponseSchema = z
 	})
 	.openapi({ ref: "LoginUrlResponse" });
 
+export const logoutUrlResponseSchema = z
+	.object({
+		message: z.string().openapi({ example: "Web logout prepared successfully." }),
+		logoutUrl: z
+			.string()
+			.url()
+			.openapi({ example: "https://auth.example.com/realms/envsync/protocol/openid-connect/logout?client_id=envsync-web" }),
+	})
+	.openapi({ ref: "LogoutUrlResponse" });
+
 export const cliLoginResponseSchema = z
 	.object({
 		message: z.string().openapi({ example: "CLI login created successfully." }),

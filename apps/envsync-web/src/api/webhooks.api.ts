@@ -8,6 +8,7 @@ import {
 } from "@envsync-cloud/envsync-ts-sdk";
 import { API_KEYS } from "../constants";
 import { useInvalidateQueries } from "@/hooks/useApi";
+import { trackAction } from "@/telemetry";
 
 const useWebhooks = () => {
   return useQuery({
@@ -47,7 +48,17 @@ const useWebhooks = () => {
 const useCreateWebhook = ({
   onSuccess,
   onError,
-}: MutationOptions<WebhookResponse, string> = {}) => {
+}: MutationOptions<
+  WebhookResponse,
+  {
+    name: string;
+    event_types: string[];
+    url: string;
+    webhook_type: CreateWebhookRequest.webhook_type;
+    app_id?: string | null;
+    linked_to: CreateWebhookRequest.linked_to;
+  }
+> = {}) => {
   const { invalidateWebhooks } = useInvalidateQueries();
 
   return useMutation({
@@ -76,9 +87,19 @@ const useCreateWebhook = ({
       });
       return data;
     },
-    onSuccess: (data) => {
-      onSuccess?.({ data });
+    onSuccess: (data, variables) => {
+      onSuccess?.({ data, variables });
       invalidateWebhooks();
+      trackAction("webhook_created", {
+        "envsync.event_name": "webhook_created",
+        "envsync.event_category": "webhook",
+        "envsync.surface": "dashboard",
+        "envsync.success": true,
+        linked_to: variables.linked_to,
+        webhook_type: variables.webhook_type,
+        event_type_count: variables.event_types.length,
+        app_id_present: Boolean(variables.app_id),
+      });
     },
     onError: (error) => {
       console.error("Failed to create webhook:", error);

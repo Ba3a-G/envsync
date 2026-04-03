@@ -49,6 +49,8 @@ interface DeployConfig {
 	observability: {
 		retention_days: number;
 		public_obs: boolean;
+		alert_webhook_url?: string;
+		alert_webhook_headers?: Record<string, string>;
 	};
 	backup: {
 		output_dir: string;
@@ -81,6 +83,7 @@ interface DeployGeneratedState {
 		operator_email: string;
 		operator_password: string;
 		access_key: string;
+		browser_api_key: string;
 	};
 	secrets: {
 		s3_secret_key: string;
@@ -148,6 +151,31 @@ const REQUIRED_BOOTSTRAP_ENV_KEYS = [
 	"OPENFGA_STORE_ID",
 	"OPENFGA_MODEL_ID",
 ] as const;
+
+const REQUIRED_CLICKSTACK_SAVED_SEARCHES = [
+	"Frontend Errors - Web",
+	"Frontend Errors - Landing",
+	"API Errors",
+	"Org Onboarding Completed",
+	"Apps Created",
+	"Users Invited",
+	"Webhooks Created",
+	"Slow API Traces",
+	"Frontend API Calls",
+] as const;
+
+const REQUIRED_CLICKSTACK_TAGS = [
+	"envsync",
+	"frontend",
+	"backend",
+	"onboarding",
+	"applications",
+	"webhooks",
+	"errors",
+	"performance",
+	"alerts",
+] as const;
+const CLICKSTACK_SELFHOST_TEAM_NAME = "EnvSync Self-Hosted Team";
 
 const SEMVER_VERSION_RE = /^\d+\.\d+\.\d+$/;
 let currentOptions: CommandOptions = { dryRun: false, force: false };
@@ -545,6 +573,8 @@ function normalizeConfig(raw: Partial<DeployConfig>): DeployConfig {
 		observability: {
 			retention_days: requireDefined(raw.observability?.retention_days, "observability.retention_days"),
 			public_obs: requireDefined(raw.observability?.public_obs, "observability.public_obs"),
+			alert_webhook_url: raw.observability?.alert_webhook_url,
+			alert_webhook_headers: raw.observability?.alert_webhook_headers ?? {},
 		},
 		backup: {
 			output_dir: requireDefined(raw.backup?.output_dir, "backup.output_dir"),
@@ -578,6 +608,7 @@ function emptyGeneratedState(): DeployGeneratedState {
 			operator_email: "",
 			operator_password: "",
 			access_key: "",
+			browser_api_key: "",
 		},
 		secrets: {
 			s3_secret_key: "",
@@ -605,6 +636,7 @@ function normalizeGeneratedState(raw?: Partial<DeployGeneratedState>): DeployGen
 			operator_email: raw?.clickstack?.operator_email ?? defaults.clickstack.operator_email,
 			operator_password: raw?.clickstack?.operator_password ?? defaults.clickstack.operator_password,
 			access_key: raw?.clickstack?.access_key ?? defaults.clickstack.access_key,
+			browser_api_key: raw?.clickstack?.browser_api_key ?? defaults.clickstack.browser_api_key,
 		},
 		secrets: {
 			s3_secret_key: raw?.secrets?.s3_secret_key ?? defaults.secrets.s3_secret_key,
@@ -657,6 +689,7 @@ function mergeGeneratedState(env: RuntimeEnv, generated?: Partial<DeployGenerate
 			operator_email: env.CLICKSTACK_OPERATOR_EMAIL ?? normalized.clickstack.operator_email,
 			operator_password: env.CLICKSTACK_OPERATOR_PASSWORD ?? normalized.clickstack.operator_password,
 			access_key: env.CLICKSTACK_ACCESS_KEY ?? normalized.clickstack.access_key,
+			browser_api_key: env.CLICKSTACK_BROWSER_API_KEY ?? normalized.clickstack.browser_api_key,
 		},
 		secrets: {
 			s3_secret_key: env.S3_SECRET_KEY ?? normalized.secrets.s3_secret_key,
@@ -685,6 +718,7 @@ function ensureGeneratedRuntimeState(config: DeployConfig, generated: DeployGene
 			operator_email: generated.clickstack.operator_email || `operator@${config.domain.root_domain}`,
 			operator_password: generated.clickstack.operator_password || randomStrongPassword(),
 			access_key: generated.clickstack.access_key || `envsync-selfhost-${config.domain.root_domain}-dashboard-access-key`,
+			browser_api_key: generated.clickstack.browser_api_key,
 		},
 		secrets: {
 			s3_secret_key: generated.secrets.s3_secret_key || randomSecret(16),
@@ -766,6 +800,7 @@ function buildRuntimeEnv(config: DeployConfig, generated: DeployGeneratedState):
 		CLICKSTACK_OPERATOR_EMAIL: generated.clickstack.operator_email,
 		CLICKSTACK_OPERATOR_PASSWORD: generated.clickstack.operator_password,
 		CLICKSTACK_ACCESS_KEY: generated.clickstack.access_key,
+		CLICKSTACK_BROWSER_API_KEY: generated.clickstack.browser_api_key,
 		MINIKMS_GRPC_ADDR: "minikms:50051",
 		MINIKMS_TLS_ENABLED: "false",
 		MINIKMS_ROOT_KEY: generated.secrets.minikms_root_key,
@@ -973,7 +1008,7 @@ function renderNginxConf(kind: "web" | "landing") {
 	].join("\n") + "\n";
 }
 
-function renderFrontendRuntimeConfig(config: DeployConfig, kind: "web" | "landing") {
+function renderFrontendRuntimeConfig(config: DeployConfig, generated: DeployGeneratedState) {
 	const hosts = domainMap(config.domain.root_domain);
 	const otelEndpoint = `https://${hosts.obs}`;
 	return `window.__ENVSYNC_RUNTIME_CONFIG__ = ${JSON.stringify({
@@ -984,6 +1019,11 @@ function renderFrontendRuntimeConfig(config: DeployConfig, kind: "web" | "landin
 		webClientId: config.auth.web_client_id,
 		apiDocsUrl: `https://${hosts.api}/docs`,
 		otelEndpoint,
+		hyperdxApiKey: generated.clickstack.browser_api_key || undefined,
+		hyperdxUrl: otelEndpoint,
+		hyperdxDisabled: generated.clickstack.browser_api_key.length === 0,
+		hyperdxAdvancedNetworkCapture: false,
+		releaseVersion: config.release.version,
 	}, null, 2)};\n`;
 }
 
@@ -1145,7 +1185,7 @@ ${includeRuntimeInfra ? `
     image: ${config.images.keycloak}
     entrypoint: ["/bin/sh", "-lc"]
     command:
-      - /opt/keycloak/bin/kc.sh import --dir /opt/keycloak/data/import --override true && exec /opt/keycloak/bin/kc.sh start-dev
+      - /opt/keycloak/bin/kc.sh import --dir /opt/keycloak/data/import --override true && exec /opt/keycloak/bin/kc.sh start --optimized
     environment:
 ${renderEnvList({
 		KC_DB: "postgres",
@@ -1650,29 +1690,64 @@ function runBootstrapInit(config: DeployConfig) {
 	};
 }
 
+function parseClickstackBootstrapJson(output: string) {
+	const trimmed = output.trim();
+	if (!trimmed) {
+		throw new Error("ClickStack bootstrap returned no JSON output");
+	}
+
+	const lines = trimmed
+		.split(/\r?\n/)
+		.map(line => line.trim())
+		.filter(Boolean);
+
+	for (let index = lines.length - 1; index >= 0; index -= 1) {
+		const candidate = lines[index]!;
+		if (!candidate.startsWith("{") || !candidate.endsWith("}")) continue;
+		try {
+			return JSON.parse(candidate) as {
+				operatorEmail?: string;
+				accessKey?: string;
+				browserApiKey?: string;
+			};
+		} catch {
+			continue;
+		}
+	}
+
+	throw new Error(`ClickStack bootstrap returned non-JSON output.\nCaptured stdout:\n${trimmed}`);
+}
+
 function runClickstackBootstrap(config: DeployConfig) {
 	logStep("Running ClickStack self-host bootstrap");
 	const { generated } = loadState();
 	if (currentOptions.dryRun) {
 		logDryRun("Would bootstrap ClickStack sources and dashboards");
 		logCommand("node", [path.join(REPO_ROOT, "scripts/bootstrap-clickstack-selfhost.mjs")]);
-		return;
+		return {
+			browserApiKey: generated.clickstack.browser_api_key,
+		};
 	}
 	const deadline = Date.now() + 180 * 1000;
 	let lastError = "unknown error";
 	while (Date.now() < deadline) {
 		try {
-			run("node", [path.join(REPO_ROOT, "scripts/bootstrap-clickstack-selfhost.mjs")], {
+			const output = run("node", [path.join(REPO_ROOT, "scripts/bootstrap-clickstack-selfhost.mjs")], {
 				env: {
 					ENVSYNC_STACK_NAME: config.services.stack_name,
 					ENVSYNC_ROOT_DOMAIN: config.domain.root_domain,
 					ENVSYNC_CLICKSTACK_OPERATOR_EMAIL: generated.clickstack.operator_email,
 					ENVSYNC_CLICKSTACK_OPERATOR_PASSWORD: generated.clickstack.operator_password,
 					ENVSYNC_CLICKSTACK_ACCESS_KEY: generated.clickstack.access_key,
+					ENVSYNC_CLICKSTACK_BROWSER_API_KEY: generated.clickstack.browser_api_key,
+					ENVSYNC_CLICKSTACK_ALERT_WEBHOOK_URL: config.observability.alert_webhook_url ?? "",
+					ENVSYNC_CLICKSTACK_ALERT_WEBHOOK_HEADERS: JSON.stringify(config.observability.alert_webhook_headers ?? {}),
 				},
+				quiet: true,
 			});
+			const result = parseClickstackBootstrapJson(output);
 			logSuccess("ClickStack self-host bootstrap completed");
-			return;
+			return result;
 		} catch (error) {
 			lastError = error instanceof Error ? error.message : String(error);
 			sleepSeconds(3);
@@ -1685,6 +1760,9 @@ function logClickstackCredentials(generated: DeployGeneratedState) {
 	logInfo(`ClickStack operator email: ${generated.clickstack.operator_email}`);
 	logInfo(`ClickStack operator password: ${generated.clickstack.operator_password}`);
 	logInfo(`ClickStack access key: ${generated.clickstack.access_key}`);
+	if (generated.clickstack.browser_api_key) {
+		logInfo(`ClickStack browser API key: ${generated.clickstack.browser_api_key}`);
+	}
 }
 
 function parseBootstrapInitJson(output: string) {
@@ -1715,6 +1793,106 @@ function parseBootstrapInitJson(output: string) {
 			`Bootstrap init returned non-JSON output.\nCaptured stdout:\n${trimmed}`,
 		);
 	}
+}
+
+function readRenderedRuntimeConfig(filePath: string) {
+	if (!exists(filePath)) return null;
+	const raw = fs.readFileSync(filePath, "utf8").trim();
+	const prefix = "window.__ENVSYNC_RUNTIME_CONFIG__ = ";
+	if (!raw.startsWith(prefix) || !raw.endsWith(";")) return null;
+	try {
+		return JSON.parse(raw.slice(prefix.length, -1)) as {
+			hyperdxApiKey?: string;
+			hyperdxUrl?: string;
+			hyperdxDisabled?: boolean;
+			releaseVersion?: string;
+		};
+	} catch {
+		return null;
+	}
+}
+
+function resolveClickstackContainerId(config: DeployConfig) {
+	const output = tryRun(
+		"docker",
+		[
+			"ps",
+			"--filter",
+			`label=com.docker.swarm.service.name=${config.services.stack_name}_clickstack`,
+			"--format",
+			"{{.ID}}",
+		],
+		{ quiet: true },
+	).trim();
+	return output.split(/\r?\n/).map(line => line.trim()).find(Boolean) ?? "";
+}
+
+function runClickstackMongoJson<T>(config: DeployConfig, script: string): T | null {
+	const containerId = resolveClickstackContainerId(config);
+	if (!containerId) return null;
+	try {
+		const payload = Buffer.from(script, "utf8").toString("base64");
+		const output = run(
+			"docker",
+			[
+				"exec",
+				"-e",
+				`HDX_SCRIPT=${payload}`,
+				containerId,
+				"sh",
+				"-lc",
+				"printf '%s' \"$HDX_SCRIPT\" | base64 -d >/tmp/envsync-clickstack-health.js && mongo hyperdx --quiet /tmp/envsync-clickstack-health.js",
+			],
+			{ quiet: true },
+		).trim();
+		const parsed = output.split(/\r?\n/).map(line => line.trim()).filter(Boolean).at(-1);
+		if (!parsed) return null;
+		return JSON.parse(parsed) as T;
+	} catch {
+		return null;
+	}
+}
+
+function getClickstackSearchState(config: DeployConfig) {
+	return runClickstackMongoJson<{
+		sourceNames: string[];
+		savedSearches: Array<{ name: string; tags?: string[] }>;
+		dashboardTags: string[];
+	}>(config, `
+var team = db.teams.findOne({ name: ${JSON.stringify(CLICKSTACK_SELFHOST_TEAM_NAME)} });
+if (!team) {
+  print(JSON.stringify({ sourceNames: [], savedSearches: [], dashboardTags: [] }));
+  quit();
+}
+
+var sourceNames = db.sources.find({ team: team._id }, { name: 1 }).toArray().map(function(source) {
+  return source.name;
+}).filter(Boolean);
+
+var savedSearches = db.savedsearches.find({ team: team._id }, { name: 1, tags: 1 }).toArray().map(function(search) {
+  return {
+    name: search.name,
+    tags: Array.isArray(search.tags) ? search.tags : []
+  };
+}).filter(function(search) {
+  return Boolean(search.name);
+});
+
+var dashboardTags = [];
+db.dashboards.find({ team: team._id }, { tags: 1 }).toArray().forEach(function(dashboard) {
+  if (Array.isArray(dashboard.tags)) {
+    dashboard.tags.forEach(function(tag) {
+      dashboardTags.push(tag);
+    });
+  }
+});
+
+print(JSON.stringify({
+  sourceNames: sourceNames,
+  savedSearches: savedSearches,
+  dashboardTags: dashboardTags
+}));
+`);
 }
 
 function hasCompleteBootstrapState(generated: DeployGeneratedState) {
@@ -2089,19 +2267,22 @@ async function cmdBootstrap() {
 	waitForHttpService(config, "openfga", "http://openfga:8090/stores");
 	waitForTcpService(config, "minikms", "minikms", 50051);
 	const initResult = runBootstrapInit(config);
+	const clickstackBootstrapResult = runClickstackBootstrap(config);
 	const persistedGenerated = normalizeGeneratedState({
 		openfga: {
 			store_id: initResult.openfgaStoreId,
 			model_id: initResult.openfgaModelId,
 		},
-		clickstack: nextGenerated.clickstack,
+		clickstack: {
+			...nextGenerated.clickstack,
+			browser_api_key: clickstackBootstrapResult.browserApiKey ?? nextGenerated.clickstack.browser_api_key,
+		},
 		secrets: nextGenerated.secrets,
 		bootstrap: nextGenerated.bootstrap,
 	});
 	if (!currentOptions.dryRun) {
 		writeDeployArtifacts(config, persistedGenerated);
 	}
-	runClickstackBootstrap(config);
 	if (currentOptions.dryRun) {
 		logDryRun("Skipping generated OpenFGA ID persistence in preview mode");
 		logSuccess("Bootstrap dry-run completed");
@@ -2112,7 +2293,7 @@ async function cmdBootstrap() {
 			store_id: initResult.openfgaStoreId,
 			model_id: initResult.openfgaModelId,
 		},
-		clickstack: nextGenerated.clickstack,
+		clickstack: persistedGenerated.clickstack,
 		secrets: nextGenerated.secrets,
 		bootstrap: {
 			completed_at: new Date().toISOString(),
@@ -2153,8 +2334,8 @@ async function cmdDeploy() {
 	}
 	extractStaticBundle(config.images.web, `${RELEASES_ROOT}/web/current`);
 	extractStaticBundle(config.images.landing, `${RELEASES_ROOT}/landing/current`);
-	writeFileMaybe(`${RELEASES_ROOT}/web/current/runtime-config.js`, renderFrontendRuntimeConfig(config, "web"));
-	writeFileMaybe(`${RELEASES_ROOT}/landing/current/runtime-config.js`, renderFrontendRuntimeConfig(config, "landing"));
+	writeFileMaybe(`${RELEASES_ROOT}/web/current/runtime-config.js`, renderFrontendRuntimeConfig(config, generated));
+	writeFileMaybe(`${RELEASES_ROOT}/landing/current/runtime-config.js`, renderFrontendRuntimeConfig(config, generated));
 	if (currentOptions.dryRun) {
 		logDryRun(`Would deploy full stack for ${config.services.stack_name}`);
 		logCommand("docker", ["stack", "deploy", "-c", STACK_FILE, config.services.stack_name]);
@@ -2183,6 +2364,14 @@ async function cmdHealth(asJson: boolean) {
 	const services = listStackServices(config);
 	const stackName = config.services.stack_name;
 	const traefikDynamic = exists(TRAEFIK_DYNAMIC_FILE) ? fs.readFileSync(TRAEFIK_DYNAMIC_FILE, "utf8") : "";
+	const webRuntimeConfig = readRenderedRuntimeConfig(path.join(RELEASES_ROOT, "web", "current", "runtime-config.js"));
+	const landingRuntimeConfig = readRenderedRuntimeConfig(path.join(RELEASES_ROOT, "landing", "current", "runtime-config.js"));
+	const clickstackSearchState = getClickstackSearchState(config);
+	const sourceNames = new Set(clickstackSearchState?.sourceNames ?? []);
+	const savedSearchNames = new Set((clickstackSearchState?.savedSearches ?? []).map(search => search.name).filter(Boolean));
+	const savedSearchTags = new Set((clickstackSearchState?.savedSearches ?? []).flatMap(search => search.tags ?? []));
+	const dashboardTags = new Set(clickstackSearchState?.dashboardTags ?? []);
+	const combinedTags = new Set([...savedSearchTags, ...dashboardTags]);
 	const bootstrapServices = {
 		postgres: serviceHealth(services, `${stackName}_postgres`),
 		redis: serviceHealth(services, `${stackName}_redis`),
@@ -2219,6 +2408,29 @@ async function cmdHealth(asJson: boolean) {
 			frontend_otel_endpoint: {
 				web: `https://${hosts.obs}`,
 				landing: `https://${hosts.obs}`,
+			},
+			browser_replay_runtime: {
+				web: {
+					configured: Boolean(webRuntimeConfig?.hyperdxApiKey && webRuntimeConfig?.hyperdxUrl && !webRuntimeConfig?.hyperdxDisabled),
+					hyperdx_url: webRuntimeConfig?.hyperdxUrl ?? null,
+				},
+				landing: {
+					configured: Boolean(landingRuntimeConfig?.hyperdxApiKey && landingRuntimeConfig?.hyperdxUrl && !landingRuntimeConfig?.hyperdxDisabled),
+					hyperdx_url: landingRuntimeConfig?.hyperdxUrl ?? null,
+				},
+			},
+			sessions_source: {
+				configured: sourceNames.has("Sessions"),
+			},
+			saved_searches: {
+				configured: REQUIRED_CLICKSTACK_SAVED_SEARCHES.every(name => savedSearchNames.has(name)),
+				required: [...REQUIRED_CLICKSTACK_SAVED_SEARCHES],
+				missing: REQUIRED_CLICKSTACK_SAVED_SEARCHES.filter(name => !savedSearchNames.has(name)),
+			},
+			tags: {
+				configured: REQUIRED_CLICKSTACK_TAGS.every(tag => combinedTags.has(tag)),
+				required: [...REQUIRED_CLICKSTACK_TAGS],
+				missing: REQUIRED_CLICKSTACK_TAGS.filter(tag => !combinedTags.has(tag)),
 			},
 		},
 		public: {

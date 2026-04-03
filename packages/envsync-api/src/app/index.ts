@@ -15,6 +15,7 @@ import { AppError } from "@/libs/errors";
 import log, { LogTypes, apiResponseLogger } from "@/libs/logger";
 import { getTracer } from "@/libs/telemetry";
 import { httpRequestDuration } from "@/libs/telemetry/metrics";
+import { csrfMiddleware } from "@/middlewares/csrf.middleware";
 import routes from "@/routes";
 import { config } from "@/utils/env";
 import { version } from "package.json";
@@ -169,11 +170,22 @@ app.use(
 			}
 			return "";
 		},
-		allowHeaders: ["Content-Type", "Authorization", "traceparent", "tracestate"],
+		allowHeaders: ["Content-Type", "Authorization", "traceparent", "tracestate", "X-CSRF-Token"],
 		allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+		credentials: true,
 		maxAge: 3600,
 	}),
 );
+
+app.use("/api/*", async (ctx, next) => {
+	await next();
+	const allowOrigin = ctx.res.headers.get("Access-Control-Allow-Origin");
+	if (allowOrigin) {
+		ctx.res.headers.set("Timing-Allow-Origin", allowOrigin);
+	}
+});
+
+app.use("/api/*", csrfMiddleware());
 
 app.use(logger());
 app.use(prettyJSON());

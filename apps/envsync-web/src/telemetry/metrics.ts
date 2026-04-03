@@ -10,6 +10,8 @@ let meterProvider: MeterProvider | null = null;
 export function initMetrics(config: TelemetryConfig): MeterProvider {
   const resource = resourceFromAttributes({
     [ATTR_SERVICE_NAME]: config.serviceName,
+    "service.version": import.meta.env.VITE_APP_VERSION || "unknown",
+    "deployment.environment": import.meta.env.MODE || "production",
   });
 
   const exporter = new OTLPMetricExporter({

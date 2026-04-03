@@ -20,7 +20,7 @@ export function initSessionReplay(): void {
 
   HyperDX.init({
     apiKey,
-    service: "envsync-web",
+    service: "envsync-landing",
     url,
     consoleCapture: true,
     advancedNetworkCapture:
@@ -36,27 +36,6 @@ export function initSessionReplay(): void {
     },
   });
   hdxActive = true;
-}
-
-/** True when HyperDX is active (it bundles its own OTel provider). */
-export function isHyperDXActive(): boolean {
-  return hdxActive;
-}
-
-export function identifyUser(
-  userId: string,
-  metadata?: Record<string, string | undefined>,
-): void {
-  if (!hdxActive) return;
-  HyperDX.setGlobalAttributes({
-    userId,
-    userEmail: metadata?.email,
-    userName: metadata?.name,
-    teamName: metadata?.org,
-    "envsync.user_id": userId,
-    "envsync.org_id": metadata?.orgId,
-    "envsync.role_name": metadata?.roleName,
-  });
 }
 
 export function trackAction(name: string, attributes: Record<string, SearchableValue> = {}): void {

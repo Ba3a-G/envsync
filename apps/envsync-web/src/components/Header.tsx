@@ -18,21 +18,19 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Fragment } from "react";
-import { runtimeConfig } from "@/utils/runtime-config";
+import { logoutWebSession } from "@/api";
 
 export const Header = () => {
   const { user } = useAuth();
   const breadcrumbs = useBreadcrumbs();
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    localStorage.removeItem("access_token");
-    const logoutUrl = new URL(
-      `${runtimeConfig.authBaseUrl}/realms/${runtimeConfig.keycloakRealm}/protocol/openid-connect/logout`
-    );
-    logoutUrl.searchParams.set("client_id", runtimeConfig.webClientId);
-    logoutUrl.searchParams.set("post_logout_redirect_uri", window.location.origin);
-    window.location.href = logoutUrl.toString();
+  const handleLogout = async () => {
+    try {
+      await logoutWebSession();
+    } catch (error) {
+      console.error("Failed to logout cleanly:", error);
+    }
   };
 
   const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;

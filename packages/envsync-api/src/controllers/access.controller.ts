@@ -2,7 +2,8 @@ import { type Context } from "hono";
 import * as openid from "openid-client";
 
 import { config } from "@/utils/env";
-import { getKeycloakIssuer, keycloakTokenExchange } from "@/helpers/keycloak";
+import { getKeycloakIssuer, getKeycloakPublicBaseUrl, getKeycloakRealm, keycloakTokenExchange } from "@/helpers/keycloak";
+import { clearWebAuthCookies, readLoginState, setLoginStateCookie, setWebAuthCookies } from "@/helpers/web-auth";
 
 const keycloakDiscoveryUrl = () => `${getKeycloakIssuer()}/.well-known/openid-configuration`;
 const authorizeEndpoint = () => `${getKeycloakIssuer()}/protocol/openid-connect/auth`;
@@ -48,8 +49,10 @@ export class AccessController {
 
 	public static readonly createWebLogin = async (c: Context) => {
 		const { KEYCLOAK_WEB_CLIENT_ID, KEYCLOAK_WEB_REDIRECT_URI } = config;
+		const state = crypto.randomUUID();
+		setLoginStateCookie(c, state);
 
-		const loginUrl = `${authorizeEndpoint()}?client_id=${KEYCLOAK_WEB_CLIENT_ID}&response_type=code&scope=openid%20email%20profile&redirect_uri=${encodeURIComponent(KEYCLOAK_WEB_REDIRECT_URI)}`;
+		const loginUrl = `${authorizeEndpoint()}?client_id=${KEYCLOAK_WEB_CLIENT_ID}&response_type=code&scope=openid%20email%20profile&redirect_uri=${encodeURIComponent(KEYCLOAK_WEB_REDIRECT_URI)}&state=${encodeURIComponent(state)}`;
 
 		return c.json({ message: "Web login created successfully.", loginUrl }, 201);
 	};
@@ -62,10 +65,15 @@ export class AccessController {
 			KEYCLOAK_WEB_CALLBACK_URL,
 		} = config;
 
-		const { code } = c.req.query();
+		const { code, state } = c.req.query();
 
 		if (!code) {
 			return c.json({ error: "Code is required." }, 400);
+		}
+		const expectedState = readLoginState(c);
+		if (!state || !expectedState || state !== expectedState) {
+			clearWebAuthCookies(c);
+			return c.json({ error: "Invalid login state." }, 400);
 		}
 
 		const tokenData = await keycloakTokenExchange(
@@ -75,8 +83,26 @@ export class AccessController {
 			KEYCLOAK_WEB_CLIENT_SECRET,
 		);
 
-		const accessToken = tokenData.access_token;
-		return c.redirect(KEYCLOAK_WEB_CALLBACK_URL + `#access_token=${accessToken}`, 302);
+		setWebAuthCookies(c, tokenData);
+		return c.redirect(KEYCLOAK_WEB_CALLBACK_URL, 302);
+	};
+
+	public static readonly logoutWebLogin = async (c: Context) => {
+		clearWebAuthCookies(c);
+
+		const logoutUrl = new URL(
+			`${getKeycloakPublicBaseUrl()}/realms/${getKeycloakRealm()}/protocol/openid-connect/logout`,
+		);
+		logoutUrl.searchParams.set("client_id", config.KEYCLOAK_WEB_CLIENT_ID);
+		logoutUrl.searchParams.set("post_logout_redirect_uri", config.DASHBOARD_URL);
+
+		return c.json(
+			{
+				message: "Web logout prepared successfully.",
+				logoutUrl: logoutUrl.toString(),
+			},
+			200,
+		);
 	};
 
 	public static readonly createApiLogin = async (c: Context) => {

@@ -3,7 +3,7 @@ import { describeRoute } from "hono-openapi";
 import { resolver } from "hono-openapi/zod";
 
 import { AccessController } from "@/controllers/access.controller";
-import { loginUrlResponseSchema, callbackResponseSchema } from "@/validators/access.validator";
+import { loginUrlResponseSchema, callbackResponseSchema, logoutUrlResponseSchema } from "@/validators/access.validator";
 import { errorResponseSchema } from "@/validators/common";
 
 const app = new Hono();
@@ -83,7 +83,7 @@ app.get(
 		],
 		responses: {
 			302: {
-				description: "Redirect with authentication token",
+				description: "Redirect after establishing the browser session",
 			},
 			500: {
 				description: "Internal server error",
@@ -96,6 +96,35 @@ app.get(
 		},
 	}),
 	AccessController.callbackWebLogin,
+);
+
+app.post(
+	"/web/logout",
+	describeRoute({
+		operationId: "logoutWebLogin",
+		summary: "Logout Web Session",
+		description: "Clear API-managed web session cookies and return the Keycloak logout URL",
+		tags: ["Access"],
+		responses: {
+			200: {
+				description: "Web logout prepared successfully",
+				content: {
+					"application/json": {
+						schema: resolver(logoutUrlResponseSchema),
+					},
+				},
+			},
+			500: {
+				description: "Internal server error",
+				content: {
+					"application/json": {
+						schema: resolver(errorResponseSchema),
+					},
+				},
+			},
+		},
+	}),
+	AccessController.logoutWebLogin,
 );
 
 app.get(

@@ -2,21 +2,13 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 const Callback = () => {
-  const [message, setMessage] = useState("Authenticating...");
+  const [message, setMessage] = useState("Finishing sign-in...");
   const navigate = useNavigate();
 
   useEffect(() => {
-    const hashParams = new URLSearchParams(window.location.hash.slice(1));
-    const accessToken = hashParams.get("access_token");
-
-    if (accessToken) {
-      localStorage.setItem("access_token", accessToken);
-      setMessage("Login successful! Redirecting...");
-      navigate("/", { replace: true });
-    } else {
-      setMessage("Authentication failed. Redirecting...");
-      setTimeout(() => navigate("/", { replace: true }), 2000);
-    }
+    setMessage("Login successful. Redirecting...");
+    const timer = window.setTimeout(() => navigate("/", { replace: true }), 150);
+    return () => window.clearTimeout(timer);
   }, [navigate]);
 
   return (

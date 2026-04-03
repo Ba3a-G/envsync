@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { type WhoAmIResponse } from "@envsync-cloud/envsync-ts-sdk";
-import { getSDK } from "@/api";
+import { getSDK, isReloginError, redirectToLogin } from "@/api";
 import { identifyUser } from "@/telemetry";
 
 export const useAuth = () => {
@@ -9,63 +9,46 @@ export const useAuth = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
-  const accessToken = typeof localStorage !== "undefined" ? localStorage.getItem("access_token") : null;
-  const api = getSDK(accessToken ?? undefined);
+  const api = getSDK();
 
   useEffect(() => {
-    const isCallbackPage =
-      typeof window !== "undefined" &&
-      window.location.pathname === "/auth/callback" &&
-      new URLSearchParams(window.location.hash.slice(1)).get("access_token");
-    if (isCallbackPage) {
-      setIsLoading(false);
-      return;
-    }
-
-    if (!accessToken) {
-      setIsLoading(false);
-      setAuthError(null);
-      api.access
-        .createWebLogin()
-        .then((response) => {
-          if (response?.loginUrl) {
-            window.location.href = response.loginUrl;
-          }
-        })
-        .catch((error) => {
-          console.error("Failed to create web login:", error);
-          setAuthError("Could not start sign-in. Check the API is running and try again.");
-        });
-      return;
-    }
-
-    setIsAuthenticated(true);
     setAuthError(null);
     const fetchUser = async () => {
       try {
         const userData = await api.authentication.whoami();
         setUser(userData);
+        setIsAuthenticated(true);
         identifyUser(userData.user.id, {
           email: userData.user.email,
+          name: userData.user.full_name,
           org: userData.org.name || "",
+          orgId: userData.org.id,
+          roleName: userData.role.name,
         });
       } catch (error) {
         console.error("Failed to fetch user:", error);
-        setAuthError("Session may have expired. Sign in again.");
+        setIsAuthenticated(false);
+        setUser(undefined);
+        if (isReloginError(error)) {
+          setAuthError(null);
+          await redirectToLogin();
+          return;
+        }
+        setAuthError("Could not load your session. Check the API is running and try again.");
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchUser();
-  }, [accessToken]);
+  }, []);
 
   return {
     user: user ?? null,
     isLoading,
     isAuthenticated,
     api,
-    token: accessToken,
+    token: null,
     authError,
   };
 };

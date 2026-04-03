@@ -18,6 +18,9 @@ export function initErrorTracking(): void {
         severityText: "ERROR",
         body: event.message,
         attributes: {
+          "envsync.event_name": "frontend_error",
+          "envsync.event_category": "frontend_error",
+          "envsync.surface": "dashboard",
           "error.type": "window.error",
           "error.filename": event.filename ?? "",
           "error.lineno": event.lineno ?? 0,
@@ -48,6 +51,9 @@ export function initErrorTracking(): void {
         severityText: "ERROR",
         body: message,
         attributes: {
+          "envsync.event_name": "frontend_error",
+          "envsync.event_category": "frontend_error",
+          "envsync.surface": "dashboard",
           "error.type": "unhandledrejection",
           "error.stack": stack,
         },
