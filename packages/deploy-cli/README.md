@@ -42,6 +42,8 @@ envsync-deploy preinstall
 envsync-deploy setup
 envsync-deploy bootstrap [--dry-run] [--force]
 envsync-deploy deploy [--dry-run]
+envsync-deploy promote [blue|green] [--dry-run]
+envsync-deploy rollback [--dry-run]
 envsync-deploy health [--json]
 envsync-deploy upgrade [--dry-run]
 envsync-deploy upgrade-deps [--dry-run]
@@ -86,7 +88,16 @@ npx @envsync-cloud/deploy-cli deploy
 The staged flow is:
 - `setup` writes desired config
 - `bootstrap` resets the existing EnvSync deployment, then starts base infra, runs OpenFGA and miniKMS migrations, starts runtime infra, initializes ClickStack sources and dashboards, and persists generated runtime env state
-- `deploy` starts the pending API and frontend services
+- `deploy` updates only the inactive API slot, waits for it to become healthy, then promotes traffic to it and keeps the previous slot ready for rollback
+
+Manual slot operations:
+
+```bash
+npx @envsync-cloud/deploy-cli promote
+npx @envsync-cloud/deploy-cli rollback
+```
+
+`promote` switches traffic to the requested or inactive API slot without rebuilding images. `rollback` switches traffic back to the previously active slot recorded in generated deploy state.
 
 Self-hosted observability routing is:
 - `https://obs.<root-domain>/` for ClickStack UI

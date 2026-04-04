@@ -164,8 +164,8 @@ function ensureSource(name, kind, document) {
 var traces = ensureSource("Traces", "trace", {
   from: { databaseName: "default", tableName: "otel_traces" },
   timestampValueExpression: "Timestamp",
-  displayedTimestampValueExpression: "TimestampTime",
-  defaultTableSelectExpression: "TimestampTime, ServiceName, SpanName, StatusCode",
+  displayedTimestampValueExpression: "Timestamp",
+  defaultTableSelectExpression: "Timestamp, ServiceName, SpanName, StatusCode",
   durationExpression: "Duration",
   durationPrecision: 9,
   serviceNameExpression: "ServiceName",
@@ -215,8 +215,8 @@ var metrics = ensureSource("Metrics", "metric", {
 var logs = ensureSource("Logs", "log", {
   from: { databaseName: "default", tableName: "otel_logs" },
   timestampValueExpression: "Timestamp",
-  displayedTimestampValueExpression: "TimestampTime",
-  defaultTableSelectExpression: "TimestampTime, ServiceName, SeverityText, Body",
+  displayedTimestampValueExpression: "Timestamp",
+  defaultTableSelectExpression: "Timestamp, ServiceName, SeverityText, Body",
   serviceNameExpression: "ServiceName",
   severityTextExpression: "SeverityText",
   bodyExpression: "Body",
@@ -245,8 +245,8 @@ var logs = ensureSource("Logs", "log", {
 var sessions = ensureSource("Sessions", "session", {
   from: { databaseName: "default", tableName: "hyperdx_sessions" },
   timestampValueExpression: "Timestamp",
-  displayedTimestampValueExpression: "TimestampTime",
-  defaultTableSelectExpression: "TimestampTime, ServiceName, Body",
+  displayedTimestampValueExpression: "Timestamp",
+  defaultTableSelectExpression: "Timestamp, ServiceName, Body",
   serviceNameExpression: "ServiceName",
   bodyExpression: "Body",
   eventAttributesExpression: "LogAttributes",

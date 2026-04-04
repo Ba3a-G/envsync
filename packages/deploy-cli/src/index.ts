@@ -79,6 +79,11 @@ interface DeployGeneratedState {
 		store_id: string;
 		model_id: string;
 	};
+	deployment: {
+		active_slot: ApiSlot;
+		previous_slot: "" | ApiSlot;
+		slots: Record<ApiSlot, ApiSlotState>;
+	};
 	clickstack: {
 		operator_email: string;
 		operator_password: string;
@@ -104,6 +109,12 @@ interface InternalState {
 	generated: DeployGeneratedState;
 }
 
+type ApiSlot = "blue" | "green";
+type ApiSlotState = {
+	api_image: string;
+	release_version: string;
+	deployed_at: string;
+};
 type RuntimeEnv = Record<string, string>;
 type ServiceHealth = "healthy" | "missing" | "degraded";
 type CommandOptions = { dryRun: boolean; force: boolean };
@@ -303,6 +314,31 @@ function randomSecret(bytes = 24) {
 
 function randomStrongPassword() {
 	return `EnvSync!${randomBytes(8).toString("hex")}Aa1`;
+}
+
+function emptyApiSlotState(): ApiSlotState {
+	return {
+		api_image: "",
+		release_version: "",
+		deployed_at: "",
+	};
+}
+
+function normalizeApiSlot(value: unknown): ApiSlot {
+	return value === "green" ? "green" : "blue";
+}
+
+function normalizeApiSlotState(raw?: Partial<ApiSlotState>): ApiSlotState {
+	const defaults = emptyApiSlotState();
+	return {
+		api_image: raw?.api_image ?? defaults.api_image,
+		release_version: raw?.release_version ?? defaults.release_version,
+		deployed_at: raw?.deployed_at ?? defaults.deployed_at,
+	};
+}
+
+function otherApiSlot(slot: ApiSlot): ApiSlot {
+	return slot === "blue" ? "green" : "blue";
 }
 
 function yamlScalar(value: string | number | boolean): string {
@@ -612,6 +648,14 @@ function emptyGeneratedState(): DeployGeneratedState {
 			store_id: "",
 			model_id: "",
 		},
+		deployment: {
+			active_slot: "blue",
+			previous_slot: "",
+			slots: {
+				blue: emptyApiSlotState(),
+				green: emptyApiSlotState(),
+			},
+		},
 		clickstack: {
 			operator_email: "",
 			operator_password: "",
@@ -639,6 +683,16 @@ function normalizeGeneratedState(raw?: Partial<DeployGeneratedState>): DeployGen
 		openfga: {
 			store_id: raw?.openfga?.store_id ?? defaults.openfga.store_id,
 			model_id: raw?.openfga?.model_id ?? defaults.openfga.model_id,
+		},
+		deployment: {
+			active_slot: normalizeApiSlot(raw?.deployment?.active_slot ?? defaults.deployment.active_slot),
+			previous_slot: raw?.deployment?.previous_slot === "blue" || raw?.deployment?.previous_slot === "green"
+				? raw.deployment.previous_slot
+				: defaults.deployment.previous_slot,
+			slots: {
+				blue: normalizeApiSlotState(raw?.deployment?.slots?.blue),
+				green: normalizeApiSlotState(raw?.deployment?.slots?.green),
+			},
 		},
 		clickstack: {
 			operator_email: raw?.clickstack?.operator_email ?? defaults.clickstack.operator_email,
@@ -693,6 +747,7 @@ function mergeGeneratedState(env: RuntimeEnv, generated?: Partial<DeployGenerate
 			store_id: env.OPENFGA_STORE_ID ?? normalized.openfga.store_id,
 			model_id: env.OPENFGA_MODEL_ID ?? normalized.openfga.model_id,
 		},
+		deployment: normalized.deployment,
 		clickstack: {
 			operator_email: env.CLICKSTACK_OPERATOR_EMAIL ?? normalized.clickstack.operator_email,
 			operator_password: env.CLICKSTACK_OPERATOR_PASSWORD ?? normalized.clickstack.operator_password,
@@ -722,6 +777,7 @@ function loadState() {
 function ensureGeneratedRuntimeState(config: DeployConfig, generated: DeployGeneratedState) {
 	return normalizeGeneratedState({
 		openfga: generated.openfga,
+		deployment: generated.deployment,
 		clickstack: {
 			operator_email: generated.clickstack.operator_email || `operator@${config.domain.root_domain}`,
 			operator_password: generated.clickstack.operator_password || randomStrongPassword(),
@@ -747,6 +803,14 @@ function resetBootstrapGeneratedState(generated: DeployGeneratedState) {
 			store_id: "",
 			model_id: "",
 		},
+		deployment: {
+			active_slot: "blue",
+			previous_slot: "",
+			slots: {
+				blue: emptyApiSlotState(),
+				green: emptyApiSlotState(),
+			},
+		},
 		clickstack: generated.clickstack,
 		secrets: generated.secrets,
 		bootstrap: {
@@ -757,6 +821,153 @@ function resetBootstrapGeneratedState(generated: DeployGeneratedState) {
 
 function keycloakImageTag(image: string) {
 	return image.split(":").slice(1).join(":") || "local";
+}
+
+function slotServiceName(slot: ApiSlot) {
+	return `envsync_api_${slot}`;
+}
+
+function serviceStackName(config: DeployConfig, serviceName: string) {
+	return `${config.services.stack_name}_${serviceName}`;
+}
+
+function slotStackServiceName(config: DeployConfig, slot: ApiSlot) {
+	return serviceStackName(config, slotServiceName(slot));
+}
+
+function slotHasApiDeployment(state: ApiSlotState) {
+	return state.api_image.length > 0;
+}
+
+function createSteadyApiDeploymentState(
+	config: DeployConfig,
+	generated: DeployGeneratedState,
+): DeployGeneratedState["deployment"] {
+	const deployment = normalizeGeneratedState(generated).deployment;
+	const activeSlot = deployment.active_slot;
+	const activeState = deployment.slots[activeSlot];
+	if (slotHasApiDeployment(activeState)) {
+		return deployment;
+	}
+	return {
+		active_slot: activeSlot,
+		previous_slot: "",
+		slots: {
+			...deployment.slots,
+			[activeSlot]: {
+				api_image: config.images.api,
+				release_version: config.release.version,
+				deployed_at: deployment.slots[activeSlot].deployed_at,
+			},
+		},
+	};
+}
+
+function prepareApiSlotStateForTarget(state: ApiSlotState, config: DeployConfig) {
+	return normalizeApiSlotState({
+		...state,
+		api_image: config.images.api,
+		release_version: config.release.version,
+	});
+}
+
+function stampApiSlotState(state: ApiSlotState, config: DeployConfig) {
+	return normalizeApiSlotState({
+		...state,
+		api_image: config.images.api,
+		release_version: config.release.version,
+		deployed_at: new Date().toISOString(),
+	});
+}
+
+function createPromotionCandidateState(
+	config: DeployConfig,
+	generated: DeployGeneratedState,
+): DeployGeneratedState["deployment"] | null {
+	const deployment = createSteadyApiDeploymentState(config, generated);
+	const activeSlot = deployment.active_slot;
+	const activeState = deployment.slots[activeSlot];
+	if (!slotHasApiDeployment(activeState) || activeState.api_image === config.images.api) {
+		return null;
+	}
+	const targetSlot = otherApiSlot(activeSlot);
+	return normalizeGeneratedState({
+		...generated,
+		deployment: {
+			active_slot: activeSlot,
+			previous_slot: deployment.previous_slot,
+			slots: {
+				...deployment.slots,
+				[targetSlot]: prepareApiSlotStateForTarget(deployment.slots[targetSlot], config),
+			},
+		},
+	}).deployment;
+}
+
+function createPromotedApiDeploymentState(
+	config: DeployConfig,
+	generated: DeployGeneratedState,
+): DeployGeneratedState["deployment"] {
+	const candidate = createPromotionCandidateState(config, generated);
+	if (!candidate) {
+		return createSteadyApiDeploymentState(config, generated);
+	}
+	const currentActive = candidate.active_slot;
+	const targetSlot = otherApiSlot(currentActive);
+	return {
+		active_slot: targetSlot,
+		previous_slot: currentActive,
+		slots: {
+			...candidate.slots,
+			[targetSlot]: stampApiSlotState(candidate.slots[targetSlot], config),
+		},
+	};
+}
+
+function createRolledBackApiDeploymentState(generated: DeployGeneratedState): DeployGeneratedState["deployment"] {
+	const deployment = generated.deployment;
+	const rollbackSlot = deployment.previous_slot;
+	if (!rollbackSlot) {
+		throw new Error("No rollback target is available. A previous promoted slot has not been recorded yet.");
+	}
+	if (!slotHasApiDeployment(deployment.slots[rollbackSlot])) {
+		throw new Error(`Rollback target slot '${rollbackSlot}' has no deployed API image recorded.`);
+	}
+	return {
+		active_slot: rollbackSlot,
+		previous_slot: deployment.active_slot,
+		slots: deployment.slots,
+	};
+}
+
+function markActiveApiSlotDeployed(config: DeployConfig, deployment: DeployGeneratedState["deployment"]) {
+	const activeSlot = deployment.active_slot;
+	if (!slotHasApiDeployment(deployment.slots[activeSlot])) {
+		return deployment;
+	}
+	return {
+		...deployment,
+		slots: {
+			...deployment.slots,
+			[activeSlot]: stampApiSlotState(deployment.slots[activeSlot], config),
+		},
+	};
+}
+
+function touchApiSlotDeployment(deployment: DeployGeneratedState["deployment"], slot: ApiSlot) {
+	if (!slotHasApiDeployment(deployment.slots[slot])) {
+		return deployment;
+	}
+	return {
+		...deployment,
+		slots: {
+			...deployment.slots,
+			[slot]: {
+				...deployment.slots[slot],
+				deployed_at: new Date().toISOString(),
+			},
+		},
+	};
 }
 
 function buildRuntimeEnv(config: DeployConfig, generated: DeployGeneratedState): RuntimeEnv {
@@ -898,8 +1109,9 @@ function renderKeycloakRealm(config: DeployConfig, runtimeEnv: RuntimeEnv) {
 	) + "\n";
 }
 
-function renderTraefikDynamicConfig(config: DeployConfig) {
+function renderTraefikDynamicConfig(config: DeployConfig, generated: DeployGeneratedState) {
 	const hosts = domainMap(config.domain.root_domain);
+	const activeSlot = generated.deployment.active_slot;
 	const otelAllowedOrigins = [
 		...publicHttpsOriginVariants(config, hosts.landing),
 		...publicHttpsOriginVariants(config, hosts.app),
@@ -934,18 +1146,27 @@ function renderTraefikDynamicConfig(config: DeployConfig) {
 		"        addVaryHeader: true",
 		"  services:",
 		"    envsync-api:",
-		"      weighted:",
-		"        services:",
-		"          - name: envsync-api-blue",
-		"            weight: 100",
-		"          - name: envsync-api-green",
-		"            weight: 0",
+		"      loadBalancer:",
+		"        healthCheck:",
+		"          path: /health",
+		"          interval: 5s",
+		"          timeout: 3s",
+		"        servers:",
+		`          - url: http://${slotServiceName(activeSlot)}:4000`,
 		"    envsync-api-blue:",
 		"      loadBalancer:",
+		"        healthCheck:",
+		"          path: /health",
+		"          interval: 5s",
+		"          timeout: 3s",
 		"        servers:",
 		"          - url: http://envsync_api_blue:4000",
 		"    envsync-api-green:",
 		"      loadBalancer:",
+		"        healthCheck:",
+		"          path: /health",
+		"          interval: 5s",
+		"          timeout: 3s",
 		"        servers:",
 		"          - url: http://envsync_api_green:4000",
 		"    landing:",
@@ -1086,10 +1307,11 @@ function renderClickstackClickHouseConfig() {
 	].join("\n") + "\n";
 }
 
-function renderStack(config: DeployConfig, runtimeEnv: RuntimeEnv, mode: "base" | "bootstrap" | "full") {
+function renderStack(config: DeployConfig, runtimeEnv: RuntimeEnv, generated: DeployGeneratedState, mode: "base" | "bootstrap" | "full") {
 	const hosts = domainMap(config.domain.root_domain);
 	const includeRuntimeInfra = mode !== "base";
 	const includeAppServices = mode === "full";
+	const deployment = createSteadyApiDeploymentState(config, generated);
 	const stackName = config.services.stack_name;
 	const s3RouterName = `${stackName}-s3-router`;
 	const s3ServiceName = `${stackName}-s3-service`;
@@ -1321,16 +1543,28 @@ ${includeAppServices ? `
     networks: [envsync]
 
   envsync_api_blue:
-    image: ${config.images.api}
+    image: ${deployment.slots.blue.api_image || config.images.api}
     environment:
-${renderEnvList(apiEnvironment)}
+${renderEnvList({
+		...apiEnvironment,
+		ENVSYNC_DEPLOY_SLOT: "blue",
+		ENVSYNC_DEPLOY_RELEASE_VERSION: deployment.slots.blue.release_version || config.release.version,
+	})}
     networks: [envsync]
+    deploy:
+      replicas: ${slotHasApiDeployment(deployment.slots.blue) ? 1 : 0}
 
   envsync_api_green:
-    image: ${config.images.api}
+    image: ${deployment.slots.green.api_image || config.images.api}
     environment:
-${renderEnvList(apiEnvironment)}
-    networks: [envsync]` : ""}
+${renderEnvList({
+		...apiEnvironment,
+		ENVSYNC_DEPLOY_SLOT: "green",
+		ENVSYNC_DEPLOY_RELEASE_VERSION: deployment.slots.green.release_version || config.release.version,
+	})}
+    networks: [envsync]
+    deploy:
+      replicas: ${slotHasApiDeployment(deployment.slots.green) ? 1 : 0}` : ""}
 
 networks:
   envsync:
@@ -1372,10 +1606,10 @@ function writeDeployArtifacts(config: DeployConfig, generated: DeployGeneratedSt
 	);
 	writeFileMaybe(VERSIONS_LOCK, JSON.stringify(config.images, null, 2) + "\n");
 	writeFileMaybe(KEYCLOAK_REALM_FILE, renderKeycloakRealm(config, runtimeEnv));
-	writeFileMaybe(TRAEFIK_DYNAMIC_FILE, renderTraefikDynamicConfig(config));
-	writeFileMaybe(BOOTSTRAP_BASE_STACK_FILE, renderStack(config, runtimeEnv, "base"));
-	writeFileMaybe(BOOTSTRAP_STACK_FILE, renderStack(config, runtimeEnv, "bootstrap"));
-	writeFileMaybe(STACK_FILE, renderStack(config, runtimeEnv, "full"));
+	writeFileMaybe(TRAEFIK_DYNAMIC_FILE, renderTraefikDynamicConfig(config, generated));
+	writeFileMaybe(BOOTSTRAP_BASE_STACK_FILE, renderStack(config, runtimeEnv, generated, "base"));
+	writeFileMaybe(BOOTSTRAP_STACK_FILE, renderStack(config, runtimeEnv, generated, "bootstrap"));
+	writeFileMaybe(STACK_FILE, renderStack(config, runtimeEnv, generated, "full"));
 	writeFileMaybe(NGINX_WEB_CONF, renderNginxConf("web"));
 	writeFileMaybe(NGINX_LANDING_CONF, renderNginxConf("landing"));
 	writeFileMaybe(OTEL_AGENT_CONF, renderOtelAgentConfig(config));
@@ -2104,6 +2338,25 @@ function apiHealth(services: Map<string, ServiceHealth>, stackName: string): Ser
 	return "degraded";
 }
 
+function waitForApiSlotHealthy(config: DeployConfig, slot: ApiSlot, timeoutSeconds = 180) {
+	if (currentOptions.dryRun) {
+		logDryRun(`Would wait for API ${slot} slot readiness`);
+		return;
+	}
+	const deadline = Date.now() + timeoutSeconds * 1000;
+	const serviceName = slotStackServiceName(config, slot);
+	while (Date.now() < deadline) {
+		const services = listStackServices(config);
+		if (serviceHealth(services, serviceName) === "healthy") {
+			logSuccess(`API ${slot} slot is healthy`);
+			return;
+		}
+		sleepSeconds(3);
+	}
+	const services = listStackServices(config);
+	throw new Error(`Timed out waiting for API ${slot} slot to become healthy: ${serviceHealth(services, serviceName)}`);
+}
+
 function waitForHealthyServices(
 	config: DeployConfig,
 	checks: Array<{ label: string; getHealth: (services: Map<string, ServiceHealth>) => ServiceHealth }>,
@@ -2127,6 +2380,46 @@ function waitForHealthyServices(
 		.map(check => `${check.label}=${check.getHealth(services)}`)
 		.join(", ");
 	throw new Error(`Timed out waiting for deployed services to become healthy: ${pending}`);
+}
+
+function deployRenderedStack(config: DeployConfig, label: string) {
+	if (currentOptions.dryRun) {
+		logDryRun(`Would deploy ${label} stack for ${config.services.stack_name}`);
+		logCommand("docker", ["stack", "deploy", "-c", STACK_FILE, config.services.stack_name]);
+		return;
+	}
+	logStep(`Deploying ${label} stack`);
+	logCommand("docker", ["stack", "deploy", "-c", STACK_FILE, config.services.stack_name]);
+	for (let attempt = 1; attempt <= 5; attempt += 1) {
+		const result = spawnSync("docker", ["stack", "deploy", "-c", STACK_FILE, config.services.stack_name], {
+			env: process.env,
+			stdio: "pipe",
+			encoding: "utf8",
+		});
+		const stdout = typeof result.stdout === "string" ? result.stdout.trim() : "";
+		const stderr = typeof result.stderr === "string" ? result.stderr.trim() : "";
+		if (stdout) console.log(stdout);
+		if (stderr) console.error(stderr);
+		if (result.status === 0) {
+			logSuccess(`${label} stack deployed`);
+			return;
+		}
+		const combined = `${stdout}\n${stderr}`.toLowerCase();
+		if (attempt < 5 && combined.includes("update out of sequence")) {
+			logWarn(`Swarm reported an out-of-sequence service update while deploying ${label}; retrying (${attempt}/5)`);
+			sleepSeconds(3);
+			continue;
+		}
+		throw new Error(`Command failed: docker stack deploy -c ${STACK_FILE} ${config.services.stack_name}${stderr ? `\n${stderr}` : ""}`);
+	}
+}
+
+function persistGeneratedState(config: DeployConfig, generated: DeployGeneratedState) {
+	if (currentOptions.dryRun) {
+		logDryRun("Would persist generated deployment state");
+		return;
+	}
+	writeDeployArtifacts(config, generated);
 }
 
 async function cmdPreinstall() {
@@ -2287,6 +2580,7 @@ async function cmdBootstrap() {
 			store_id: initResult.openfgaStoreId,
 			model_id: initResult.openfgaModelId,
 		},
+		deployment: nextGenerated.deployment,
 		clickstack: {
 			...nextGenerated.clickstack,
 			browser_api_key: clickstackBootstrapResult.browserApiKey ?? nextGenerated.clickstack.browser_api_key,
@@ -2307,6 +2601,7 @@ async function cmdBootstrap() {
 			store_id: initResult.openfgaStoreId,
 			model_id: initResult.openfgaModelId,
 		},
+		deployment: nextGenerated.deployment,
 		clickstack: persistedGenerated.clickstack,
 		secrets: nextGenerated.secrets,
 		bootstrap: {
@@ -2337,7 +2632,6 @@ async function cmdDeploy() {
 		logDryRun("Skipping runtime bootstrap service validation");
 	}
 	ensureRepoCheckout(config);
-	writeDeployArtifacts(config, generated);
 	buildKeycloakImage(config.images.keycloak);
 	if (currentOptions.dryRun) {
 		logDryRun(`Would ensure ${RELEASES_ROOT}/web/current exists`);
@@ -2348,17 +2642,41 @@ async function cmdDeploy() {
 	}
 	extractStaticBundle(config.images.web, `${RELEASES_ROOT}/web/current`);
 	extractStaticBundle(config.images.landing, `${RELEASES_ROOT}/landing/current`);
-	writeFileMaybe(`${RELEASES_ROOT}/web/current/runtime-config.js`, renderFrontendRuntimeConfig(config, generated));
-	writeFileMaybe(`${RELEASES_ROOT}/landing/current/runtime-config.js`, renderFrontendRuntimeConfig(config, generated));
-	if (currentOptions.dryRun) {
-		logDryRun(`Would deploy full stack for ${config.services.stack_name}`);
-		logCommand("docker", ["stack", "deploy", "-c", STACK_FILE, config.services.stack_name]);
-		logSuccess("Deploy dry-run completed");
-		return;
+	let currentState = normalizeGeneratedState(generated);
+	let promoted = false;
+	const candidateDeployment = createPromotionCandidateState(config, currentState);
+	if (candidateDeployment) {
+		const candidateState = normalizeGeneratedState({
+			...currentState,
+			deployment: candidateDeployment,
+		});
+		writeDeployArtifacts(config, candidateState);
+		writeFileMaybe(`${RELEASES_ROOT}/web/current/runtime-config.js`, renderFrontendRuntimeConfig(config, candidateState));
+		writeFileMaybe(`${RELEASES_ROOT}/landing/current/runtime-config.js`, renderFrontendRuntimeConfig(config, candidateState));
+		const targetSlot = otherApiSlot(candidateDeployment.active_slot);
+		logInfo(`Deploying release ${config.release.version} into inactive API slot ${targetSlot}`);
+		deployRenderedStack(config, `candidate ${targetSlot}`);
+		waitForApiSlotHealthy(config, targetSlot);
+		currentState = normalizeGeneratedState({
+			...candidateState,
+			deployment: createPromotedApiDeploymentState(config, candidateState),
+		});
+		writeDeployArtifacts(config, currentState);
+		writeFileMaybe(`${RELEASES_ROOT}/web/current/runtime-config.js`, renderFrontendRuntimeConfig(config, currentState));
+		writeFileMaybe(`${RELEASES_ROOT}/landing/current/runtime-config.js`, renderFrontendRuntimeConfig(config, currentState));
+		sleepSeconds(3);
+		promoted = true;
 	}
-	logStep("Deploying full stack");
-	logCommand("docker", ["stack", "deploy", "-c", STACK_FILE, config.services.stack_name]);
-	run("docker", ["stack", "deploy", "-c", STACK_FILE, config.services.stack_name]);
+	currentState = normalizeGeneratedState({
+		...currentState,
+		deployment: createSteadyApiDeploymentState(config, currentState),
+	});
+	writeDeployArtifacts(config, currentState);
+	writeFileMaybe(`${RELEASES_ROOT}/web/current/runtime-config.js`, renderFrontendRuntimeConfig(config, currentState));
+	writeFileMaybe(`${RELEASES_ROOT}/landing/current/runtime-config.js`, renderFrontendRuntimeConfig(config, currentState));
+	if (!promoted) {
+		deployRenderedStack(config, "steady");
+	}
 	waitForHealthyServices(config, [
 		{ label: "traefik", getHealth: services => serviceHealth(services, `${config.services.stack_name}_traefik`) },
 		{ label: "keycloak", getHealth: services => serviceHealth(services, `${config.services.stack_name}_keycloak`) },
@@ -2369,7 +2687,79 @@ async function cmdDeploy() {
 		{ label: "web", getHealth: services => serviceHealth(services, `${config.services.stack_name}_web_nginx`) },
 		{ label: "api", getHealth: services => apiHealth(services, config.services.stack_name) },
 	]);
+	waitForApiSlotHealthy(config, currentState.deployment.active_slot);
+	currentState = normalizeGeneratedState({
+		...currentState,
+		deployment: markActiveApiSlotDeployed(config, currentState.deployment),
+	});
+	persistGeneratedState(config, currentState);
+	logInfo(`Active API slot: ${currentState.deployment.active_slot}`);
+	if (currentState.deployment.previous_slot) {
+		logInfo(`Rollback slot: ${currentState.deployment.previous_slot}`);
+	}
 	logSuccess("Deploy completed");
+}
+
+async function cmdPromote(target?: string) {
+	logSection("Promote");
+	const { config, generated } = loadState();
+	logReleaseContext(config);
+	assertSwarmManager();
+	assertBootstrapState(generated);
+	const currentState = normalizeGeneratedState(generated);
+	const activeSlot = currentState.deployment.active_slot;
+	const targetSlot = target === "blue" || target === "green" ? target : otherApiSlot(activeSlot);
+	if (targetSlot === activeSlot) {
+		logInfo(`API slot ${targetSlot} is already active`);
+		return;
+	}
+	if (!slotHasApiDeployment(currentState.deployment.slots[targetSlot])) {
+		throw new Error(`Cannot promote API slot '${targetSlot}' because it has no deployed image recorded.`);
+	}
+	const promotedState = normalizeGeneratedState({
+		...currentState,
+		deployment: {
+			active_slot: targetSlot,
+			previous_slot: activeSlot,
+			slots: currentState.deployment.slots,
+		},
+	});
+	writeDeployArtifacts(config, promotedState);
+	sleepSeconds(3);
+	waitForApiSlotHealthy(config, targetSlot);
+	const persistedState = normalizeGeneratedState({
+		...promotedState,
+		deployment: touchApiSlotDeployment(promotedState.deployment, targetSlot),
+	});
+	persistGeneratedState(config, persistedState);
+	logInfo(`Active API slot: ${targetSlot}`);
+	logInfo(`Rollback slot: ${activeSlot}`);
+	logSuccess("Promotion completed");
+}
+
+async function cmdRollback() {
+	logSection("Rollback");
+	const { config, generated } = loadState();
+	logReleaseContext(config);
+	assertSwarmManager();
+	assertBootstrapState(generated);
+	const currentState = normalizeGeneratedState(generated);
+	const rollbackState = normalizeGeneratedState({
+		...currentState,
+		deployment: createRolledBackApiDeploymentState(currentState),
+	});
+	writeDeployArtifacts(config, rollbackState);
+	sleepSeconds(3);
+	waitForApiSlotHealthy(config, rollbackState.deployment.active_slot);
+	persistGeneratedState(config, normalizeGeneratedState({
+		...rollbackState,
+		deployment: touchApiSlotDeployment(rollbackState.deployment, rollbackState.deployment.active_slot),
+	}));
+	logInfo(`Active API slot: ${rollbackState.deployment.active_slot}`);
+	if (rollbackState.deployment.previous_slot) {
+		logInfo(`Rollback slot: ${rollbackState.deployment.previous_slot}`);
+	}
+	logSuccess("Rollback completed");
 }
 
 async function cmdHealth(asJson: boolean) {
@@ -2401,7 +2791,25 @@ async function cmdHealth(asJson: boolean) {
 			services: bootstrapServices,
 		},
 		deploy: {
+			active_slot: generated.deployment.active_slot,
+			previous_slot: generated.deployment.previous_slot || null,
 			api: apiHealth(services, stackName),
+			api_slots: {
+				blue: {
+					service: serviceHealth(services, slotStackServiceName(config, "blue")),
+					image: generated.deployment.slots.blue.api_image || null,
+					release_version: generated.deployment.slots.blue.release_version || null,
+					deployed_at: generated.deployment.slots.blue.deployed_at || null,
+					active: generated.deployment.active_slot === "blue",
+				},
+				green: {
+					service: serviceHealth(services, slotStackServiceName(config, "green")),
+					image: generated.deployment.slots.green.api_image || null,
+					release_version: generated.deployment.slots.green.release_version || null,
+					deployed_at: generated.deployment.slots.green.deployed_at || null,
+					active: generated.deployment.active_slot === "green",
+				},
+			},
 			web: serviceHealth(services, `${stackName}_web_nginx`),
 			landing: serviceHealth(services, `${stackName}_landing_nginx`),
 		},
@@ -2501,6 +2909,60 @@ function stackVolumeName(config: DeployConfig, name: (typeof STACK_VOLUMES)[numb
 	return `${config.services.stack_name}_${name}`;
 }
 
+function hasManagedRuntime(config: DeployConfig) {
+	return stackExists(config) || listManagedContainers(config).length > 0;
+}
+
+function stopManagedRuntime(config: DeployConfig, label = "Stopping existing EnvSync services") {
+	const containerIds = listManagedContainers(config);
+	const networkName = stackNetworkName(config);
+
+	logStep(label);
+	if (currentOptions.dryRun) {
+		if (stackExists(config)) {
+			logDryRun(`Would remove stack ${config.services.stack_name}`);
+			logCommand("docker", ["stack", "rm", config.services.stack_name]);
+		}
+		if (containerIds.length > 0) {
+			logDryRun(`Would remove containers: ${containerIds.join(", ")}`);
+			logCommand("docker", ["rm", "-f", ...containerIds]);
+		}
+		logDryRun(`Would remove network ${networkName} if present`);
+		logCommand("docker", ["network", "rm", networkName]);
+		logSuccess("Managed EnvSync runtime stop preview completed");
+		return;
+	}
+
+	if (stackExists(config)) {
+		logCommand("docker", ["stack", "rm", config.services.stack_name]);
+		run("docker", ["stack", "rm", config.services.stack_name]);
+		waitForStackRemoval(config);
+	}
+
+	const refreshedContainers = listManagedContainers(config);
+	if (refreshedContainers.length > 0) {
+		logCommand("docker", ["rm", "-f", ...refreshedContainers]);
+		const removed = runIgnoringAbsent("docker", ["rm", "-f", ...refreshedContainers], {
+			absentPatterns: ["no such container", "not found"],
+		});
+		if (!removed) {
+			logInfo("Managed containers were already absent");
+		}
+	}
+
+	if (commandSucceeds("docker", ["network", "inspect", networkName])) {
+		logCommand("docker", ["network", "rm", networkName]);
+		const removed = runIgnoringAbsent("docker", ["network", "rm", networkName], {
+			absentPatterns: ["network", "not found", "no such network"],
+		});
+		if (!removed) {
+			logInfo(`Network ${networkName} was already absent`);
+		}
+	}
+
+	logSuccess("Existing EnvSync services stopped");
+}
+
 function backupDockerVolume(volumeName: string, targetDir: string) {
 	logStep(`Backing up Docker volume ${volumeName}`);
 	if (currentOptions.dryRun) {
@@ -2556,6 +3018,11 @@ async function cmdBackup() {
 	logInfo(`Backup archive target: ${tarPath}`);
 	if (currentOptions.dryRun) {
 		logDryRun(`Would stage backup files in ${staged}`);
+		if (hasManagedRuntime(config)) {
+			logWarn("Backup would temporarily stop the EnvSync stack to capture consistent volume data.");
+			stopManagedRuntime(config, "Stopping existing EnvSync services for consistent backup");
+			logDryRun("Would redeploy the EnvSync stack after the backup archive is created");
+		}
 		for (const volume of STACK_VOLUMES) {
 			backupDockerVolume(stackVolumeName(config, volume), path.join(staged, "volumes", volume));
 		}
@@ -2567,30 +3034,64 @@ async function cmdBackup() {
 	}
 	ensureDir(config.backup.output_dir);
 	ensureDir(staged);
-	writeFile(path.join(staged, "deploy.env"), fs.readFileSync(DEPLOY_ENV, "utf8"));
-	writeFile(path.join(staged, "deploy.yaml"), fs.readFileSync(DEPLOY_YAML, "utf8"));
-	writeFile(path.join(staged, "config.json"), fs.readFileSync(INTERNAL_CONFIG_JSON, "utf8"));
-	writeFile(path.join(staged, "versions.lock.json"), fs.readFileSync(VERSIONS_LOCK, "utf8"));
-	writeFile(path.join(staged, "docker-stack.bootstrap.base.yaml"), fs.readFileSync(BOOTSTRAP_BASE_STACK_FILE, "utf8"));
-	writeFile(path.join(staged, "docker-stack.bootstrap.yaml"), fs.readFileSync(BOOTSTRAP_STACK_FILE, "utf8"));
-	writeFile(path.join(staged, "docker-stack.yaml"), fs.readFileSync(STACK_FILE, "utf8"));
-	writeFile(path.join(staged, "traefik-dynamic.yaml"), fs.readFileSync(TRAEFIK_DYNAMIC_FILE, "utf8"));
-	writeFile(path.join(staged, "keycloak-realm.envsync.json"), fs.readFileSync(KEYCLOAK_REALM_FILE, "utf8"));
-	writeFile(path.join(staged, "otel-agent.yaml"), fs.readFileSync(OTEL_AGENT_CONF, "utf8"));
-	writeFile(path.join(staged, "clickhouse-listen.xml"), fs.readFileSync(CLICKSTACK_CLICKHOUSE_CONF, "utf8"));
-	const volumesDir = path.join(staged, "volumes");
-	for (const volume of STACK_VOLUMES) {
-		backupDockerVolume(stackVolumeName(config, volume), path.join(volumesDir, volume));
+	const resumeRuntimeAfterBackup = hasManagedRuntime(config);
+	let backupCompleted = false;
+	let backupError: unknown = null;
+	try {
+		if (resumeRuntimeAfterBackup) {
+			logWarn("Backup will temporarily stop the EnvSync stack to capture consistent volume data.");
+			stopManagedRuntime(config, "Stopping existing EnvSync services for consistent backup");
+		}
+		writeFile(path.join(staged, "deploy.env"), fs.readFileSync(DEPLOY_ENV, "utf8"));
+		writeFile(path.join(staged, "deploy.yaml"), fs.readFileSync(DEPLOY_YAML, "utf8"));
+		writeFile(path.join(staged, "config.json"), fs.readFileSync(INTERNAL_CONFIG_JSON, "utf8"));
+		writeFile(path.join(staged, "versions.lock.json"), fs.readFileSync(VERSIONS_LOCK, "utf8"));
+		writeFile(path.join(staged, "docker-stack.bootstrap.base.yaml"), fs.readFileSync(BOOTSTRAP_BASE_STACK_FILE, "utf8"));
+		writeFile(path.join(staged, "docker-stack.bootstrap.yaml"), fs.readFileSync(BOOTSTRAP_STACK_FILE, "utf8"));
+		writeFile(path.join(staged, "docker-stack.yaml"), fs.readFileSync(STACK_FILE, "utf8"));
+		writeFile(path.join(staged, "traefik-dynamic.yaml"), fs.readFileSync(TRAEFIK_DYNAMIC_FILE, "utf8"));
+		writeFile(path.join(staged, "keycloak-realm.envsync.json"), fs.readFileSync(KEYCLOAK_REALM_FILE, "utf8"));
+		writeFile(path.join(staged, "otel-agent.yaml"), fs.readFileSync(OTEL_AGENT_CONF, "utf8"));
+		writeFile(path.join(staged, "clickhouse-listen.xml"), fs.readFileSync(CLICKSTACK_CLICKHOUSE_CONF, "utf8"));
+		const volumesDir = path.join(staged, "volumes");
+		for (const volume of STACK_VOLUMES) {
+			backupDockerVolume(stackVolumeName(config, volume), path.join(volumesDir, volume));
+		}
+		run("bash", ["-lc", `tar -czf ${JSON.stringify(tarPath)} -C ${JSON.stringify(staged)} .`]);
+		const manifest = {
+			archive: path.basename(tarPath),
+			sha256: sha256File(tarPath),
+			created_at: new Date().toISOString(),
+			stack_name: config.services.stack_name,
+			volumes: STACK_VOLUMES.map(volume => stackVolumeName(config, volume)),
+		};
+		writeFile(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
+		backupCompleted = true;
+	} catch (error) {
+		backupError = error;
+	} finally {
+		if (resumeRuntimeAfterBackup) {
+			try {
+				logStep("Restarting EnvSync services after backup");
+				await cmdDeploy();
+			} catch (restartError) {
+				if (backupError) {
+					throw new Error(
+						`Backup failed and automatic service restart also failed: ${backupError instanceof Error ? backupError.message : String(backupError)}\n${restartError instanceof Error ? restartError.message : String(restartError)}`,
+					);
+				}
+				throw new Error(
+					`Backup archive was created, but automatic service restart failed: ${restartError instanceof Error ? restartError.message : String(restartError)}`,
+				);
+			}
+		}
 	}
-	run("bash", ["-lc", `tar -czf ${JSON.stringify(tarPath)} -C ${JSON.stringify(staged)} .`]);
-	const manifest = {
-		archive: path.basename(tarPath),
-		sha256: sha256File(tarPath),
-		created_at: new Date().toISOString(),
-		stack_name: config.services.stack_name,
-		volumes: STACK_VOLUMES.map(volume => stackVolumeName(config, volume)),
-	};
-	writeFile(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
+	if (backupError) {
+		throw backupError instanceof Error ? backupError : new Error(String(backupError));
+	}
+	if (!backupCompleted) {
+		throw new Error("Backup did not complete");
+	}
 	logSuccess("Backup completed");
 	console.log(tarPath);
 }
@@ -2603,9 +3104,17 @@ async function cmdRestore(archivePath: string) {
 	if (currentOptions.dryRun) {
 		logDryRun(`Would extract ${archivePath} into ${restoreRoot}`);
 		logDryRun(`Would restore deploy files into ${DEPLOY_ROOT} and ${ETC_ROOT}`);
+		if (hasManagedRuntime(loadState().config)) {
+			stopManagedRuntime(loadState().config, "Stopping existing EnvSync services before restore");
+		}
 		logDryRun("Would restore all managed Docker volumes from the archive");
 		logSuccess("Restore dry-run completed");
 		return;
+	}
+	const currentConfig = loadState().config;
+	if (hasManagedRuntime(currentConfig)) {
+		logWarn("Restore will stop the existing EnvSync stack before replacing managed data volumes.");
+		stopManagedRuntime(currentConfig, "Stopping existing EnvSync services before restore");
 	}
 	ensureDir(restoreRoot);
 	run("bash", ["-lc", `tar -xzf ${JSON.stringify(archivePath)} -C ${JSON.stringify(restoreRoot)}`]);
@@ -2649,6 +3158,12 @@ async function main() {
 		case "deploy":
 			await cmdDeploy();
 			break;
+		case "promote":
+			await cmdPromote(positionals[0]);
+			break;
+		case "rollback":
+			await cmdRollback();
+			break;
 		case "health":
 			await cmdHealth(positionals[0] === "--json");
 			break;
@@ -2666,7 +3181,7 @@ async function main() {
 			break;
 		default:
 			console.log(
-				"Usage: envsync-deploy <preinstall|setup|bootstrap|deploy|health|upgrade|upgrade-deps|backup|restore> [--dry-run] [--force]",
+				"Usage: envsync-deploy <preinstall|setup|bootstrap|deploy|promote|rollback|health|upgrade|upgrade-deps|backup|restore> [--dry-run] [--force]",
 			);
 			process.exit(command ? 1 : 0);
 	}

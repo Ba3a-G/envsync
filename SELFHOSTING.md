@@ -97,6 +97,8 @@ Command surface:
 - `setup`
 - `bootstrap [--dry-run]`
 - `deploy [--dry-run]`
+- `promote [blue|green] [--dry-run]`
+- `rollback [--dry-run]`
 - `health`
 - `upgrade [--dry-run]`
 - `upgrade-deps [--dry-run]`
@@ -184,7 +186,9 @@ npx @envsync-cloud/deploy-cli deploy --dry-run
 Stage ownership:
 - `setup` writes desired operator config, including an exact release version such as `0.6.2`
 - `bootstrap` first removes the existing EnvSync stack, matching containers, network, and managed volumes after a `yes` confirmation, or with `--force` in non-interactive environments, then starts base infra, runs OpenFGA and miniKMS migration jobs, starts runtime infra, initializes RustFS, initializes or validates OpenFGA, bootstraps ClickStack sources/dashboards for the self-hosted host, and persists generated env state
-- `deploy` starts the pending API and frontend services
+- `deploy` performs a blue/green API rollout by updating the inactive slot, waiting for health, then promoting traffic to that slot while leaving the previous slot available for rollback
+- `promote` manually switches traffic to the requested or inactive API slot
+- `rollback` switches traffic back to the previously active API slot recorded in generated deploy state
 
 Bootstrap waits for Keycloak health on the management interface at `http://keycloak:9000/health/ready`.
 

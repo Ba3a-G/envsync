@@ -24,6 +24,7 @@ const keepFailed = process.argv.includes("--keep-failed");
 const version = JSON.parse(fs.readFileSync(path.join(rootDir, "package.json"), "utf8")).version as string;
 const rootDomain = "127.0.0.1.sslip.io";
 const localApiImage = `envsync-selfhost-smoke-api:${runId}`;
+const localApiImageCanary = `envsync-selfhost-smoke-api:${runId}-canary`;
 const localWebImage = `envsync-selfhost-smoke-web-static:${runId}`;
 const localLandingImage = `envsync-selfhost-smoke-landing-static:${runId}`;
 let publicHttpPort = 18080;
@@ -207,6 +208,7 @@ function runCli(args: string[], capture = false) {
 function buildLocalReleaseImages() {
 	console.log("Building local self-host smoke images\n");
 	run("docker", ["build", "-t", localApiImage, "packages/envsync-api"]);
+	run("docker", ["tag", localApiImage, localApiImageCanary]);
 	run("bun", ["run", "--filter", "@envsync-cloud/envsync-ts-sdk", "build"]);
 	run("bun", ["run", "--filter", "envsync-web", "build"], {
 		env: {
@@ -242,6 +244,10 @@ function readJson<T>(filePath: string): T {
 	return JSON.parse(fs.readFileSync(filePath, "utf8")) as T;
 }
 
+function writeJson(filePath: string, value: unknown) {
+	fs.writeFileSync(filePath, JSON.stringify(value, null, 2) + "\n", "utf8");
+}
+
 function readRuntimeConfig(filePath: string) {
 	const source = fs.readFileSync(filePath, "utf8").trim();
 	const prefix = "window.__ENVSYNC_RUNTIME_CONFIG__ = ";
@@ -260,6 +266,12 @@ function curl(args: string[]) {
 	return run("curl", args, { stdio: "pipe" });
 }
 
+function updateDeployConfig(mutator: (config: Record<string, unknown>) => void) {
+	const config = readJson<Record<string, unknown>>(deployYamlPath);
+	mutator(config);
+	writeJson(deployYamlPath, config);
+}
+
 function sleep(seconds: number) {
   spawnSync("sleep", [String(seconds)], { stdio: "ignore" });
 }
@@ -275,6 +287,11 @@ function assertBootstrapArtifacts(expectedOtelEndpoint: string) {
 	const internal = readJson<{
 		generated: {
 			openfga: { store_id: string; model_id: string };
+			deployment: {
+				active_slot: "blue" | "green";
+				previous_slot: "" | "blue" | "green";
+				slots: Record<"blue" | "green", { api_image: string; release_version: string; deployed_at: string }>;
+			};
 			bootstrap: { completed_at: string };
 		};
 	}>(internalConfigPath);
@@ -286,6 +303,8 @@ function assertBootstrapArtifacts(expectedOtelEndpoint: string) {
 	assert(/OPENFGA_MODEL_ID=.+/.test(deployEnv), "deploy.env is missing OPENFGA_MODEL_ID");
 	assert(internal.generated.openfga.store_id.length > 0, "config.json is missing generated OpenFGA store_id");
 	assert(internal.generated.openfga.model_id.length > 0, "config.json is missing generated OpenFGA model_id");
+	assert(internal.generated.deployment.active_slot === "blue", "first deploy should default the active API slot to blue");
+	assert(internal.generated.deployment.slots.blue.api_image.length > 0, "blue slot image was not persisted");
 	assert(internal.generated.bootstrap.completed_at.length > 0, "bootstrap completion timestamp was not persisted");
 	assert(traefikDynamic.includes("obs-ui-router"), "traefik-dynamic.yaml is missing obs-ui-router");
 	assert(traefikDynamic.includes("obs-api-router"), "traefik-dynamic.yaml is missing obs-api-router");
@@ -304,6 +323,11 @@ function assertBootstrapArtifacts(expectedOtelEndpoint: string) {
 
 function assertObservabilityHealth() {
 	const health = JSON.parse(runCli(["health", "--json"], true)) as {
+		deploy?: {
+			active_slot?: "blue" | "green";
+			previous_slot?: null | "blue" | "green";
+			api_slots?: Record<"blue" | "green", { active?: boolean; image?: string | null }>;
+		};
 		observability?: {
 			browser_replay_runtime?: {
 				web?: { configured?: boolean };
@@ -319,6 +343,32 @@ function assertObservabilityHealth() {
 	assert(health.observability?.sessions_source?.configured, "health --json reports Sessions source is not configured");
 	assert(health.observability?.saved_searches?.configured, `health --json reports saved searches missing: ${(health.observability?.saved_searches?.missing ?? []).join(", ")}`);
 	assert(health.observability?.tags?.configured, `health --json reports tags missing: ${(health.observability?.tags?.missing ?? []).join(", ")}`);
+	assert(Boolean(health.deploy?.active_slot), "health --json did not report an active API slot");
+}
+
+function assertDeploymentSlots(expected: {
+	active: "blue" | "green";
+	previous: "" | "blue" | "green";
+	activeImage: string;
+	standbyImage?: string;
+}) {
+	const internal = readJson<{
+		generated: {
+			deployment: {
+				active_slot: "blue" | "green";
+				previous_slot: "" | "blue" | "green";
+				slots: Record<"blue" | "green", { api_image: string; release_version: string; deployed_at: string }>;
+			};
+		};
+	}>(internalConfigPath);
+	const deployment = internal.generated.deployment;
+	const standby = expected.active === "blue" ? "green" : "blue";
+	assert(deployment.active_slot === expected.active, `expected active slot ${expected.active}, got ${deployment.active_slot}`);
+	assert(deployment.previous_slot === expected.previous, `expected previous slot ${expected.previous || "<empty>"}, got ${deployment.previous_slot || "<empty>"}`);
+	assert(deployment.slots[expected.active].api_image === expected.activeImage, `expected ${expected.active} slot image ${expected.activeImage}, got ${deployment.slots[expected.active].api_image}`);
+	if (expected.standbyImage !== undefined) {
+		assert(deployment.slots[standby].api_image === expected.standbyImage, `expected ${standby} slot image ${expected.standbyImage}, got ${deployment.slots[standby].api_image}`);
+	}
 }
 
 function assertObsRouting() {
@@ -413,10 +463,27 @@ function assertApiAuthAndOtel() {
 	const apiHost = `api.${rootDomain}`;
 	const apiBase = publicHttpsUrl(apiHost);
 	const resolveArg = `${apiHost}:${publicHttpsPort}:127.0.0.1`;
-	const loginResponse = curl(["-ksS", "--resolve", resolveArg, `${apiBase}/api/access/web`]);
+	let loginResponse = "";
+	let lastError = "";
+	const deadline = Date.now() + 60_000;
+	while (Date.now() < deadline) {
+		try {
+			loginResponse = curl(["-ksS", "--resolve", resolveArg, `${apiBase}/api/access/web`]);
+			if (
+				loginResponse.includes(
+					publicHttpsUrl(`auth.${rootDomain}`, "/realms/envsync/protocol/openid-connect/auth"),
+				)
+			) {
+				break;
+			}
+		} catch (error) {
+			lastError = error instanceof Error ? error.message : String(error);
+		}
+		sleep(2);
+	}
 	assert(
 		loginResponse.includes(publicHttpsUrl(`auth.${rootDomain}`, "/realms/envsync/protocol/openid-connect/auth")),
-		"API web login URL did not use the public auth host",
+		lastError ? `API web login URL did not use the public auth host\n${lastError}` : "API web login URL did not use the public auth host",
 	);
 
 	const otelReady = tryRun("docker", [
@@ -492,6 +559,37 @@ async function main() {
 		assertObservabilityHealth();
 		assertObsRouting();
 		assertApiAuthAndOtel();
+		assertDeploymentSlots({
+			active: "blue",
+			previous: "",
+			activeImage: localApiImage,
+		});
+		updateDeployConfig(config => {
+			const images = (config.images ?? {}) as Record<string, unknown>;
+			images.api = localApiImageCanary;
+			config.images = images;
+		});
+		runCli(["deploy"]);
+		assertDeploymentSlots({
+			active: "green",
+			previous: "blue",
+			activeImage: localApiImageCanary,
+			standbyImage: localApiImage,
+		});
+		assertApiAuthAndOtel();
+		runCli(["rollback"]);
+		assertDeploymentSlots({
+			active: "blue",
+			previous: "green",
+			activeImage: localApiImage,
+			standbyImage: localApiImageCanary,
+		});
+		assertApiAuthAndOtel();
+		updateDeployConfig(config => {
+			const images = (config.images ?? {}) as Record<string, unknown>;
+			images.api = localApiImage;
+			config.images = images;
+		});
 		firstStoreId = readJson<{ generated: { openfga: { store_id: string } } }>(internalConfigPath).generated.openfga.store_id;
 		assert(firstStoreId.length > 0, "first bootstrap did not persist an OpenFGA store ID");
 		runCli(["bootstrap", "--force"]);
