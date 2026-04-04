@@ -71,6 +71,11 @@ interface DeployConfig {
 		s3_public: boolean;
 		s3_console_public: boolean;
 	};
+	upgrade: {
+		maintenance_mode_enabled: boolean;
+		db_snapshot_on_api_upgrade: boolean;
+		keep_failed_upgrade_db_snapshot: boolean;
+	};
 	release_channel?: string;
 }
 
@@ -82,6 +87,7 @@ interface DeployGeneratedState {
 	deployment: {
 		active_slot: ApiSlot;
 		previous_slot: "" | ApiSlot;
+		maintenance_mode: boolean;
 		slots: Record<ApiSlot, ApiSlotState>;
 	};
 	clickstack: {
@@ -136,9 +142,11 @@ const TRAEFIK_DYNAMIC_FILE = path.join(DEPLOY_ROOT, "traefik-dynamic.yaml");
 const KEYCLOAK_REALM_FILE = path.join(DEPLOY_ROOT, "keycloak-realm.envsync.json");
 const NGINX_WEB_CONF = path.join(DEPLOY_ROOT, "nginx-web.conf");
 const NGINX_LANDING_CONF = path.join(DEPLOY_ROOT, "nginx-landing.conf");
+const NGINX_API_MAINTENANCE_CONF = path.join(DEPLOY_ROOT, "nginx-api-maintenance.conf");
 const OTEL_AGENT_CONF = path.join(DEPLOY_ROOT, "otel-agent.yaml");
 const CLICKSTACK_CLICKHOUSE_CONF = path.join(DEPLOY_ROOT, "clickhouse-listen.xml");
 const INTERNAL_CONFIG_JSON = path.join(DEPLOY_ROOT, "config.json");
+const UPGRADE_BACKUPS_ROOT = path.join(BACKUPS_ROOT, "upgrade");
 
 const STACK_VOLUMES = [
 	"postgres_data",
@@ -523,6 +531,147 @@ function logReleaseContext(config: DeployConfig) {
 	}
 }
 
+function renderHelpBlock() {
+	return [
+		`${chalk.bold("EnvSync Self-Host Deploy CLI")}`,
+		"",
+		`${chalk.dim("Usage")}`,
+		"  envsync-deploy <command> [options]",
+		"",
+		`${chalk.dim("Commands")}`,
+		"  preinstall           Prepare the host with Docker, Swarm, and required packages",
+		"  setup                Write /etc/envsync/deploy.yaml for a new self-hosted install",
+		"  bootstrap            Destructively rebuild managed infra and bootstrap runtime state",
+		"  deploy               Deploy the configured release",
+		"  promote [blue|green] Promote the requested or inactive API slot",
+		"  rollback             Switch traffic back to the previous API slot",
+		"  health [--json]      Show operator health or machine-readable health JSON",
+		"  upgrade [version]    Pin a target release and deploy it",
+		"  upgrade-deps         Refresh dependency images and redeploy",
+		"  backup               Create a managed self-host backup archive",
+		"  restore <archive>    Restore a backup archive into the managed self-host roots",
+		"",
+		`${chalk.dim("Options")}`,
+		"  --dry-run            Preview mutating work without changing the host",
+		"  --force              Skip destructive confirmations where supported",
+		"  --deploy             Used with restore to start services after restore",
+	].join("\n");
+}
+
+type OperatorOverview = {
+	statusLines: string[];
+	nextSteps: string[];
+};
+
+function buildOperatorOverview(): OperatorOverview {
+	const statusLines = [
+		`CLI version: ${chalk.cyan(getDeployCliVersion())}`,
+		`Config path: ${chalk.dim(DEPLOY_YAML)}`,
+	];
+
+	const dockerReady = commandSucceeds("docker", ["info"]);
+	statusLines.push(`Docker: ${dockerReady ? chalk.green("available") : chalk.red("not available")}`);
+
+	if (!exists(DEPLOY_YAML)) {
+		statusLines.push(`Configured: ${chalk.red("no")}`);
+		return {
+			statusLines,
+			nextSteps: [
+				"`envsync-deploy preinstall` if this host has not been prepared yet",
+				"`envsync-deploy setup` to create the self-host deploy config",
+			],
+		};
+	}
+
+	const { config, generated } = loadState();
+	const services = listStackServices(config);
+	const stackRunning = stackExists(config);
+	const bootstrapComplete = hasCompleteBootstrapState(generated) && generated.bootstrap.completed_at.length > 0;
+	const api = apiHealth(services, config.services.stack_name);
+	const web = serviceHealth(services, `${config.services.stack_name}_web_nginx`);
+	const landing = serviceHealth(services, `${config.services.stack_name}_landing_nginx`);
+
+	statusLines.push(`Configured: ${chalk.green("yes")}`);
+	statusLines.push(`Pinned release: ${chalk.cyan(config.release.version)}`);
+	statusLines.push(`Stack: ${stackRunning ? chalk.green(config.services.stack_name) : chalk.yellow("not running")}`);
+	statusLines.push(`Bootstrap: ${bootstrapComplete ? chalk.green("complete") : chalk.yellow("pending")}`);
+	statusLines.push(`Active API slot: ${chalk.cyan(generated.deployment.active_slot)}`);
+	statusLines.push(`API: ${api === "healthy" ? chalk.green(api) : api === "missing" ? chalk.red(api) : chalk.yellow(api)}`);
+	statusLines.push(`Web: ${web === "healthy" ? chalk.green(web) : web === "missing" ? chalk.red(web) : chalk.yellow(web)}`);
+	statusLines.push(`Landing: ${landing === "healthy" ? chalk.green(landing) : landing === "missing" ? chalk.red(landing) : chalk.yellow(landing)}`);
+
+	if (!bootstrapComplete) {
+		return {
+			statusLines,
+			nextSteps: [
+				"`envsync-deploy bootstrap` to create infrastructure, runtime secrets, and generated state",
+				"`envsync-deploy bootstrap --force` for non-interactive automation",
+			],
+		};
+	}
+
+	if (api !== "healthy" || web !== "healthy" || landing !== "healthy") {
+		return {
+			statusLines,
+			nextSteps: [
+				"`envsync-deploy deploy` to reconcile services to the pinned release",
+				"`envsync-deploy health --json` to inspect exact slot and observability state",
+			],
+		};
+	}
+
+	return {
+		statusLines,
+		nextSteps: [
+			"`envsync-deploy health --json` for machine-readable checks",
+			"`envsync-deploy upgrade` to move to the current deploy-cli release",
+			"`envsync-deploy backup` before an upgrade or major change",
+		],
+	};
+}
+
+function printOperatorOverview() {
+	const overview = buildOperatorOverview();
+	const commonCommands = [
+		"`envsync-deploy setup`",
+		"`envsync-deploy bootstrap --force`",
+		"`envsync-deploy deploy`",
+		"`envsync-deploy upgrade`",
+		"`envsync-deploy health --json`",
+		"`envsync-deploy backup`",
+		"`envsync-deploy restore <archive>`",
+		"`envsync-deploy promote`",
+		"`envsync-deploy rollback`",
+	];
+	const importantNotes = [
+		"`bootstrap` is destructive",
+		"`upgrade` updates the pinned release target automatically",
+		"blue/green keeps the previous API slot for rollback",
+		"self-hosted release targets must be exact semver values",
+	];
+
+	console.log(chalk.bold("EnvSync Self-Host Deploy CLI"));
+	printHealthSection("Current Status");
+	for (const line of overview.statusLines) {
+		console.log(`  ${line}`);
+	}
+
+	printHealthSection("Recommended Next Step");
+	for (const line of overview.nextSteps) {
+		console.log(`  - ${line}`);
+	}
+
+	printHealthSection("Common Commands");
+	for (const line of commonCommands) {
+		console.log(`  - ${line}`);
+	}
+
+	printHealthSection("Important Notes");
+	for (const line of importantNotes) {
+		console.log(`  - ${line}`);
+	}
+}
+
 function assertSemverVersion(version: string, label = "release version") {
 	if (!SEMVER_VERSION_RE.test(version)) {
 		throw new Error(`Invalid ${label} '${version}'. Expected an exact semver like 0.6.2.`);
@@ -657,6 +806,11 @@ function normalizeConfig(raw: Partial<DeployConfig>): DeployConfig {
 			s3_public: requireDefined(raw.exposure?.s3_public, "exposure.s3_public"),
 			s3_console_public: requireDefined(raw.exposure?.s3_console_public, "exposure.s3_console_public"),
 		},
+		upgrade: {
+			maintenance_mode_enabled: raw.upgrade?.maintenance_mode_enabled ?? true,
+			db_snapshot_on_api_upgrade: raw.upgrade?.db_snapshot_on_api_upgrade ?? true,
+			keep_failed_upgrade_db_snapshot: raw.upgrade?.keep_failed_upgrade_db_snapshot ?? true,
+		},
 	};
 }
 
@@ -669,6 +823,7 @@ function emptyGeneratedState(): DeployGeneratedState {
 		deployment: {
 			active_slot: "blue",
 			previous_slot: "",
+			maintenance_mode: false,
 			slots: {
 				blue: emptyApiSlotState(),
 				green: emptyApiSlotState(),
@@ -707,6 +862,7 @@ function normalizeGeneratedState(raw?: Partial<DeployGeneratedState>): DeployGen
 			previous_slot: raw?.deployment?.previous_slot === "blue" || raw?.deployment?.previous_slot === "green"
 				? raw.deployment.previous_slot
 				: defaults.deployment.previous_slot,
+			maintenance_mode: raw?.deployment?.maintenance_mode ?? defaults.deployment.maintenance_mode,
 			slots: {
 				blue: normalizeApiSlotState(raw?.deployment?.slots?.blue),
 				green: normalizeApiSlotState(raw?.deployment?.slots?.green),
@@ -824,6 +980,7 @@ function resetBootstrapGeneratedState(generated: DeployGeneratedState) {
 		deployment: {
 			active_slot: "blue",
 			previous_slot: "",
+			maintenance_mode: false,
 			slots: {
 				blue: emptyApiSlotState(),
 				green: emptyApiSlotState(),
@@ -870,6 +1027,7 @@ function createSteadyApiDeploymentState(
 	return {
 		active_slot: activeSlot,
 		previous_slot: "",
+		maintenance_mode: deployment.maintenance_mode,
 		slots: {
 			...deployment.slots,
 			[activeSlot]: {
@@ -914,6 +1072,7 @@ function createPromotionCandidateState(
 		deployment: {
 			active_slot: activeSlot,
 			previous_slot: deployment.previous_slot,
+			maintenance_mode: deployment.maintenance_mode,
 			slots: {
 				...deployment.slots,
 				[targetSlot]: prepareApiSlotStateForTarget(deployment.slots[targetSlot], config),
@@ -935,6 +1094,7 @@ function createPromotedApiDeploymentState(
 	return {
 		active_slot: targetSlot,
 		previous_slot: currentActive,
+		maintenance_mode: candidate.maintenance_mode,
 		slots: {
 			...candidate.slots,
 			[targetSlot]: stampApiSlotState(candidate.slots[targetSlot], config),
@@ -954,6 +1114,7 @@ function createRolledBackApiDeploymentState(generated: DeployGeneratedState): De
 	return {
 		active_slot: rollbackSlot,
 		previous_slot: deployment.active_slot,
+		maintenance_mode: deployment.maintenance_mode,
 		slots: deployment.slots,
 	};
 }
@@ -992,6 +1153,7 @@ function buildRuntimeEnv(config: DeployConfig, generated: DeployGeneratedState):
 	const hosts = domainMap(config.domain.root_domain);
 	return {
 		NODE_ENV: "production",
+		DB_AUTO_MIGRATE: "false",
 		PORT: `${config.services.api_port}`,
 		DATABASE_HOST: "postgres",
 		DATABASE_PORT: "5432",
@@ -1130,6 +1292,7 @@ function renderKeycloakRealm(config: DeployConfig, runtimeEnv: RuntimeEnv) {
 function renderTraefikDynamicConfig(config: DeployConfig, generated: DeployGeneratedState) {
 	const hosts = domainMap(config.domain.root_domain);
 	const activeSlot = generated.deployment.active_slot;
+	const apiServiceName = generated.deployment.maintenance_mode ? "envsync-api-maintenance" : "envsync-api";
 	const otelAllowedOrigins = [
 		...publicHttpsOriginVariants(config, hosts.landing),
 		...publicHttpsOriginVariants(config, hosts.app),
@@ -1187,6 +1350,10 @@ function renderTraefikDynamicConfig(config: DeployConfig, generated: DeployGener
 		"          timeout: 3s",
 		"        servers:",
 		"          - url: http://envsync_api_green:4000",
+		"    envsync-api-maintenance:",
+		"      loadBalancer:",
+		"        servers:",
+		"          - url: http://api_maintenance:8080",
 		"    landing:",
 		"      loadBalancer:",
 		"        servers:",
@@ -1240,7 +1407,7 @@ function renderTraefikDynamicConfig(config: DeployConfig, generated: DeployGener
 		"        certResolver: letsencrypt",
 		"    api-router:",
 		`      rule: Host(\`${hosts.api}\`)`,
-		"      service: envsync-api",
+		`      service: ${apiServiceName}`,
 		"      entryPoints: [websecure]",
 		"      tls:",
 		"        certResolver: letsencrypt",
@@ -1261,9 +1428,24 @@ function renderNginxConf(kind: "web" | "landing") {
 	].join("\n") + "\n";
 }
 
+function renderApiMaintenanceConf() {
+	return [
+		"server {",
+		"  listen 8080;",
+		"  server_name _;",
+		"  location / {",
+		"    default_type application/json;",
+		"    add_header Cache-Control \"no-store\" always;",
+		"    return 503 '{\"error\":\"Upgrade in progress. Please retry shortly.\"}';",
+		"  }",
+		"}",
+	].join("\n") + "\n";
+}
+
 function renderFrontendRuntimeConfig(config: DeployConfig, generated: DeployGeneratedState) {
 	const hosts = domainMap(config.domain.root_domain);
 	const otelEndpoint = publicHttpsUrl(config, hosts.obs);
+	const activeReleaseVersion = generated.deployment.slots[generated.deployment.active_slot].release_version || config.release.version;
 	return `window.__ENVSYNC_RUNTIME_CONFIG__ = ${JSON.stringify({
 		apiBaseUrl: publicHttpsUrl(config, hosts.api),
 		appBaseUrl: publicHttpsUrl(config, hosts.app),
@@ -1276,7 +1458,8 @@ function renderFrontendRuntimeConfig(config: DeployConfig, generated: DeployGene
 		hyperdxUrl: otelEndpoint,
 		hyperdxDisabled: generated.clickstack.browser_api_key.length === 0,
 		hyperdxAdvancedNetworkCapture: false,
-		releaseVersion: config.release.version,
+		releaseVersion: activeReleaseVersion,
+		activeApiSlot: generated.deployment.active_slot,
 	}, null, 2)};\n`;
 }
 
@@ -1542,6 +1725,13 @@ ${renderEnvList({
     networks: [envsync]
 ${includeAppServices ? `
 
+  api_maintenance:
+    image: nginx:1.27-alpine
+    configs:
+      - source: nginx_api_maintenance_conf
+        target: /etc/nginx/conf.d/default.conf
+    networks: [envsync]
+
   landing_nginx:
     image: nginx:1.27-alpine
     configs:
@@ -1611,6 +1801,8 @@ configs:
     file: ${NGINX_LANDING_CONF}
   nginx_web_conf:
     file: ${NGINX_WEB_CONF}
+  nginx_api_maintenance_conf:
+    file: ${NGINX_API_MAINTENANCE_CONF}
 `.trimStart();
 }
 
@@ -1630,6 +1822,7 @@ function writeDeployArtifacts(config: DeployConfig, generated: DeployGeneratedSt
 	writeFileMaybe(STACK_FILE, renderStack(config, runtimeEnv, generated, "full"));
 	writeFileMaybe(NGINX_WEB_CONF, renderNginxConf("web"));
 	writeFileMaybe(NGINX_LANDING_CONF, renderNginxConf("landing"));
+	writeFileMaybe(NGINX_API_MAINTENANCE_CONF, renderApiMaintenanceConf());
 	writeFileMaybe(OTEL_AGENT_CONF, renderOtelAgentConfig(config));
 	writeFileMaybe(CLICKSTACK_CLICKHOUSE_CONF, renderClickstackClickHouseConfig());
 	logSuccess(currentOptions.dryRun ? "Deploy artifacts previewed" : "Deploy artifacts written");
@@ -1681,6 +1874,7 @@ function extractStaticBundle(image: string, targetDir: string) {
 		logDryRun(`Would extract ${image} into ${targetDir}`);
 		return;
 	}
+	fs.rmSync(targetDir, { recursive: true, force: true });
 	ensureDir(targetDir);
 	const containerId = run("docker", ["create", image], { quiet: true }).trim();
 	try {
@@ -1689,6 +1883,94 @@ function extractStaticBundle(image: string, targetDir: string) {
 		run("docker", ["rm", "-f", containerId], { quiet: true });
 	}
 	logSuccess(`Static bundle extracted to ${targetDir}`);
+}
+
+function releaseAssetDir(kind: "web" | "landing", version: string) {
+	return path.join(RELEASES_ROOT, kind, version);
+}
+
+function currentReleaseDir(kind: "web" | "landing") {
+	return path.join(RELEASES_ROOT, kind, "current");
+}
+
+function stageFrontendRelease(kind: "web" | "landing", image: string, version: string) {
+	const targetDir = releaseAssetDir(kind, version);
+	extractStaticBundle(image, targetDir);
+}
+
+function activateFrontendRelease(kind: "web" | "landing", version: string, runtimeConfig: string) {
+	const stagedDir = releaseAssetDir(kind, version);
+	const currentDir = currentReleaseDir(kind);
+	if (currentOptions.dryRun) {
+		logDryRun(`Would activate ${kind} release ${version} into ${currentDir}`);
+		logDryRun(`Would write ${kind} runtime-config.js for release ${version}`);
+		return;
+	}
+	if (!exists(stagedDir)) {
+		throw new Error(`Missing staged ${kind} release at ${stagedDir}`);
+	}
+	fs.rmSync(currentDir, { recursive: true, force: true });
+	ensureDir(currentDir);
+	fs.cpSync(stagedDir, currentDir, { recursive: true });
+	writeFile(path.join(currentDir, "runtime-config.js"), runtimeConfig);
+}
+
+function createApiDbUpgradeBackup(config: DeployConfig, fromVersion: string, toVersion: string) {
+	const timestamp = new Date().toISOString().replace(/[:]/g, "-");
+	const fileName = `envsync-db-preupgrade-${fromVersion || "unknown"}-to-${toVersion}-${timestamp}.dump`;
+	const hostPath = path.join(UPGRADE_BACKUPS_ROOT, fileName);
+	logStep(`Creating API DB upgrade snapshot ${fileName}`);
+	if (currentOptions.dryRun) {
+		logDryRun(`Would create upgrade DB snapshot at ${hostPath}`);
+		return hostPath;
+	}
+	ensureDir(UPGRADE_BACKUPS_ROOT);
+	run("docker", [
+		"run",
+		"--rm",
+		"--network",
+		stackNetworkName(config),
+		"-e",
+		"PGPASSWORD=envsync-postgres",
+		"-v",
+		`${UPGRADE_BACKUPS_ROOT}:/backup`,
+		"postgres:17",
+		"sh",
+		"-lc",
+		`pg_dump -h postgres -U postgres -d envsync -Fc -f /backup/${fileName}`,
+	]);
+	logSuccess(`API DB upgrade snapshot created at ${hostPath}`);
+	return hostPath;
+}
+
+function restoreApiDbUpgradeBackup(config: DeployConfig, backupPath: string) {
+	const fileName = path.basename(backupPath);
+	logWarn(`Restoring API DB upgrade snapshot ${fileName}`);
+	if (currentOptions.dryRun) {
+		logDryRun(`Would restore upgrade DB snapshot from ${backupPath}`);
+		return;
+	}
+	run("docker", [
+		"run",
+		"--rm",
+		"--network",
+		stackNetworkName(config),
+		"-e",
+		"PGPASSWORD=envsync-postgres",
+		"-v",
+		`${UPGRADE_BACKUPS_ROOT}:/backup:ro`,
+		"postgres:17",
+		"sh",
+		"-lc",
+		`pg_restore --clean --if-exists --no-owner --no-privileges -h postgres -U postgres -d envsync /backup/${fileName}`,
+	]);
+	logSuccess(`API DB upgrade snapshot restored from ${backupPath}`);
+}
+
+function activateFrontendReleaseForState(config: DeployConfig, state: DeployGeneratedState, fallbackVersion = config.release.version) {
+	const version = state.deployment.slots[state.deployment.active_slot].release_version || fallbackVersion;
+	activateFrontendRelease("web", version, renderFrontendRuntimeConfig(config, state));
+	activateFrontendRelease("landing", version, renderFrontendRuntimeConfig(config, state));
 }
 
 function buildKeycloakImage(imageTag: string, repoRoot = REPO_ROOT) {
@@ -1916,6 +2198,7 @@ function runBootstrapInit(config: DeployConfig) {
 			"run",
 			"scripts/prod-init.ts",
 			"--json",
+			"--skip-migrations",
 			"--no-write-root-env",
 		]);
 		return {
@@ -1941,6 +2224,7 @@ function runBootstrapInit(config: DeployConfig) {
 			"run",
 			"scripts/prod-init.ts",
 			"--json",
+			"--skip-migrations",
 			"--no-write-root-env",
 		],
 		{ quiet: true },
@@ -2072,9 +2356,93 @@ function readRenderedRuntimeConfig(filePath: string) {
 			hyperdxUrl?: string;
 			hyperdxDisabled?: boolean;
 			releaseVersion?: string;
+			activeApiSlot?: ApiSlot;
 		};
 	} catch {
 		return null;
+	}
+}
+
+function activeApiImage(config: DeployConfig, generated: DeployGeneratedState) {
+	const slot = generated.deployment.active_slot;
+	return generated.deployment.slots[slot].api_image || config.images.api;
+}
+
+function parseMigrationCommandJson(output: string) {
+	const trimmed = output.trim();
+	if (!trimmed) {
+		throw new Error("Migration command returned no JSON output");
+	}
+
+	const lines = trimmed
+		.split(/\r?\n/)
+		.map(line => line.trim())
+		.filter(Boolean);
+
+	for (let index = lines.length - 1; index >= 0; index -= 1) {
+		const candidate = lines[index]!;
+		if (!candidate.startsWith("{") || !candidate.endsWith("}")) continue;
+		try {
+			return JSON.parse(candidate) as {
+				ok: boolean;
+				currentHead: string | null;
+				results?: unknown;
+				executedMigrations?: Array<{ name: string; executedAt: string | null }>;
+			};
+		} catch {
+			continue;
+		}
+	}
+
+	throw new Error(`Migration command returned non-JSON output.\nCaptured stdout:\n${trimmed}`);
+}
+
+function runApiMigrationJsonCommand(config: DeployConfig, image: string, args: string[]) {
+	if (currentOptions.dryRun) {
+		logDryRun(`Would run API migration command in ${image}: ${args.join(" ")}`);
+		return {
+			ok: true,
+			currentHead: null,
+			executedMigrations: [],
+		};
+	}
+
+	const output = run(
+		"docker",
+		[
+			"run",
+			"--rm",
+			"--network",
+			stackNetworkName(config),
+			"--env-file",
+			DEPLOY_ENV,
+			"-e",
+			"SKIP_ROOT_ENV=1",
+			image,
+			"bun",
+			"run",
+			"scripts/migrate.ts",
+			...args,
+			"--json",
+		],
+		{ quiet: true },
+	);
+	return parseMigrationCommandJson(output);
+}
+
+function getApiMigrationHealth(config: DeployConfig, generated: DeployGeneratedState) {
+	try {
+		const response = runApiMigrationJsonCommand(config, activeApiImage(config, generated), ["head"]);
+		return {
+			migration_head: response.currentHead,
+			auto_migrate_enabled: false,
+		};
+	} catch (error) {
+		return {
+			migration_head: null,
+			auto_migrate_enabled: false,
+			error: error instanceof Error ? error.message : String(error),
+		};
 	}
 }
 
@@ -2440,6 +2808,138 @@ function persistGeneratedState(config: DeployConfig, generated: DeployGeneratedS
 	writeDeployArtifacts(config, generated);
 }
 
+function formatHealthStatus(status: ServiceHealth | boolean) {
+	if (status === true || status === "healthy") {
+		return `${chalk.green("●")} ${chalk.green(typeof status === "boolean" ? "yes" : status)}`;
+	}
+	if (status === false || status === "missing") {
+		return `${chalk.red("●")} ${chalk.red(typeof status === "boolean" ? "no" : status)}`;
+	}
+	return `${chalk.yellow("●")} ${chalk.yellow(status)}`;
+}
+
+function printHealthLine(label: string, value: string) {
+	console.log(`  ${chalk.dim(label.padEnd(22))} ${value}`);
+}
+
+function printHealthSection(title: string) {
+	console.log(`\n${chalk.bold.blue(title)}`);
+}
+
+function printHealthSummary(checks: {
+	bootstrap: {
+		completed: boolean;
+		completed_at: string | null;
+		services: Record<string, ServiceHealth>;
+	};
+	deploy: {
+		active_slot: ApiSlot;
+		previous_slot: string | null;
+		maintenance_mode: boolean;
+		api: ServiceHealth;
+		api_slots: Record<ApiSlot, {
+			service: ServiceHealth;
+			image: string | null;
+			release_version: string | null;
+			deployed_at: string | null;
+			active: boolean;
+		}>;
+		web: ServiceHealth;
+		landing: ServiceHealth;
+	};
+	database: {
+		api: {
+			migration_head: string | null;
+			auto_migrate_enabled: boolean;
+			error?: string;
+		};
+	};
+	observability: {
+		service: ServiceHealth;
+		obs_ui: { url: string; configured: boolean };
+		obs_api: { url: string; configured: boolean };
+		obs_otlp: { url: string; configured: boolean };
+		frontend_otel_endpoint: { web: string; landing: string };
+		browser_replay_runtime: {
+			web: { configured: boolean; hyperdx_url: string | null };
+			landing: { configured: boolean; hyperdx_url: string | null };
+		};
+		sessions_source: { configured: boolean };
+		saved_searches: { configured: boolean; missing: string[] };
+		tags: { configured: boolean; missing: string[] };
+	};
+	public: Record<string, string>;
+}) {
+	printHealthSection("EnvSync Health");
+	printHealthLine("Bootstrap", formatHealthStatus(checks.bootstrap.completed));
+	printHealthLine("Deploy API", formatHealthStatus(checks.deploy.api));
+	printHealthLine("Web", formatHealthStatus(checks.deploy.web));
+	printHealthLine("Landing", formatHealthStatus(checks.deploy.landing));
+	printHealthLine("ClickStack", formatHealthStatus(checks.observability.service));
+	printHealthLine("Active slot", chalk.cyan(checks.deploy.active_slot));
+	printHealthLine("Maintenance mode", checks.deploy.maintenance_mode ? chalk.yellow("enabled") : chalk.green("disabled"));
+	if (checks.deploy.previous_slot) {
+		printHealthLine("Rollback slot", chalk.yellow(checks.deploy.previous_slot));
+	}
+
+	printHealthSection("Bootstrap");
+	printHealthLine("Completed", formatHealthStatus(checks.bootstrap.completed));
+	printHealthLine("Completed at", checks.bootstrap.completed_at ?? chalk.dim("not completed"));
+	for (const [service, health] of Object.entries(checks.bootstrap.services)) {
+		printHealthLine(service, formatHealthStatus(health));
+	}
+
+	printHealthSection("Deployment");
+	for (const [slot, data] of Object.entries(checks.deploy.api_slots)) {
+		const heading = `${slot}${data.active ? " (active)" : ""}`;
+		printHealthLine(heading, formatHealthStatus(data.service));
+		if (data.release_version) printHealthLine(`${slot} release`, `v${data.release_version}`);
+		if (data.image) printHealthLine(`${slot} image`, chalk.dim(data.image));
+		if (data.deployed_at) printHealthLine(`${slot} deployed`, data.deployed_at);
+	}
+
+	printHealthSection("Database");
+	printHealthLine("API migration head", checks.database.api.migration_head ?? chalk.dim("none"));
+	printHealthLine("DB auto migrate", checks.database.api.auto_migrate_enabled ? chalk.red("enabled") : chalk.green("disabled"));
+	if (checks.database.api.error) {
+		printHealthLine("Migration probe", chalk.yellow(checks.database.api.error));
+	}
+
+	printHealthSection("Observability");
+	printHealthLine("Sessions source", formatHealthStatus(checks.observability.sessions_source.configured));
+	printHealthLine("Saved searches", formatHealthStatus(checks.observability.saved_searches.configured));
+	if (checks.observability.saved_searches.missing.length > 0) {
+		printHealthLine("Missing searches", chalk.yellow(checks.observability.saved_searches.missing.join(", ")));
+	}
+	printHealthLine("Tags", formatHealthStatus(checks.observability.tags.configured));
+	if (checks.observability.tags.missing.length > 0) {
+		printHealthLine("Missing tags", chalk.yellow(checks.observability.tags.missing.join(", ")));
+	}
+	printHealthLine("Replay web", formatHealthStatus(checks.observability.browser_replay_runtime.web.configured));
+	printHealthLine("Replay landing", formatHealthStatus(checks.observability.browser_replay_runtime.landing.configured));
+	printHealthLine("Obs UI", checks.observability.obs_ui.url);
+	printHealthLine("Obs API", checks.observability.obs_api.url);
+	printHealthLine("Obs OTLP", checks.observability.obs_otlp.url);
+
+	printHealthSection("Public URLs");
+	for (const [label, url] of Object.entries(checks.public)) {
+		printHealthLine(label, url);
+	}
+
+	printHealthSection("Next Steps");
+	if (!checks.bootstrap.completed) {
+		printHealthLine("Recommended", chalk.cyan("envsync-deploy bootstrap"));
+		return;
+	}
+	if (checks.deploy.api !== "healthy" || checks.deploy.web !== "healthy" || checks.deploy.landing !== "healthy") {
+		printHealthLine("Recommended", chalk.cyan("envsync-deploy deploy"));
+		return;
+	}
+	printHealthLine("Inspect JSON", chalk.cyan("envsync-deploy health --json"));
+	printHealthLine("Upgrade", chalk.cyan("envsync-deploy upgrade"));
+	printHealthLine("Backup", chalk.cyan("envsync-deploy backup"));
+}
+
 async function cmdPreinstall() {
 	ensureDir(HOST_ROOT);
 	ensureDir(DEPLOY_ROOT);
@@ -2538,6 +3038,11 @@ async function cmdSetup() {
 			s3_public: true,
 			s3_console_public: true,
 		},
+		upgrade: {
+			maintenance_mode_enabled: true,
+			db_snapshot_on_api_upgrade: true,
+			keep_failed_upgrade_db_snapshot: true,
+		},
 	};
 
 	saveDesiredConfig(config);
@@ -2591,6 +3096,9 @@ async function cmdBootstrap() {
 	waitForHttpService(config, "keycloak management readiness", "http://keycloak:9000/health/ready", 180);
 	waitForHttpService(config, "openfga", "http://openfga:8090/stores");
 	waitForTcpService(config, "minikms", "minikms", 50051);
+	logStep("Running API database migrations");
+	runApiMigrationJsonCommand(config, config.images.api, ["latest"]);
+	logSuccess("API database migrations completed");
 	const initResult = runBootstrapInit(config);
 	const clickstackBootstrapResult = runClickstackBootstrap(config);
 	const persistedGenerated = normalizeGeneratedState({
@@ -2651,48 +3159,102 @@ async function cmdDeploy() {
 	}
 	ensureRepoCheckout(config);
 	buildKeycloakImage(config.images.keycloak);
-	if (currentOptions.dryRun) {
-		logDryRun(`Would ensure ${RELEASES_ROOT}/web/current exists`);
-		logDryRun(`Would ensure ${RELEASES_ROOT}/landing/current exists`);
-	} else {
-		ensureDir(`${RELEASES_ROOT}/web/current`);
-		ensureDir(`${RELEASES_ROOT}/landing/current`);
+	if (!currentOptions.dryRun) {
+		ensureDir(currentReleaseDir("web"));
+		ensureDir(currentReleaseDir("landing"));
 	}
-	extractStaticBundle(config.images.web, `${RELEASES_ROOT}/web/current`);
-	extractStaticBundle(config.images.landing, `${RELEASES_ROOT}/landing/current`);
-	let currentState = normalizeGeneratedState(generated);
+	stageFrontendRelease("web", config.images.web, config.release.version);
+	stageFrontendRelease("landing", config.images.landing, config.release.version);
+
+	const originalState = normalizeGeneratedState(generated);
+	let currentState = originalState;
 	let promoted = false;
 	const candidateDeployment = createPromotionCandidateState(config, currentState);
 	if (candidateDeployment) {
+		const targetSlot = otherApiSlot(candidateDeployment.active_slot);
 		const candidateState = normalizeGeneratedState({
 			...currentState,
-			deployment: candidateDeployment,
+			deployment: {
+				...candidateDeployment,
+				maintenance_mode: config.upgrade.maintenance_mode_enabled,
+			},
 		});
+		const activeImageBeforeUpgrade = currentState.deployment.slots[currentState.deployment.active_slot].api_image || config.images.api;
+		const activeReleaseBeforeUpgrade = currentState.deployment.slots[currentState.deployment.active_slot].release_version || config.release.version;
+		const preUpgradeHead = runApiMigrationJsonCommand(config, activeImageBeforeUpgrade, ["head"]).currentHead;
+		let snapshotPath: string | null = null;
+		let usedSnapshotRestore = false;
 		writeDeployArtifacts(config, candidateState);
-		writeFileMaybe(`${RELEASES_ROOT}/web/current/runtime-config.js`, renderFrontendRuntimeConfig(config, candidateState));
-		writeFileMaybe(`${RELEASES_ROOT}/landing/current/runtime-config.js`, renderFrontendRuntimeConfig(config, candidateState));
-		const targetSlot = otherApiSlot(candidateDeployment.active_slot);
-		logInfo(`Deploying release ${config.release.version} into inactive API slot ${targetSlot}`);
-		deployRenderedStack(config, `candidate ${targetSlot}`);
-		waitForApiSlotHealthy(config, targetSlot);
-		currentState = normalizeGeneratedState({
-			...candidateState,
-			deployment: createPromotedApiDeploymentState(config, candidateState),
-		});
-		writeDeployArtifacts(config, currentState);
-		writeFileMaybe(`${RELEASES_ROOT}/web/current/runtime-config.js`, renderFrontendRuntimeConfig(config, currentState));
-		writeFileMaybe(`${RELEASES_ROOT}/landing/current/runtime-config.js`, renderFrontendRuntimeConfig(config, currentState));
-		sleepSeconds(3);
-		promoted = true;
+		try {
+			logInfo(`Deploying release ${config.release.version} into inactive API slot ${targetSlot}`);
+			deployRenderedStack(config, `candidate ${targetSlot}`);
+			logInfo(`API migration head before upgrade: ${preUpgradeHead ?? "none"}`);
+			if (config.upgrade.db_snapshot_on_api_upgrade) {
+				snapshotPath = createApiDbUpgradeBackup(config, activeReleaseBeforeUpgrade, config.release.version);
+			}
+			runApiMigrationJsonCommand(config, config.images.api, ["latest"]);
+			const postUpgradeHead = runApiMigrationJsonCommand(config, config.images.api, ["head"]).currentHead;
+			logInfo(`API migration head after upgrade: ${postUpgradeHead ?? "none"}`);
+			waitForApiSlotHealthy(config, targetSlot);
+			currentState = normalizeGeneratedState({
+				...candidateState,
+				deployment: {
+					...createPromotedApiDeploymentState(config, candidateState),
+					maintenance_mode: false,
+				},
+			});
+			writeDeployArtifacts(config, currentState);
+			activateFrontendReleaseForState(config, currentState, config.release.version);
+			sleepSeconds(3);
+			promoted = true;
+			if (snapshotPath && !currentOptions.dryRun) {
+				fs.rmSync(snapshotPath, { force: true });
+			}
+		} catch (error) {
+			const rollbackTarget = preUpgradeHead ?? "zero";
+			try {
+				logWarn(`Candidate deploy failed after migration. Rolling schema back to ${rollbackTarget}.`);
+				runApiMigrationJsonCommand(config, config.images.api, ["rollback_to", rollbackTarget]);
+			} catch (rollbackError) {
+				if (!snapshotPath) {
+					throw new Error(
+						`Deploy failed and migration rollback failed: ${error instanceof Error ? error.message : String(error)}\n${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
+					);
+				}
+				logWarn(`Migration rollback failed. Restoring DB snapshot ${snapshotPath}.`);
+				restoreApiDbUpgradeBackup(config, snapshotPath);
+				usedSnapshotRestore = true;
+			}
+			const recoveredState = normalizeGeneratedState({
+				...originalState,
+				deployment: {
+					...originalState.deployment,
+					maintenance_mode: false,
+				},
+			});
+			writeDeployArtifacts(config, recoveredState);
+			deployRenderedStack(config, "rollback recovery");
+			waitForApiSlotHealthy(config, recoveredState.deployment.active_slot);
+			if (snapshotPath && !config.upgrade.keep_failed_upgrade_db_snapshot && !currentOptions.dryRun) {
+				fs.rmSync(snapshotPath, { force: true });
+			}
+			throw new Error(
+				usedSnapshotRestore
+					? `Deploy failed after DB migration. Previous release was restored using DB snapshot recovery. ${error instanceof Error ? error.message : String(error)}`
+					: `Deploy failed after DB migration. Previous release was restored. ${error instanceof Error ? error.message : String(error)}`,
+			);
+		}
 	}
 	currentState = normalizeGeneratedState({
 		...currentState,
-		deployment: createSteadyApiDeploymentState(config, currentState),
+		deployment: {
+			...createSteadyApiDeploymentState(config, currentState),
+			maintenance_mode: false,
+		},
 	});
 	writeDeployArtifacts(config, currentState);
-	writeFileMaybe(`${RELEASES_ROOT}/web/current/runtime-config.js`, renderFrontendRuntimeConfig(config, currentState));
-	writeFileMaybe(`${RELEASES_ROOT}/landing/current/runtime-config.js`, renderFrontendRuntimeConfig(config, currentState));
 	if (!promoted) {
+		activateFrontendReleaseForState(config, currentState, config.release.version);
 		deployRenderedStack(config, "steady");
 	}
 	waitForHealthyServices(config, [
@@ -2739,10 +3301,19 @@ async function cmdPromote(target?: string) {
 		deployment: {
 			active_slot: targetSlot,
 			previous_slot: activeSlot,
+			maintenance_mode: false,
 			slots: currentState.deployment.slots,
 		},
 	});
 	writeDeployArtifacts(config, promotedState);
+	if (
+		exists(releaseAssetDir("web", promotedState.deployment.slots[targetSlot].release_version)) &&
+		exists(releaseAssetDir("landing", promotedState.deployment.slots[targetSlot].release_version))
+	) {
+		activateFrontendReleaseForState(config, promotedState);
+	} else {
+		logWarn(`Missing staged frontend assets for release ${promotedState.deployment.slots[targetSlot].release_version}; leaving current frontend assets unchanged.`);
+	}
 	sleepSeconds(3);
 	waitForApiSlotHealthy(config, targetSlot);
 	const persistedState = normalizeGeneratedState({
@@ -2764,9 +3335,20 @@ async function cmdRollback() {
 	const currentState = normalizeGeneratedState(generated);
 	const rollbackState = normalizeGeneratedState({
 		...currentState,
-		deployment: createRolledBackApiDeploymentState(currentState),
+		deployment: {
+			...createRolledBackApiDeploymentState(currentState),
+			maintenance_mode: false,
+		},
 	});
 	writeDeployArtifacts(config, rollbackState);
+	if (
+		exists(releaseAssetDir("web", rollbackState.deployment.slots[rollbackState.deployment.active_slot].release_version)) &&
+		exists(releaseAssetDir("landing", rollbackState.deployment.slots[rollbackState.deployment.active_slot].release_version))
+	) {
+		activateFrontendReleaseForState(config, rollbackState);
+	} else {
+		logWarn(`Missing staged frontend assets for release ${rollbackState.deployment.slots[rollbackState.deployment.active_slot].release_version}; leaving current frontend assets unchanged.`);
+	}
 	sleepSeconds(3);
 	waitForApiSlotHealthy(config, rollbackState.deployment.active_slot);
 	persistGeneratedState(config, normalizeGeneratedState({
@@ -2794,6 +3376,7 @@ async function cmdHealth(asJson: boolean) {
 	const savedSearchTags = new Set((clickstackSearchState?.savedSearches ?? []).flatMap(search => search.tags ?? []));
 	const dashboardTags = new Set(clickstackSearchState?.dashboardTags ?? []);
 	const combinedTags = new Set([...savedSearchTags, ...dashboardTags]);
+	const databaseHealth = getApiMigrationHealth(config, generated);
 	const bootstrapServices = {
 		postgres: serviceHealth(services, `${stackName}_postgres`),
 		redis: serviceHealth(services, `${stackName}_redis`),
@@ -2811,6 +3394,7 @@ async function cmdHealth(asJson: boolean) {
 		deploy: {
 			active_slot: generated.deployment.active_slot,
 			previous_slot: generated.deployment.previous_slot || null,
+			maintenance_mode: generated.deployment.maintenance_mode,
 			api: apiHealth(services, stackName),
 			api_slots: {
 				blue: {
@@ -2830,6 +3414,9 @@ async function cmdHealth(asJson: boolean) {
 			},
 			web: serviceHealth(services, `${stackName}_web_nginx`),
 			landing: serviceHealth(services, `${stackName}_landing_nginx`),
+		},
+		database: {
+			api: databaseHealth,
 		},
 		observability: {
 			service: serviceHealth(services, `${stackName}_clickstack`),
@@ -2885,7 +3472,7 @@ async function cmdHealth(asJson: boolean) {
 		console.log(JSON.stringify(checks, null, 2));
 		return;
 	}
-	console.log(JSON.stringify(checks, null, 2));
+	printHealthSummary(checks);
 }
 
 async function cmdUpgrade(targetVersion?: string) {
@@ -3121,7 +3708,7 @@ async function cmdBackup() {
 	console.log(tarPath);
 }
 
-async function cmdRestore(archivePath: string) {
+async function cmdRestore(archivePath: string, autoDeploy = false) {
 	if (!archivePath) throw new Error("restore requires a .tar.gz path");
 	logSection("Restore");
 	const restoreRoot = path.join(BACKUPS_ROOT, `restore-${Date.now()}`);
@@ -3158,7 +3745,15 @@ async function cmdRestore(archivePath: string) {
 	for (const volume of STACK_VOLUMES) {
 		restoreDockerVolume(stackVolumeName(config, volume), path.join(restoreRoot, "volumes", volume));
 	}
-	logSuccess("Restore completed. Run 'envsync-deploy deploy' to start services.");
+	logSuccess("Restore completed");
+	logInfo(`Restored archive: ${archivePath}`);
+	logInfo(`Restored stack name: ${config.services.stack_name}`);
+	if (autoDeploy) {
+		logInfo("Starting services after restore because --deploy was provided");
+		await cmdDeploy();
+		return;
+	}
+	logInfo("Next: envsync-deploy deploy");
 }
 
 async function main() {
@@ -3169,7 +3764,11 @@ async function main() {
 		dryRun: args.includes("--dry-run"),
 		force: args.includes("--force"),
 	};
-	const positionals = args.filter(arg => arg !== "--dry-run" && arg !== "--force");
+	const positionals = args.filter(arg => arg !== "--dry-run" && arg !== "--force" && arg !== "--deploy");
+	if (!command) {
+		printOperatorOverview();
+		process.exit(0);
+	}
 	switch (command) {
 		case "preinstall":
 			await cmdPreinstall();
@@ -3202,13 +3801,12 @@ async function main() {
 			await cmdBackup();
 			break;
 		case "restore":
-			await cmdRestore(positionals[0] ?? "");
+			await cmdRestore(positionals[0] ?? "", args.includes("--deploy"));
 			break;
 		default:
-			console.log(
-				"Usage: envsync-deploy <preinstall|setup|bootstrap|deploy|promote|rollback|health|upgrade [version]|upgrade-deps|backup|restore> [--dry-run] [--force]",
-			);
-			process.exit(command ? 1 : 0);
+			console.error(chalk.red(`Unknown command: ${command}`));
+			console.log(renderHelpBlock());
+			process.exit(1);
 	}
 }
 

@@ -13,6 +13,7 @@ const runtimeConfigSchema = z.object({
   hyperdxDisabled: z.boolean().optional(),
   hyperdxAdvancedNetworkCapture: z.boolean().optional(),
   releaseVersion: z.string().min(1).optional(),
+  activeApiSlot: z.enum(["blue", "green"]).optional(),
 });
 
 export type RuntimeConfig = z.infer<typeof runtimeConfigSchema>;

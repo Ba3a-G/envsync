@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { navGroups } from "@/constants";
 import { useAuthContext } from "@/contexts/auth";
 import { logoutWebSession } from "@/api";
+import { runtimeConfig } from "@/utils/runtime-config";
 
 interface SidebarProps {
   expanded: boolean;
@@ -178,6 +179,12 @@ export const Sidebar = ({ expanded, onToggle }: SidebarProps) => {
                 <p className="text-[11px] text-gray-500 truncate">
                   {user.user.email ?? ""}
                 </p>
+                {runtimeConfig.releaseVersion && (
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-gray-600">
+                    {`v${runtimeConfig.releaseVersion}`}
+                    {runtimeConfig.activeApiSlot ? ` · slot ${runtimeConfig.activeApiSlot}` : ""}
+                  </p>
+                )}
               </div>
             )}
 

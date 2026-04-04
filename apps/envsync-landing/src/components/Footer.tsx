@@ -26,8 +26,8 @@ const Footer = () => {
                   className="h-8 w-8"
                 />
                 <span className="text-xl font-bold text-foreground">EnvSync</span>
-                <Badge className="rounded-none border border-orange-500/60 bg-orange-500/15 px-2 py-1 text-xs font-bold text-orange-300 hover:bg-orange-500/20">
-                  ALPHA
+                <Badge className="rounded-none border border-sky-500/60 bg-sky-500/15 px-2 py-1 text-xs font-bold text-sky-300 hover:bg-sky-500/20">
+                  BETA
                 </Badge>
               </div>
               <p className="mb-6 text-muted-foreground">

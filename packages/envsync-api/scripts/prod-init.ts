@@ -13,6 +13,7 @@ import { config } from "../src/utils/env";
 const args = new Set(process.argv.slice(2));
 const jsonMode = args.has("--json");
 const noWriteRootEnv = args.has("--no-write-root-env");
+const skipMigrations = args.has("--skip-migrations");
 
 function formatErrorMessage(error: unknown) {
 	if (error instanceof Error) {
@@ -132,7 +133,11 @@ async function main() {
 	const openfga = await initOpenFGA();
 
 	log("\n=== Database ===");
-	runMigrations();
+	if (skipMigrations) {
+		log("Skipping DB migrations because --skip-migrations was provided");
+	} else {
+		runMigrations();
+	}
 
 	log("\n=== RustFS ===");
 	await initRustfs();

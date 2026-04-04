@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Fragment } from "react";
 import { logoutWebSession } from "@/api";
+import { runtimeConfig } from "@/utils/runtime-config";
 
 export const Header = () => {
   const { user } = useAuth();
@@ -126,6 +127,12 @@ export const Header = () => {
                 <p className="text-xs text-gray-500 truncate">
                   {user?.user?.email ?? ""}
                 </p>
+                {runtimeConfig.releaseVersion && (
+                  <p className="text-[11px] text-gray-600">
+                    {`v${runtimeConfig.releaseVersion}`}
+                    {runtimeConfig.activeApiSlot ? ` · slot ${runtimeConfig.activeApiSlot}` : ""}
+                  </p>
+                )}
               </div>
               <DropdownMenuSeparator className="bg-gray-800" />
               <DropdownMenuItem

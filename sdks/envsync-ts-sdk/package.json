@@ -34,7 +34,7 @@
   "peerDependencies": {
     "typescript": "^5"
   },
-  "version": "0.6.26",
+  "version": "0.6.27",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/EnvSync-Cloud/envsync.git",
