@@ -190,6 +190,13 @@ const CLICKSTACK_SELFHOST_TEAM_NAME = "EnvSync Self-Hosted Team";
 
 const SEMVER_VERSION_RE = /^\d+\.\d+\.\d+$/;
 let currentOptions: CommandOptions = { dryRun: false, force: false };
+const DEFAULT_SOURCE_REPO_URL = "https://github.com/EnvSync-Cloud/envsync.git";
+const MANAGED_VERSIONED_IMAGE_PREFIXES = {
+	api: "ghcr.io/envsync-cloud/envsync-api:",
+	keycloak: "envsync-keycloak:",
+	web: "ghcr.io/envsync-cloud/envsync-web-static:",
+	landing: "ghcr.io/envsync-cloud/envsync-landing-static:",
+} as const;
 
 function formatShellArg(arg: string) {
 	if (/^[A-Za-z0-9_./:@%+=,-]+$/.test(arg)) return arg;
@@ -534,9 +541,16 @@ function versionedImages(version: string) {
 
 function defaultSourceConfig(version: string) {
 	return {
-		repo_url: "https://github.com/EnvSync-Cloud/envsync.git",
+		repo_url: DEFAULT_SOURCE_REPO_URL,
 		ref: `v${version}`,
 	};
+}
+
+function isManagedVersionedImage(
+	image: string | undefined,
+	key: keyof Pick<DeployConfig["images"], "api" | "keycloak" | "web" | "landing">,
+) {
+	return typeof image === "string" && image.startsWith(MANAGED_VERSIONED_IMAGE_PREFIXES[key]);
 }
 
 function resolveReleaseVersion(raw: Partial<DeployConfig>) {
@@ -575,7 +589,7 @@ function normalizeConfig(raw: Partial<DeployConfig>): DeployConfig {
 	return {
 		...rest,
 		source: {
-			repo_url: raw.source?.repo_url ?? "https://github.com/EnvSync-Cloud/envsync.git",
+			repo_url: raw.source?.repo_url ?? DEFAULT_SOURCE_REPO_URL,
 			ref: `v${version}`,
 		},
 		release: {
@@ -586,10 +600,14 @@ function normalizeConfig(raw: Partial<DeployConfig>): DeployConfig {
 			acme_email: acmeEmail,
 		},
 		images: {
-			api: raw.images?.api ?? derivedImages.api,
-			keycloak: raw.images?.keycloak ?? derivedImages.keycloak,
-			web: raw.images?.web ?? derivedImages.web,
-			landing: raw.images?.landing ?? derivedImages.landing,
+			api: !raw.images?.api || isManagedVersionedImage(raw.images.api, "api") ? derivedImages.api : raw.images.api,
+			keycloak: !raw.images?.keycloak || isManagedVersionedImage(raw.images.keycloak, "keycloak")
+				? derivedImages.keycloak
+				: raw.images.keycloak,
+			web: !raw.images?.web || isManagedVersionedImage(raw.images.web, "web") ? derivedImages.web : raw.images.web,
+			landing: !raw.images?.landing || isManagedVersionedImage(raw.images.landing, "landing")
+				? derivedImages.landing
+				: raw.images.landing,
 			clickstack: raw.images?.clickstack ?? "clickhouse/clickstack-all-in-one:latest",
 			traefik: raw.images?.traefik ?? "traefik:v3.6.6",
 			otel_agent: raw.images?.otel_agent ?? "otel/opentelemetry-collector-contrib:0.111.0",
@@ -2870,17 +2888,24 @@ async function cmdHealth(asJson: boolean) {
 	console.log(JSON.stringify(checks, null, 2));
 }
 
-async function cmdUpgrade() {
+async function cmdUpgrade(targetVersion?: string) {
 	logSection("Upgrade");
 	const { config } = loadState();
+	const desiredVersion = targetVersion ?? getDeployCliVersion();
+	assertSemverVersion(desiredVersion, "target release version");
+	config.release.version = desiredVersion;
+	config.source = {
+		...config.source,
+		ref: `v${desiredVersion}`,
+	};
 	logReleaseContext(config);
 	config.images = {
 		...config.images,
-		...versionedImages(config.release.version),
+		...versionedImages(desiredVersion),
 	};
 	saveDesiredConfig(config);
 	if (currentOptions.dryRun) {
-		logDryRun(`Would upgrade stack to release ${config.release.version}`);
+		logDryRun(`Would upgrade stack to release ${desiredVersion}`);
 	}
 	await cmdDeploy();
 }
@@ -3168,7 +3193,7 @@ async function main() {
 			await cmdHealth(positionals[0] === "--json");
 			break;
 		case "upgrade":
-			await cmdUpgrade();
+			await cmdUpgrade(positionals[0]);
 			break;
 		case "upgrade-deps":
 			await cmdUpgradeDeps();
@@ -3181,7 +3206,7 @@ async function main() {
 			break;
 		default:
 			console.log(
-				"Usage: envsync-deploy <preinstall|setup|bootstrap|deploy|promote|rollback|health|upgrade|upgrade-deps|backup|restore> [--dry-run] [--force]",
+				"Usage: envsync-deploy <preinstall|setup|bootstrap|deploy|promote|rollback|health|upgrade [version]|upgrade-deps|backup|restore> [--dry-run] [--force]",
 			);
 			process.exit(command ? 1 : 0);
 	}

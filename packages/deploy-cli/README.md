@@ -45,7 +45,7 @@ envsync-deploy deploy [--dry-run]
 envsync-deploy promote [blue|green] [--dry-run]
 envsync-deploy rollback [--dry-run]
 envsync-deploy health [--json]
-envsync-deploy upgrade [--dry-run]
+envsync-deploy upgrade [version] [--dry-run]
 envsync-deploy upgrade-deps [--dry-run]
 envsync-deploy backup [--dry-run]
 envsync-deploy restore <archive> [--dry-run]
@@ -67,7 +67,17 @@ npx @envsync-cloud/deploy-cli setup
 
 `setup` requires an exact release version such as `0.6.2`. Channel names like `stable` and `latest` are not accepted for self-hosted installs.
 
-The configured target release comes from `/etc/envsync/deploy.yaml`. Running a newer CLI package with `bunx @envsync-cloud/deploy-cli@<version> ...` does not change the pinned target release by itself.
+The configured target release comes from `/etc/envsync/deploy.yaml`. `upgrade` now updates that pinned release for you:
+
+```bash
+bunx @envsync-cloud/deploy-cli@0.6.25 upgrade
+```
+
+Without an explicit `version` argument, `upgrade` targets the running deploy-cli package version. You can also pin a different target directly:
+
+```bash
+bunx @envsync-cloud/deploy-cli@0.6.25 upgrade 0.6.24
+```
 
 Bootstrap infra, migrations, RustFS, and OpenFGA:
 
@@ -98,6 +108,15 @@ npx @envsync-cloud/deploy-cli rollback
 ```
 
 `promote` switches traffic to the requested or inactive API slot without rebuilding images. `rollback` switches traffic back to the previously active slot recorded in generated deploy state.
+
+For normal production installs, `release.version` is the source of truth for the managed EnvSync release artifacts:
+- `source.ref`
+- API image
+- Keycloak image tag
+- web static image
+- landing static image
+
+`deploy` reconciles those managed versioned artifacts from `release.version` automatically. Explicit custom image overrides are still preserved for local or advanced self-hosted flows.
 
 Self-hosted observability routing is:
 - `https://obs.<root-domain>/` for ClickStack UI

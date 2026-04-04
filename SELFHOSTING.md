@@ -100,7 +100,7 @@ Command surface:
 - `promote [blue|green] [--dry-run]`
 - `rollback [--dry-run]`
 - `health`
-- `upgrade [--dry-run]`
+- `upgrade [version] [--dry-run]`
 - `upgrade-deps [--dry-run]`
 - `backup [--dry-run]`
 - `restore [--dry-run]`
@@ -200,7 +200,23 @@ Destructive bootstrap resets generated OpenFGA IDs before re-initialization:
 - `OPENFGA_MODEL_ID` does not persist
 - `bootstrap.completed_at` is cleared until the new run succeeds
 
-The configured target release always comes from `/etc/envsync/deploy.yaml`. Running a newer CLI package version does not change that target automatically.
+The configured target release always comes from `/etc/envsync/deploy.yaml`, but `upgrade` now updates that target for you. If no explicit version is passed, it uses the running deploy-cli package version.
+
+Examples:
+
+```bash
+bunx @envsync-cloud/deploy-cli@0.6.25 upgrade
+bunx @envsync-cloud/deploy-cli@0.6.25 upgrade 0.6.24
+```
+
+For normal production installs, the pinned `release.version` is the source of truth for:
+- `source.ref`
+- EnvSync API image
+- Keycloak image tag
+- web static image
+- landing static image
+
+`deploy` reconciles those managed versioned artifacts from `release.version` automatically. Explicit custom image overrides are still preserved for local smoke or advanced custom deployments.
 
 Generated frontend runtime config uses:
 - `otelEndpoint = https://obs.<root-domain>`
