@@ -11,7 +11,7 @@ import { XMLHttpRequestInstrumentation } from "@opentelemetry/instrumentation-xm
 import { UserInteractionInstrumentation } from "@opentelemetry/instrumentation-user-interaction";
 import { trace } from "@opentelemetry/api";
 import type { TelemetryConfig } from "./config";
-import { env } from "@/utils/env";
+import { runtimeConfig } from "@/utils/runtime-config";
 
 let provider: WebTracerProvider | null = null;
 
@@ -46,7 +46,7 @@ export function initTracing(config: TelemetryConfig): WebTracerProvider {
     contextManager: new ZoneContextManager(),
   });
 
-  const apiBaseUrl = env.VITE_API_BASE_URL;
+  const apiBaseUrl = runtimeConfig.apiBaseUrl;
 
   registerInstrumentations({
     instrumentations: [

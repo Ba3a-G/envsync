@@ -925,6 +925,8 @@ function renderTraefikDynamicConfig(config: DeployConfig) {
 		"        accessControlAllowHeaders:",
 		"          - Content-Type",
 		"          - content-type",
+		"          - Content-Encoding",
+		"          - content-encoding",
 		"          - Authorization",
 		"          - authorization",
 		"        accessControlAllowCredentials: true",

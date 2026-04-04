@@ -326,13 +326,14 @@ function assertObsRouting() {
 	const obsBase = publicHttpsUrl(obsHost);
 	const resolveArg = `${obsHost}:${publicHttpsPort}:127.0.0.1`;
 	let apiConfig = "";
-	let otlpPreflight = "";
+	let tracePreflight = "";
+	let logPreflight = "";
 	let lastError = "";
 	const deadline = Date.now() + 60_000;
 	while (Date.now() < deadline) {
 		try {
 			apiConfig = curl(["-ksS", "--resolve", resolveArg, "-D", "-", `${obsBase}/api/config`]);
-			otlpPreflight = curl([
+			tracePreflight = curl([
 				"-ksS",
 				"--resolve",
 				resolveArg,
@@ -348,13 +349,32 @@ function assertObsRouting() {
 				"-H",
 				"Access-Control-Request-Headers: content-type",
 			]);
+			logPreflight = curl([
+				"-ksS",
+				"--resolve",
+				resolveArg,
+				"-D",
+				"-",
+				"-X",
+				"OPTIONS",
+				`${obsBase}/v1/logs`,
+				"-H",
+				`Origin: ${publicHttpsUrl(rootDomain)}`,
+				"-H",
+				"Access-Control-Request-Method: POST",
+				"-H",
+				"Access-Control-Request-Headers: authorization,content-encoding,content-type",
+			]);
 			if (
 				(apiConfig.includes("HTTP/2 200") || apiConfig.includes("HTTP/1.1 200")) &&
 				apiConfig.includes("collectorUrl") &&
-				otlpPreflight.includes(
+				tracePreflight.includes(
 					`access-control-allow-origin: ${publicHttpsUrl(rootDomain)}`,
 				) &&
-				otlpPreflight.toLowerCase().includes("access-control-allow-credentials: true")
+				tracePreflight.toLowerCase().includes("access-control-allow-credentials: true") &&
+				logPreflight.includes(`access-control-allow-origin: ${publicHttpsUrl(rootDomain)}`) &&
+				logPreflight.toLowerCase().includes("access-control-allow-credentials: true") &&
+				logPreflight.toLowerCase().includes("content-encoding")
 			) {
 				break;
 			}
@@ -366,14 +386,26 @@ function assertObsRouting() {
 	assert(apiConfig.includes("HTTP/2 200") || apiConfig.includes("HTTP/1.1 200"), "obs /api/config did not return 200");
 	assert(apiConfig.includes("collectorUrl"), "obs /api/config did not return HyperDX config");
 	assert(
-		otlpPreflight.includes(
+		tracePreflight.includes(
 			`access-control-allow-origin: ${publicHttpsUrl(rootDomain)}`,
 		),
 		lastError ? `obs OTLP preflight is missing access-control-allow-origin\n${lastError}` : "obs OTLP preflight is missing access-control-allow-origin",
 	);
 	assert(
-		otlpPreflight.toLowerCase().includes("access-control-allow-credentials: true"),
+		tracePreflight.toLowerCase().includes("access-control-allow-credentials: true"),
 		"obs OTLP preflight is missing access-control-allow-credentials",
+	);
+	assert(
+		logPreflight.includes(`access-control-allow-origin: ${publicHttpsUrl(rootDomain)}`),
+		"obs log OTLP preflight is missing access-control-allow-origin",
+	);
+	assert(
+		logPreflight.toLowerCase().includes("access-control-allow-credentials: true"),
+		"obs log OTLP preflight is missing access-control-allow-credentials",
+	);
+	assert(
+		logPreflight.toLowerCase().includes("content-encoding"),
+		"obs log OTLP preflight is missing content-encoding in access-control-allow-headers",
 	);
 }
 

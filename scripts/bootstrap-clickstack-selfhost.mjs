@@ -164,8 +164,8 @@ function ensureSource(name, kind, document) {
 var traces = ensureSource("Traces", "trace", {
   from: { databaseName: "default", tableName: "otel_traces" },
   timestampValueExpression: "Timestamp",
-  displayedTimestampValueExpression: "Timestamp",
-  defaultTableSelectExpression: "Timestamp, ServiceName, SpanName, StatusCode",
+  displayedTimestampValueExpression: "TimestampTime",
+  defaultTableSelectExpression: "TimestampTime, ServiceName, SpanName, StatusCode",
   durationExpression: "Duration",
   durationPrecision: 9,
   serviceNameExpression: "ServiceName",
@@ -472,10 +472,12 @@ function getDashboardDefinitions(sourceIds) {
 			filters: [],
 			tiles: [
 				numberTile("HTTP Requests", logs, 0, 0, "LogAttributes['log.type'] = 'http_request'"),
-				numberTile("Error Logs", logs, 4, 0, "SeverityText = 'error'"),
+				numberTile("Error Logs", logs, 4, 0, "SeverityText = 'ERROR'"),
 				numberTile("Trace Spans", traces, 8, 0),
-				lineTile("HTTP Requests Over Time", logs, 0, 3, "LogAttributes['log.type'] = 'http_request'", { aggFn: "count" }),
-				lineTile("Error Logs Over Time", logs, 6, 3, "SeverityText = 'error'", { aggFn: "count" }),
+				lineTile("Request Rate (RPS)", traces, 0, 3, "notEmpty(SpanAttributes['http.route'])", {
+					aggFn: "count",
+				}),
+				lineTile("Error Logs Over Time", logs, 6, 3, "SeverityText = 'ERROR'", { aggFn: "count" }),
 				lineTile("Span Volume", traces, 0, 7, undefined, { aggFn: "count" }),
 				lineTile("Span Volume by Service", traces, 6, 7, undefined, { aggFn: "count" }, ["ServiceName"]),
 			],
@@ -488,22 +490,22 @@ function getDashboardDefinitions(sourceIds) {
 				lineTile("p50 Span Duration", traces, 0, 0, undefined, {
 					aggFn: "quantile",
 					level: 0.5,
-					valueExpression: "Duration",
+					valueExpression: "Duration / 1000000",
 					numberFormat: { output: "time" },
 				}),
 				lineTile("p95 Span Duration", traces, 6, 0, undefined, {
 					aggFn: "quantile",
 					level: 0.95,
-					valueExpression: "Duration",
+					valueExpression: "Duration / 1000000",
 					numberFormat: { output: "time" },
 				}),
 				lineTile("p95 Span Duration by Service", traces, 0, 4, undefined, {
 					aggFn: "quantile",
 					level: 0.95,
-					valueExpression: "Duration",
+					valueExpression: "Duration / 1000000",
 					numberFormat: { output: "time" },
 				}, ["ServiceName"]),
-				lineTile("Error Span Volume", traces, 6, 4, "StatusCode = 'error'", { aggFn: "count" }),
+				lineTile("Error Span Volume", traces, 6, 4, "StatusCode = 'STATUS_CODE_ERROR'", { aggFn: "count" }),
 			],
 		},
 		{
@@ -512,7 +514,7 @@ function getDashboardDefinitions(sourceIds) {
 			filters: [],
 			tiles: [
 				lineTile("HTTP Requests by Severity", logs, 0, 0, "LogAttributes['log.type'] = 'http_request'", { aggFn: "count" }, ["SeverityText"]),
-				lineTile("Error Logs by Severity", logs, 6, 0, "SeverityText = 'error'", { aggFn: "count" }, ["SeverityText"]),
+				lineTile("Error Logs by Severity", logs, 6, 0, "SeverityText = 'ERROR'", { aggFn: "count" }, ["SeverityText"]),
 				lineTile("Spans by Name", traces, 0, 4, undefined, { aggFn: "count" }, ["SpanName"]),
 				lineTile("Spans by Service", traces, 6, 4, undefined, { aggFn: "count" }, ["ServiceName"]),
 			],
@@ -524,7 +526,7 @@ function getDashboardDefinitions(sourceIds) {
 			tiles: [
 				lineTile("Logs by Severity", logs, 0, 0, undefined, { aggFn: "count" }, ["SeverityText"]),
 				lineTile("Logs by Service", logs, 6, 0, undefined, { aggFn: "count" }, ["ServiceName"]),
-				lineTile("Error Logs by Severity", logs, 0, 6, "SeverityText = 'error'", { aggFn: "count" }, ["SeverityText"]),
+				lineTile("Error Logs by Severity", logs, 0, 6, "SeverityText = 'ERROR'", { aggFn: "count" }, ["SeverityText"]),
 				lineTile("Traces by Service", traces, 6, 6, undefined, { aggFn: "count" }, ["ServiceName"]),
 			],
 		},
@@ -560,8 +562,8 @@ function getSavedSearchDefinitions(sourceIds) {
 			name: "API Errors",
 			source: traces,
 			select: "Timestamp, ServiceName, SpanName, Duration, StatusCode",
-			where: "ServiceName:envsync-api AND (SpanAttributes.http.status_code:>=500 OR StatusCode:error)",
-			whereLanguage: "lucene",
+			where: "ServiceName = 'envsync-api' AND (toInt64OrZero(SpanAttributes['http.status_code']) >= 500 OR StatusCode = 'STATUS_CODE_ERROR')",
+			whereLanguage: "sql",
 			tags: ["envsync", "backend", "errors", "alerts"],
 		},
 		{
@@ -600,8 +602,8 @@ function getSavedSearchDefinitions(sourceIds) {
 			name: "Slow API Traces",
 			source: traces,
 			select: "Timestamp, ServiceName, SpanName, Duration, StatusCode",
-			where: "ServiceName:envsync-api AND Duration:>1000",
-			whereLanguage: "lucene",
+			where: "ServiceName = 'envsync-api' AND Duration > 1000000000",
+			whereLanguage: "sql",
 			tags: ["envsync", "backend", "performance", "alerts"],
 		},
 		{
