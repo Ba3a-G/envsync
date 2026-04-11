@@ -41,7 +41,7 @@ export const useUsers = () => {
     error,
     refetch,
   } = useQuery({
-    queryKey: [API_KEYS.ALL_USERS],
+    queryKey: [API_KEYS.USERS_PAGE],
     queryFn: async () => {
       const [usersData, rolesData] = await Promise.all([
         api.users.getUsers(),
@@ -124,7 +124,10 @@ export const useUsers = () => {
       return await api.onboarding.createUserInvite({ email, role_id });
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: [API_KEYS.ALL_USERS] });
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: [API_KEYS.ALL_USERS] }),
+        queryClient.invalidateQueries({ queryKey: [API_KEYS.USERS_PAGE] }),
+      ]);
       resetInviteForm();
       console.log("User invited successfully");
       trackAction("user_invited", {
@@ -147,7 +150,10 @@ export const useUsers = () => {
       return await api.users.deleteUser(userId);
     },
     onSuccess: (_, userId) => {
-      queryClient.invalidateQueries({ queryKey: [API_KEYS.ALL_USERS] });
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: [API_KEYS.ALL_USERS] }),
+        queryClient.invalidateQueries({ queryKey: [API_KEYS.USERS_PAGE] }),
+      ]);
       setActionLoading(userId, false);
       console.log("User deleted successfully");
     },
@@ -169,7 +175,10 @@ export const useUsers = () => {
       return await api.users.updateRole(userId, { role_id: roleId });
     },
     onSuccess: (_, { userId }) => {
-      queryClient.invalidateQueries({ queryKey: [API_KEYS.ALL_USERS] });
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: [API_KEYS.ALL_USERS] }),
+        queryClient.invalidateQueries({ queryKey: [API_KEYS.USERS_PAGE] }),
+      ]);
       setActionLoading(userId, false);
       console.log("User role updated successfully");
     },

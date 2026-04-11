@@ -5,6 +5,7 @@ export enum API_KEYS {
   ALL_WEBHOOKS = "webhooks",
   ALL_APPLICATIONS = "applications/all",
   ALL_USERS = "users/all",
+  USERS_PAGE = "users/page",
   ALL_ROLES = "roles/all",
   ALL_ENVIRONMENTS = "environments/all",
   ALL_ORGANIZATIONS = "organizations/all",

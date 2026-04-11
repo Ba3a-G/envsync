@@ -14,7 +14,7 @@ export const useRolesTable = () => {
   const isLoading = rolesLoading || usersLoading;
 
   const data = useMemo(() => {
-    if (!rolesData || !usersData) return [];
+    if (!Array.isArray(rolesData) || !Array.isArray(usersData)) return [];
     return rolesData.map((role) => ({
       ...role,
       users: usersData.filter((user) => user.role_id === role.id),
