@@ -199,6 +199,31 @@ var logs = ensureSource("Logs", "log", {
   querySettings: []
 });
 
+var sessions = ensureSource("Sessions", "session", {
+  from: { databaseName: "default", tableName: "hyperdx_sessions" },
+  timestampValueExpression: "Timestamp",
+  displayedTimestampValueExpression: "Timestamp",
+  defaultTableSelectExpression: "Timestamp, ServiceName, Body",
+  serviceNameExpression: "ServiceName",
+  bodyExpression: "Body",
+  eventAttributesExpression: "LogAttributes",
+  resourceAttributesExpression: "ResourceAttributes",
+  traceIdExpression: "TraceId",
+  spanIdExpression: "SpanId",
+  implicitColumnExpression: "Body",
+  highlightedTraceAttributeExpressions: [],
+  highlightedRowAttributeExpressions: [
+    { sqlExpression: "ServiceName", alias: "service.name", luceneExpression: "ServiceName" },
+    { sqlExpression: "LogAttributes['envsync.event_name']", alias: "envsync.event_name", luceneExpression: "LogAttributes.envsync.event_name" },
+    { sqlExpression: "LogAttributes['envsync.event_category']", alias: "envsync.event_category", luceneExpression: "LogAttributes.envsync.event_category" },
+    { sqlExpression: "LogAttributes['envsync.org_id']", alias: "envsync.org_id", luceneExpression: "LogAttributes.envsync.org_id" },
+    { sqlExpression: "LogAttributes['envsync.role_name']", alias: "envsync.role_name", luceneExpression: "LogAttributes.envsync.role_name" },
+    { sqlExpression: "LogAttributes['envsync.user_id']", alias: "envsync.user_id", luceneExpression: "LogAttributes.envsync.user_id" }
+  ],
+  materializedViews: [],
+  querySettings: []
+});
+
 db.sources.updateOne(
   { _id: logs._id },
   { $set: { traceSourceId: traces._id.valueOf(), metricSourceId: metrics._id.valueOf(), updatedAt: now } }
@@ -206,7 +231,12 @@ db.sources.updateOne(
 
 db.sources.updateOne(
   { _id: traces._id },
-  { $set: { logSourceId: logs._id.valueOf(), metricSourceId: metrics._id.valueOf(), updatedAt: now } }
+  { $set: { logSourceId: logs._id.valueOf(), metricSourceId: metrics._id.valueOf(), sessionSourceId: sessions._id.valueOf(), updatedAt: now } }
+);
+
+db.sources.updateOne(
+  { _id: sessions._id },
+  { $set: { traceSourceId: traces._id.valueOf(), updatedAt: now } }
 );
 
 print(accessKey);
