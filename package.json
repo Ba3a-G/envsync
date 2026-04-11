@@ -8,6 +8,7 @@
     "apps/*"
   ],
   "scripts": {
+    "check:no-enterprise-imports": "bun run scripts/check-no-enterprise-imports.ts",
     "build": "turbo build",
     "dev": "turbo dev",
     "start": "turbo start",

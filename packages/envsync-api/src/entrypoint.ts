@@ -4,10 +4,12 @@ import { CacheClient } from "@/libs/cache";
 import { FGAClient } from "@/libs/openfga";
 import { config } from "@/utils/env";
 import { DB } from "@/libs/db";
+import { registerApiBackgroundHandlers } from "@/modules/load-modules";
 
 CacheClient.init();
 await DB.healthCheck();
 await FGAClient.getInstance();
+await registerApiBackgroundHandlers();
 
 export default {
 	fetch: app.fetch.bind(app),

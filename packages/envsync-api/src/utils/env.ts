@@ -1,10 +1,12 @@
-import { z } from "zod";
+import { z, type ZodObject, type ZodRawShape } from "zod";
+
+import { collectEnvSchemaExtensions } from "@/modules/load-modules";
 
 import { loadRootEnv } from "./load-root-env";
 
 loadRootEnv();
 
-export const env = z.object({
+export const BaseEnvSchema = z.object({
 	NODE_ENV: z.enum(["development", "production"]).default("development"),
 	PORT: z.string(),
 	DB_LOGGING: z.string().default("false"),
@@ -63,6 +65,20 @@ export const env = z.object({
 	OTEL_SERVICE_NAME: z.string().default("envsync-api"),
 	OTEL_SDK_DISABLED: z.string().default("false"),
 });
+
+export function composeEnvSchema(extensions: ZodRawShape[] = []): ZodObject<ZodRawShape> {
+	const mergedShape: ZodRawShape = {
+		...BaseEnvSchema.shape,
+	};
+
+	for (const extension of extensions) {
+		Object.assign(mergedShape, extension);
+	}
+
+	return z.object(mergedShape);
+}
+
+export const env = composeEnvSchema(collectEnvSchemaExtensions());
 
 export type Env = z.infer<typeof env>;
 

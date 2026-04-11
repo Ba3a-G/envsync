@@ -1,65 +1,51 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { Suspense, lazy } from "react";
 import { RouteChangeTracker } from "@/telemetry";
+import { getWebRoutes } from "@/modules/load-modules";
 
 import RootLayout from "@/layout/root";
+import type { WebRouteDefinition } from "@/modules/types";
 
-import Dashboard from "@/pages/Dashboard";
-import Applications from "@/pages/Applications";
-import AuditLogs from "@/pages/AuditLogs";
-import UserSettings from "@/pages/UserSettings";
-import OrgSettings from "@/pages/OrgSettings";
-import Roles from "./Roles";
-import Users from "@/pages/Users";
-import Callback from "@/pages/Callback";
-import NotFound from "@/pages/NotFound";
-import ApiKeys from "@/pages/ApiKeys";
-import Webhooks from "@/pages/Webhooks";
-import GpgKeys from "@/pages/GpgKeys";
-import Certificates from "@/pages/Certificates";
-import ProjectEnvironments from "@/pages/ProjectVariables";
-import ProjectSecrets from "@/pages/ProjectSecrets";
-import CreateProject from "@/pages/CreateProject";
-import ManageEnvironment from "@/pages/ManageEnvironment";
-import PointInTimeVariables from "@/pages/PointInTimeVariables";
+const webRoutes = getWebRoutes();
+
+function RouteFallback() {
+  return (
+    <div className="flex min-h-[240px] items-center justify-center text-sm text-gray-400">
+      Loading…
+    </div>
+  );
+}
+
+function RouteElement({ route }: { route: WebRouteDefinition }) {
+  const Component = lazy(route.loadComponent);
+
+  return (
+    <Suspense fallback={<RouteFallback />}>
+      <Component />
+    </Suspense>
+  );
+}
+
+function renderRoute(route: WebRouteDefinition) {
+  if (route.index) {
+    return <Route key={route.id} index element={<RouteElement route={route} />} />;
+  }
+
+  return <Route key={route.id} path={route.path} element={<RouteElement route={route} />} />;
+}
 
 export const AppRoutes = () => {
+  const rootRoutes = webRoutes.filter((route) => (route.layout ?? "root") === "root");
+  const standaloneRoutes = webRoutes.filter((route) => route.layout === "standalone");
+
   return (
     <BrowserRouter>
       <RouteChangeTracker />
       <Routes>
-        <Route path="/auth/callback" element={<Callback />} />
         <Route path="/" element={<RootLayout />}>
-          <Route index element={<Dashboard />} />
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="applications" element={<Applications />} />
-          <Route path="applications/create" element={<CreateProject />} />
-          <Route
-            path="applications/:projectNameId"
-            element={<ProjectEnvironments />}
-          />
-          <Route
-            path="applications/:projectNameId/secrets"
-            element={<ProjectSecrets />}
-          />
-          <Route
-            path="applications/:projectNameId/manage-environments"
-            element={<ManageEnvironment />}
-          />
-          <Route
-            path="applications/pit/:projectNameId"
-            element={<PointInTimeVariables />}
-          />
-          <Route path="roles" element={<Roles />} />
-          <Route path="users" element={<Users />} />
-          <Route path="settings" element={<UserSettings />} />
-          <Route path="organisation" element={<OrgSettings />} />
-          <Route path="audit" element={<AuditLogs />} />
-          <Route path="apikeys" element={<ApiKeys />} />
-          <Route path="webhooks" element={<Webhooks />} />
-          <Route path="gpgkeys" element={<GpgKeys />} />
-          <Route path="certificates" element={<Certificates />} />
+          {rootRoutes.map(renderRoute)}
         </Route>
-        <Route path="*" element={<NotFound />} />
+        {standaloneRoutes.map(renderRoute)}
       </Routes>
     </BrowserRouter>
   );

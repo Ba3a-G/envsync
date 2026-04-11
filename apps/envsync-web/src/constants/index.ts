@@ -1,17 +1,4 @@
-import {
-  Database,
-  Users,
-  Key,
-  Activity,
-  Settings,
-  Globe,
-  ShieldAlert,
-  Anchor,
-  KeyRound,
-  ShieldCheck,
-  LayoutDashboard,
-} from "lucide-react";
-import type { FC } from "react";
+import { getRegisteredScopeIds, getWebNavGroups, getWebNavItems } from "@/modules/load-modules";
 
 export enum API_KEYS {
   ALL_API_KEYS = "api-keys",
@@ -29,76 +16,9 @@ export enum API_KEYS {
   ALL_CERTIFICATES = "certificates/all",
 }
 
-export const SCOPES = [
-  "dashboard",
-  "applications",
-  "users",
-  "roles",
-  "apikeys",
-  "webhooks",
-  "gpgkeys",
-  "certificates",
-  "audit",
-  "settings",
-  "organisation",
-] as const;
-
-export const navItems = [
-  { id: "dashboard", name: "Dashboard", icon: LayoutDashboard },
-  { id: "applications", name: "Projects", icon: Database },
-  { id: "users", name: "Team", icon: Users },
-  { id: "roles", name: "Roles", icon: ShieldAlert },
-  { id: "apikeys", name: "API Keys", icon: Key },
-  { id: "webhooks", name: "Webhooks", icon: Anchor },
-  { id: "gpgkeys", name: "GPG Keys", icon: KeyRound },
-  { id: "certificates", name: "Certificates", icon: ShieldCheck },
-  { id: "audit", name: "Activity", icon: Activity },
-  { id: "settings", name: "Account", icon: Settings },
-  { id: "organisation", name: "Organisation", icon: Globe },
-] satisfies {
-  id: (typeof SCOPES)[number];
-  name: string;
-  icon: FC;
-}[];
-
-export const navGroups = [
-  {
-    label: "Overview",
-    items: [
-      { id: "dashboard", name: "Dashboard", icon: LayoutDashboard },
-    ] as typeof navItems,
-  },
-  {
-    label: "Projects",
-    items: [
-      { id: "applications", name: "Projects", icon: Database },
-    ] as typeof navItems,
-  },
-  {
-    label: "Security",
-    items: [
-      { id: "apikeys", name: "API Keys", icon: Key },
-      { id: "gpgkeys", name: "GPG Keys", icon: KeyRound },
-      { id: "certificates", name: "Certificates", icon: ShieldCheck },
-    ] as typeof navItems,
-  },
-  {
-    label: "Collaboration",
-    items: [
-      { id: "users", name: "Team", icon: Users },
-      { id: "roles", name: "Roles", icon: ShieldAlert },
-      { id: "webhooks", name: "Webhooks", icon: Anchor },
-    ] as typeof navItems,
-  },
-  {
-    label: "Admin",
-    items: [
-      { id: "audit", name: "Activity", icon: Activity },
-      { id: "settings", name: "Account", icon: Settings },
-      { id: "organisation", name: "Organisation", icon: Globe },
-    ] as typeof navItems,
-  },
-];
+export const SCOPES = getRegisteredScopeIds();
+export const navItems = getWebNavItems();
+export const navGroups = getWebNavGroups();
 
 export interface FormData {
   name: string;

@@ -1,13 +1,47 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { FileMigrationProvider, Kysely, Migrator, sql, type Expression,type OperationNode } from "kysely";
+import { FileMigrationProvider, Kysely, Migrator, sql, type Expression, type Migration, type MigrationProvider, type OperationNode } from "kysely";
 
 import infoLogs, { LogTypes } from "@/libs/logger";
+import { collectMigrationDirectories } from "@/modules/load-modules";
 import { type Database } from "@/types/db";
 import { config } from "@/utils/env";
 
 import { PostgresDB } from "./adapters/postgresql";
+
+function defaultMigrationDirectories() {
+	return [new URL(import.meta.resolve("./migrations")).pathname];
+}
+
+export class CompositeMigrationProvider implements MigrationProvider {
+	#providers: MigrationProvider[];
+
+	constructor(migrationDirectories: string[]) {
+		this.#providers = migrationDirectories.map(migrationFolder => new FileMigrationProvider({
+			fs,
+			path,
+			migrationFolder,
+		}));
+	}
+
+	async getMigrations(): Promise<Record<string, Migration>> {
+		const mergedMigrations: Record<string, Migration> = {};
+
+		for (const provider of this.#providers) {
+			const migrations = await provider.getMigrations();
+
+			for (const [name, migration] of Object.entries(migrations)) {
+				if (name in mergedMigrations) {
+					throw new Error(`Duplicate migration name detected: ${name}`);
+				}
+				mergedMigrations[name] = migration;
+			}
+		}
+
+		return mergedMigrations;
+	}
+}
 
 export class DB {
 	private static kysely: Promise<Kysely<Database>> | undefined;
@@ -45,13 +79,12 @@ export class DB {
 		if (!auto_migrate) {
 			return;
 		}
+
 		const migrator = new Migrator({
 			db: kysely as any,
-			provider: new FileMigrationProvider({
-				fs,
-				path,
-				migrationFolder: new URL(import.meta.resolve("./migrations")).pathname,
-			}),
+			provider: new CompositeMigrationProvider(
+				collectMigrationDirectories(defaultMigrationDirectories()),
+			),
 		});
 
 		infoLogs("Running migrations...", LogTypes.LOGS, "DB:Kysely");
@@ -84,11 +117,9 @@ export class DB {
 
 		return new Migrator({
 			db: kysely as any,
-			provider: new FileMigrationProvider({
-				fs,
-				path,
-				migrationFolder: new URL(import.meta.resolve("./migrations")).pathname,
-			}),
+			provider: new CompositeMigrationProvider(
+				collectMigrationDirectories(defaultMigrationDirectories()),
+			),
 		});
 	}
 
