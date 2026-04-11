@@ -35,7 +35,7 @@ function inferFallbackRuntimeConfig(): RuntimeConfig {
       keycloakRealm: "envsync",
       webClientId: "envsync-web",
       apiDocsUrl: `${defaultApiBaseUrl.replace(/\/$/, "")}/docs`,
-      otelEndpoint: "http://localhost:14318",
+      otelEndpoint: "http://localhost:4318",
       hyperdxApiKey: import.meta.env.VITE_HYPERDX_API_KEY || undefined,
       hyperdxUrl: import.meta.env.VITE_HYPERDX_URL || undefined,
       hyperdxDisabled: import.meta.env.VITE_HYPERDX_DISABLED === "true",
