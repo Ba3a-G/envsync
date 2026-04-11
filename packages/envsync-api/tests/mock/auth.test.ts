@@ -34,11 +34,11 @@ describe("GET /api/auth/me", () => {
 		expect(body.error).toBeDefined();
 	});
 
-	test("returns 403 with an invalid token (unknown user)", async () => {
+	test("returns 401 with an invalid token (unknown user)", async () => {
 		const res = await testRequest("/api/auth/me", {
 			token: "test-token-nonexistent-user",
 		});
-		expect(res.status).toBe(403);
+		expect(res.status).toBe(401);
 	});
 
 	test("returns 200 with valid token and user info", async () => {

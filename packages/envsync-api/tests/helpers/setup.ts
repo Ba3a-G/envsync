@@ -194,20 +194,35 @@ if (!isE2E) {
 			},
 		}));
 
-		// Mock Keycloak helpers — no-op user management
-		mock.module("@/helpers/keycloak", () => ({
-			getKeycloakIssuer: () => "http://localhost:8080/realms/envsync",
-			createKeycloakUser: async () => ({
-				id: `keycloak-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-			}),
-			updateKeycloakUser: async () => {},
-			deleteKeycloakUser: async () => {},
-			sendKeycloakPasswordReset: async () => {},
-			keycloakTokenExchange: async (code: string) => ({
-				access_token: `mock-access-token-${code}`,
-				id_token: `mock-id-token-${code}`,
-			}),
-		}));
+			// Mock Keycloak helpers — no-op user management
+			mock.module("@/helpers/keycloak", () => ({
+				getKeycloakBaseUrl: () => "http://localhost:8080",
+				getKeycloakPublicBaseUrl: () => "http://localhost:8080",
+				getKeycloakIssuer: () => "http://localhost:8080/realms/envsync",
+				getKeycloakRealm: () => "envsync",
+				createKeycloakUser: async () => ({
+					id: `keycloak-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+				}),
+				updateKeycloakUser: async () => {},
+				deleteKeycloakUser: async () => {},
+				sendKeycloakPasswordReset: async () => {},
+				findKeycloakUserByUsername: async () => null,
+				getKeycloakUserById: async () => null,
+				setKeycloakUserPassword: async () => {},
+				keycloakTokenExchange: async (code: string) => ({
+					access_token: `mock-access-token-${code}`,
+					id_token: `mock-id-token-${code}`,
+					refresh_token: `mock-refresh-token-${code}`,
+					expires_in: 900,
+					refresh_expires_in: 86400,
+				}),
+				keycloakRefreshToken: async (refreshToken: string) => ({
+					access_token: `mock-refreshed-access-token-${refreshToken}`,
+					refresh_token: refreshToken,
+					expires_in: 900,
+					refresh_expires_in: 86400,
+				}),
+			}));
 
 		// Mock KMS — in-memory AES-256-GCM with deterministic test keys + Vault + Session mocks
 		const { MockKMSClient } = await import("./kms");
