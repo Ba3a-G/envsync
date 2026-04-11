@@ -5,6 +5,27 @@ import { Upload } from "@aws-sdk/lib-storage";
 import infoLogs, { LogTypes } from "@/libs/logger";
 import { config } from "@/utils/env";
 
+function trimTrailingSlash(value: string) {
+	return value.replace(/\/+$/, "");
+}
+
+function getPublicBucketBaseUrl(bucketUrl: string, endpoint: string, bucket: string) {
+	const normalizedBucketUrl = trimTrailingSlash(bucketUrl);
+
+	try {
+		const parsedBucketUrl = new URL(normalizedBucketUrl);
+		const parsedEndpoint = new URL(trimTrailingSlash(endpoint));
+		const normalizedPath = trimTrailingSlash(parsedBucketUrl.pathname);
+
+		if ((normalizedPath === "" || normalizedPath === "/") && parsedBucketUrl.origin === parsedEndpoint.origin) {
+			parsedBucketUrl.pathname = `/${bucket}`;
+			return trimTrailingSlash(parsedBucketUrl.toString());
+		}
+	} catch {}
+
+	return normalizedBucketUrl;
+}
+
 /**
  * Uploader class
  */
@@ -52,6 +73,8 @@ export class Uploader {
 
 		infoLogs("File uploaded successfully to S3", LogTypes.LOGS, "S3:Upload");
 
-		return `${config.S3_BUCKET_URL}/${s3Key}`;
+		const publicBucketBaseUrl = getPublicBucketBaseUrl(config.S3_BUCKET_URL, config.S3_ENDPOINT, this._s3Opts.bucket);
+
+		return `${publicBucketBaseUrl}/${s3Key}`;
 	}
 }

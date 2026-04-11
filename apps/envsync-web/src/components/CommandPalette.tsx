@@ -68,9 +68,7 @@ export function CommandPalette() {
               <CommandItem
                 key={item.id}
                 onSelect={() =>
-                  runAction(() =>
-                    navigate(item.id === "dashboard" ? "/" : `/${item.id}`)
-                  )
+                  runAction(() => navigate(item.href))
                 }
               >
                 <Icon className="mr-2 size-4" />

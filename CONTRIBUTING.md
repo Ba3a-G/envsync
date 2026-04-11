@@ -42,14 +42,14 @@ Use `bun run test:e2e` from the repo root. It runs `e2e-setup init` before invok
 2. Service method in `src/services/{resource}.service.ts` (static methods, Kysely queries)
 3. Controller in `src/controllers/{resource}.controller.ts` (delegates to service, handles errors, logs audit)
 4. Route in `src/routes/{resource}.route.ts` (use `describeRoute`, `zValidator`, permission middleware)
-5. Register the route in `src/routes/index.ts`
+5. Register the route in `src/modules/core-modules.ts`
 6. Add mock test + E2E test (as above)
 
 ### Other conventions
 
 - **File naming:** `{resource}.controller.ts`, `{resource}.service.ts`, `{resource}.route.ts`, `{resource}.validator.ts`
-- **New env vars:** add to the Zod schema in `src/utils/env.ts`
-- **Database changes:** add a Kysely migration in `src/scripts/migrations/`, run with `bun run db migrate`
+- **New env vars:** add to the base Zod schema in `src/utils/env.ts` or to a module env extension
+- **Database changes:** add a Kysely migration in `src/libs/db/migrations/`, run with `bun run db`
 - **Formatting:** `prettier --write .` (uses `@bravo68web/prettier-config`)
 
 ## Frontend Changes (`apps/envsync-web/`)
@@ -70,7 +70,19 @@ Use `bun run test:e2e` from the repo root. It runs `e2e-setup init` before invok
 - Use `@envsync-cloud/envsync-ts-sdk` for API types — don't duplicate types locally
 - Server state via **React Query**, client state via **React Context**
 - Only `VITE_*` env vars are exposed to the client
+- Register new dashboard routes and nav items via `src/modules/core-modules.ts`
 - Run `bun run lint` before pushing
+
+## Editions & Shared Shell
+
+- The public repo is the canonical FOSS shared shell.
+- Shared extension seams live in the `src/modules/` loaders for API and web.
+- If future enterprise work needs a seam, upstream the seam first and keep proprietary logic outside public packages.
+- Public source must not import enterprise-only packages. Run:
+
+```bash
+bun run check:no-enterprise-imports
+```
 
 ## CLI Changes (`packages/envsync-cli/`)
 

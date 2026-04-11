@@ -22,6 +22,24 @@ function shouldUseSecureCookies() {
 	return config.NODE_ENV === "production" || config.DASHBOARD_URL.startsWith("https://");
 }
 
+function sharedCookieDomain() {
+	try {
+		const hostname = new URL(config.DASHBOARD_URL).hostname;
+		if (hostname === "localhost" || /^[0-9.]+$/.test(hostname) || hostname.includes(":")) {
+			return undefined;
+		}
+
+		const parts = hostname.split(".");
+		if (parts.length < 3) {
+			return undefined;
+		}
+
+		return `.${parts.slice(1).join(".")}`;
+	} catch {
+		return undefined;
+	}
+}
+
 function cookieBaseOptions(path = "/api") {
 	return {
 		httpOnly: true,
@@ -48,9 +66,14 @@ export function readRefreshToken(c: Context) {
 }
 
 export function clearWebAuthCookies(c: Context) {
+	const csrfDomain = sharedCookieDomain();
+
 	for (const cookieName of [ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE, CSRF_COOKIE, LOGIN_STATE_COOKIE]) {
 		deleteCookie(c, cookieName, { path: "/" });
 		deleteCookie(c, cookieName, { path: "/api" });
+		if (cookieName === CSRF_COOKIE && csrfDomain) {
+			deleteCookie(c, cookieName, { path: "/", domain: csrfDomain });
+		}
 	}
 }
 
@@ -63,6 +86,7 @@ export function setLoginStateCookie(c: Context, state: string) {
 
 export function setWebAuthCookies(c: Context, tokens: WebSessionTokens) {
 	const csrfToken = createCsrfToken();
+	const csrfDomain = sharedCookieDomain();
 
 	setCookie(c, ACCESS_TOKEN_COOKIE, tokens.access_token, {
 		...cookieBaseOptions("/api"),
@@ -81,6 +105,7 @@ export function setWebAuthCookies(c: Context, tokens: WebSessionTokens) {
 		secure: shouldUseSecureCookies(),
 		sameSite: "Lax",
 		path: "/",
+		...(csrfDomain ? { domain: csrfDomain } : {}),
 		maxAge: Math.max(tokens.refresh_expires_in ?? 7 * 24 * 60 * 60, 60),
 	});
 

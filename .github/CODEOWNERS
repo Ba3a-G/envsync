@@ -1,0 +1,16 @@
+# Shared shell and extension seams
+/packages/envsync-api/src/modules/ @bravo68web
+/apps/envsync-web/src/modules/ @bravo68web
+/packages/envsync-api/src/routes/ @bravo68web
+/packages/envsync-api/src/utils/env.ts @bravo68web
+/packages/envsync-api/src/libs/db/ @bravo68web
+/apps/envsync-web/src/pages/ @bravo68web
+/apps/envsync-web/src/components/Sidebar.tsx @bravo68web
+/apps/envsync-web/src/components/CommandPalette.tsx @bravo68web
+/apps/envsync-web/src/contexts/auth/provider.tsx @bravo68web
+
+# Private superset repo should mirror these rules and add enterprise ownership.
+/packages/envsync-enterprise-api/ @bravo68web
+/packages/envsync-enterprise-web/ @bravo68web
+/packages/envsync-enterprise-shared/ @bravo68web
+/sdks/envsync-enterprise-ts-sdk/ @bravo68web

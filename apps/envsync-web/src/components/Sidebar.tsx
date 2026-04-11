@@ -27,8 +27,6 @@ export const Sidebar = ({ expanded, onToggle }: SidebarProps) => {
     [allowedScopes]
   );
 
-  const activeView = pathname === "/" ? "dashboard" : pathname.split("/")[1] || "dashboard";
-
   const handleLogout = async () => {
     try {
       await logoutWebSession();
@@ -87,12 +85,14 @@ export const Sidebar = ({ expanded, onToggle }: SidebarProps) => {
             <div className="space-y-0.5">
               {group.items.map((item) => {
                 const Icon = item.icon;
-                const isActive = activeView === item.id;
+                const isActive = item.href === "/"
+                  ? pathname === "/"
+                  : pathname === item.href || pathname.startsWith(`${item.href}/`);
 
                 return (
                   <div key={item.id} className="relative group">
                     <Link
-                      to={item.id === "dashboard" ? "/" : `/${item.id}`}
+                      to={item.href}
                       className={cn(
                         "w-full flex items-center rounded-lg text-left transition-all duration-200 text-sm font-medium relative",
                         expanded

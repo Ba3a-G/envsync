@@ -5,5 +5,5 @@ window.__ENVSYNC_RUNTIME_CONFIG__ = {
   keycloakRealm: "envsync",
   webClientId: "envsync-web",
   apiDocsUrl: "http://api.lvh.me:4000/docs",
-  otelEndpoint: "http://localhost:14318"
+  otelEndpoint: "http://localhost:4318"
 };

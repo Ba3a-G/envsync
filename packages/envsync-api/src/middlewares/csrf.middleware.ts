@@ -8,9 +8,13 @@ function usesHeaderAuth(ctx: Context) {
 	return Boolean(ctx.req.header("Authorization") || ctx.req.header("X-API-Key"));
 }
 
+function isLogoutRequest(ctx: Context) {
+	return ctx.req.path === "/api/access/web/logout";
+}
+
 export const csrfMiddleware = (): MiddlewareHandler => {
 	return async (ctx: Context, next: Next) => {
-		if (SAFE_METHODS.has(ctx.req.method) || usesHeaderAuth(ctx)) {
+		if (SAFE_METHODS.has(ctx.req.method) || usesHeaderAuth(ctx) || isLogoutRequest(ctx)) {
 			await next();
 			return;
 		}
@@ -23,8 +27,9 @@ export const csrfMiddleware = (): MiddlewareHandler => {
 
 		const csrfCookie = getCookie(ctx, CSRF_COOKIE);
 		const csrfHeader = ctx.req.header("X-CSRF-Token");
+		const hasValidCsrfHeader = Boolean(csrfHeader && (!csrfCookie || csrfCookie === csrfHeader));
 
-		if (!csrfCookie || !csrfHeader || csrfCookie !== csrfHeader) {
+		if (!hasValidCsrfHeader) {
 			return ctx.json(
 				{
 					error: "CSRF token is missing or invalid",

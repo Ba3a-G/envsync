@@ -1,18 +1,18 @@
 import type { ColumnType } from "kysely";
 
-interface BaseTable {
+export interface BaseTable {
 	id: ColumnType<string>;
 	created_at: ColumnType<Date>;
 	updated_at: ColumnType<Date>;
 }
 
-interface InviteOrg extends BaseTable {
+export interface InviteOrg extends BaseTable {
 	email: ColumnType<string>;
 	invite_token: ColumnType<string>;
 	is_accepted: ColumnType<boolean>;
 }
 
-interface InviteUser extends BaseTable {
+export interface InviteUser extends BaseTable {
 	email: ColumnType<string>;
 	role_id: ColumnType<string>;
 	invite_token: ColumnType<string>;
@@ -20,7 +20,7 @@ interface InviteUser extends BaseTable {
 	org_id: ColumnType<string>;
 }
 
-interface OrgRole extends BaseTable {
+export interface OrgRole extends BaseTable {
 	org_id: ColumnType<string>;
 	name: ColumnType<string>;
 	is_admin: ColumnType<boolean>;
@@ -36,7 +36,7 @@ interface OrgRole extends BaseTable {
 	is_master?: ColumnType<boolean>;
 }
 
-interface EnvStore extends BaseTable {
+export interface EnvStore extends BaseTable {
 	org_id: ColumnType<string>;
 	env_type_id: ColumnType<string>;
 	app_id: ColumnType<string>;
@@ -44,7 +44,7 @@ interface EnvStore extends BaseTable {
 	value: ColumnType<string>;
 }
 
-interface EnvStorePiT extends BaseTable {
+export interface EnvStorePiT extends BaseTable {
 	change_request_message: ColumnType<string>;
 	org_id: ColumnType<string>;
 	env_type_id: ColumnType<string>;
@@ -52,14 +52,14 @@ interface EnvStorePiT extends BaseTable {
 	app_id: ColumnType<string>;
 }
 
-interface EnvStorePiTChangeRequest extends BaseTable {
+export interface EnvStorePiTChangeRequest extends BaseTable {
 	env_store_pit_id: ColumnType<string>;
 	key: ColumnType<string>;
 	value: ColumnType<string>;
 	operation: ColumnType<"CREATE" | "UPDATE" | "DELETE">;
 }
 
-interface SecretStore extends BaseTable {
+export interface SecretStore extends BaseTable {
 	org_id: ColumnType<string>;
 	env_type_id: ColumnType<string>;
 	app_id: ColumnType<string>;
@@ -67,7 +67,7 @@ interface SecretStore extends BaseTable {
 	value: ColumnType<string>;
 }
 
-interface SecretStorePiT extends BaseTable {
+export interface SecretStorePiT extends BaseTable {
 	change_request_message: ColumnType<string>;
 	org_id: ColumnType<string>;
 	env_type_id: ColumnType<string>;
@@ -75,14 +75,14 @@ interface SecretStorePiT extends BaseTable {
 	app_id: ColumnType<string>;
 }
 
-interface SecretStorePiTChangeRequest extends BaseTable {
+export interface SecretStorePiTChangeRequest extends BaseTable {
 	secret_store_pit_id: ColumnType<string>;
 	key: ColumnType<string>;
 	value: ColumnType<string>;
 	operation: ColumnType<"CREATE" | "UPDATE" | "DELETE">;
 }
 
-interface AuditLog extends BaseTable {
+export interface AuditLog extends BaseTable {
 	org_id: ColumnType<string>;
 	user_id: ColumnType<string>;
 	action: ColumnType<AuditActions | string>;
@@ -92,7 +92,7 @@ interface AuditLog extends BaseTable {
 	entry_hash?: ColumnType<string | null>;
 }
 
-interface App extends BaseTable {
+export interface App extends BaseTable {
 	name: ColumnType<string>;
 	org_id: ColumnType<string>;
 	description: ColumnType<string>;
@@ -105,7 +105,7 @@ interface App extends BaseTable {
 	encryption_migrated?: ColumnType<boolean>;
 }
 
-interface EnvType extends BaseTable {
+export interface EnvType extends BaseTable {
 	org_id: ColumnType<string>;
 	name: ColumnType<string>;
 	app_id: ColumnType<string>;
@@ -114,7 +114,7 @@ interface EnvType extends BaseTable {
 	color: ColumnType<string>;
 }
 
-interface Users extends BaseTable {
+export interface Users extends BaseTable {
 	email: ColumnType<string>;
 	org_id: ColumnType<string>;
 	role_id: ColumnType<string>;
@@ -125,7 +125,7 @@ interface Users extends BaseTable {
 	is_active: ColumnType<boolean>;
 }
 
-interface Orgs extends BaseTable {
+export interface Orgs extends BaseTable {
 	name: ColumnType<string>;
 	logo_url?: ColumnType<string | null>;
 	slug: ColumnType<string>;
@@ -134,13 +134,13 @@ interface Orgs extends BaseTable {
 	metadata: ColumnType<Record<string, any>>;
 }
 
-interface Settings extends BaseTable {
+export interface Settings extends BaseTable {
 	user_id: ColumnType<string>;
 	email_notifications: ColumnType<boolean>;
 	theme?: ColumnType<string | null>;
 }
 
-interface ApiKeys extends BaseTable {
+export interface ApiKeys extends BaseTable {
 	org_id: ColumnType<string>;
 	user_id: ColumnType<string>;
 	key: ColumnType<string>;
@@ -149,7 +149,7 @@ interface ApiKeys extends BaseTable {
 	last_used_at?: ColumnType<Date | null>;
 }
 
-interface WebhookStore extends BaseTable {
+export interface WebhookStore extends BaseTable {
 	name: ColumnType<string>;
 	org_id: ColumnType<string>;
 	user_id: ColumnType<string>;
@@ -162,21 +162,21 @@ interface WebhookStore extends BaseTable {
 	last_triggered_at?: ColumnType<Date | null>;
 }
 
-interface Team extends BaseTable {
+export interface Team extends BaseTable {
 	org_id: ColumnType<string>;
 	name: ColumnType<string>;
 	description?: ColumnType<string | null>;
 	color: ColumnType<string>;
 }
 
-interface TeamMember {
+export interface TeamMember {
 	id: ColumnType<string>;
 	team_id: ColumnType<string>;
 	user_id: ColumnType<string>;
 	created_at: ColumnType<Date>;
 }
 
-interface GpgKey extends BaseTable {
+export interface GpgKey extends BaseTable {
 	org_id: ColumnType<string>;
 	user_id: ColumnType<string>;
 	name: ColumnType<string>;
@@ -195,7 +195,7 @@ interface GpgKey extends BaseTable {
 	is_default: ColumnType<boolean>;
 }
 
-interface OrgCertificate extends BaseTable {
+export interface OrgCertificate extends BaseTable {
 	org_id: ColumnType<string>;
 	user_id: ColumnType<string>;
 	serial_hex: ColumnType<string>;
@@ -211,7 +211,7 @@ interface OrgCertificate extends BaseTable {
 	revocation_reason?: ColumnType<number | null>;
 }
 
-export interface Database {
+export interface BaseDatabase {
 	invite_org: InviteOrg;
 	invite_user: InviteUser;
 	org_role: OrgRole;
@@ -232,3 +232,11 @@ export interface Database {
 	gpg_keys: GpgKey;
 	org_certificates: OrgCertificate;
 }
+
+/**
+ * Private superset repos can augment this interface using declaration merging
+ * to add enterprise-only tables without editing the public schema contract.
+ */
+export interface DatabaseExtensions {}
+
+export interface Database extends BaseDatabase, DatabaseExtensions {}

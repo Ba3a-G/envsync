@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { CreateBucketCommand, S3Client } from "@aws-sdk/client-s3";
+import { CreateBucketCommand, PutBucketPolicyCommand, S3Client } from "@aws-sdk/client-s3";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -20,6 +20,21 @@ import {
 const repoRoot = path.resolve(import.meta.dir, "..", "..", "..");
 const localRealmImportPath = path.join(repoRoot, "docker/keycloak/realm-import/envsync-realm.json");
 
+function buildPublicReadBucketPolicy(bucket: string) {
+	return JSON.stringify({
+		Version: "2012-10-17",
+		Statement: [
+			{
+				Sid: "AllowPublicReadObjects",
+				Effect: "Allow",
+				Principal: "*",
+				Action: ["s3:GetObject"],
+				Resource: [`arn:aws:s3:::${bucket}/*`],
+			},
+		],
+	});
+}
+
 async function initRustfsBucket() {
 	const client = new S3Client({
 		region: config.S3_REGION,
@@ -38,10 +53,18 @@ async function initRustfsBucket() {
 		const err = error as { name?: string; Code?: string };
 		if (err?.name === "BucketAlreadyOwnedByYou" || err?.Code === "BucketAlreadyOwnedByYou") {
 			console.log(`RustFS: bucket ${config.S3_BUCKET} already exists.`);
-			return;
+		} else {
+			throw error;
 		}
-		throw error;
 	}
+
+	await client.send(
+		new PutBucketPolicyCommand({
+			Bucket: config.S3_BUCKET,
+			Policy: buildPublicReadBucketPolicy(config.S3_BUCKET),
+		}),
+	);
+	console.log(`RustFS: public read policy applied to bucket ${config.S3_BUCKET}.`);
 }
 
 async function getAdminToken() {
@@ -242,6 +265,26 @@ async function ensureDefaultRoles(orgId: string) {
 async function ensureUserRoleAccess(userId: string, orgId: string, roleId: string) {
 	const { AuthorizationService } = await import("../src/services/authorization.service");
 	await AuthorizationService.resyncUserRole(userId, orgId, roleId);
+}
+
+async function ensureOrgResourceAccess(orgId: string) {
+	const { AuthorizationService } = await import("../src/services/authorization.service");
+	const db = await DB.getInstance();
+
+	const [apps, envTypes] = await Promise.all([
+		db.selectFrom("app").select(["id", "org_id"]).where("org_id", "=", orgId).execute(),
+		db.selectFrom("env_type").select(["id", "app_id", "org_id"]).where("org_id", "=", orgId).execute(),
+	]);
+
+	for (const app of apps) {
+		await AuthorizationService.writeAppOrgRelation(app.id, app.org_id);
+	}
+
+	for (const envType of envTypes) {
+		await AuthorizationService.writeEnvTypeRelations(envType.id, envType.app_id, envType.org_id);
+	}
+
+	console.log(`OpenFGA resource relations synced for ${apps.length} apps and ${envTypes.length} env types`);
 }
 
 async function ensureOrgCertificates(orgId: string, orgName: string, userId: string, email: string) {
@@ -606,6 +649,8 @@ async function createDevUser() {
 		await seedDevWorkspace(org.id, org.name, user.id, email);
 		console.log("Seeded local development workspace");
 	}
+
+	await ensureOrgResourceAccess(org.id);
 }
 
 const cmd = process.argv[2];

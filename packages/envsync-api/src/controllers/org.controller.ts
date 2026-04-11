@@ -25,15 +25,21 @@ export class OrgController {
 	public static readonly updateOrg = async (c: Context) => {
 		const org_id = c.get("org_id");
 
-		const { logo_url, website, name, slug } = await c.req.json();
+		const { logo_url, contact_email, website, name, slug } = await c.req.json();
 
 		const org = await OrgService.getOrg(org_id);
+		const metadata = typeof org.metadata === "object" && org.metadata !== null ? { ...org.metadata } : {};
+
+		if (contact_email !== undefined) {
+			metadata.contact_email = contact_email;
+		}
 
 		const updatedData = {
-			logo_url: logo_url ?? org.logo_url,
-			website: website ?? org.website,
-			name: name ?? org.name,
-			slug: slug ?? org.slug,
+			logo_url: logo_url !== undefined ? logo_url : org.logo_url,
+			website: website !== undefined ? website : org.website,
+			name: name !== undefined ? name : org.name,
+			slug: slug !== undefined ? slug : org.slug,
+			metadata,
 		};
 
 		// check if the slug already exists
@@ -54,6 +60,7 @@ export class OrgController {
 			message: `Organization ${org.name} updated.`,
 			details: {
 				logo_url,
+				contact_email,
 				website,
 				name,
 				slug,

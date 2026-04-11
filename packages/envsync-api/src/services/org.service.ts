@@ -8,9 +8,10 @@ export class OrgService {
 	public static createOrg = async (data: {
 		name: string;
 		slug: string;
-		logo_url?: string;
+		logo_url?: string | null;
 		size?: string;
-		website?: string;
+		website?: string | null;
+		metadata?: Record<string, unknown>;
 	}) => {
 		const db = await DB.getInstance();
 
@@ -46,10 +47,11 @@ export class OrgService {
 	public static updateOrg = async (
 		id: string,
 		data: {
-			logo_url?: string;
-			website?: string;
+			logo_url?: string | null;
+			website?: string | null;
 			name?: string;
 			slug?: string;
+			metadata?: Record<string, unknown>;
 		},
 	) => {
 		const db = await DB.getInstance();

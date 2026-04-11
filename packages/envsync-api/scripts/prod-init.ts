@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { OpenFgaClient } from "@openfga/sdk";
-import { CreateBucketCommand, S3Client } from "@aws-sdk/client-s3";
+import { CreateBucketCommand, PutBucketPolicyCommand, S3Client } from "@aws-sdk/client-s3";
 
 import { authorizationModelDef } from "../src/libs/openfga/model";
 import { updateRootEnv } from "../src/utils/load-root-env";
@@ -28,6 +28,21 @@ function log(message: string) {
 		return;
 	}
 	console.log(message);
+}
+
+function buildPublicReadBucketPolicy(bucket: string) {
+	return JSON.stringify({
+		Version: "2012-10-17",
+		Statement: [
+			{
+				Sid: "AllowPublicReadObjects",
+				Effect: "Allow",
+				Principal: "*",
+				Action: ["s3:GetObject"],
+				Resource: [`arn:aws:s3:::${bucket}/*`],
+			},
+		],
+	});
 }
 
 function assertCompleteOpenFgaState() {
@@ -101,6 +116,13 @@ async function initRustfs() {
 		await client.send(new CreateBucketCommand({ Bucket: config.S3_BUCKET, ACL: "public-read" }));
 	} catch {
 	}
+
+	await client.send(
+		new PutBucketPolicyCommand({
+			Bucket: config.S3_BUCKET,
+			Policy: buildPublicReadBucketPolicy(config.S3_BUCKET),
+		}),
+	);
 }
 
 function runMigrations() {

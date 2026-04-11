@@ -16,7 +16,10 @@ export const useInvalidateQueries = () => {
         queryKey: [API_KEYS.ALL_ROLES],
       }),
     invalidateUsers: () =>
-      queryClient.invalidateQueries({ queryKey: [API_KEYS.ALL_USERS] }),
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: [API_KEYS.ALL_USERS] }),
+        queryClient.invalidateQueries({ queryKey: [API_KEYS.USERS_PAGE] }),
+      ]),
     invalidateApplications: () =>
       queryClient.invalidateQueries({ queryKey: [API_KEYS.ALL_APPLICATIONS] }),
     invalidateEnvironments: () =>
