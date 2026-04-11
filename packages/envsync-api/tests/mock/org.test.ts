@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { testRequest } from "../helpers/request";
 import { seedOrg, type SeedOrgResult } from "../helpers/db";
 import { setupUserOrgTuples } from "../helpers/fga";
+import { OrgService } from "@/services/org.service";
 
 let seed: SeedOrgResult;
 
@@ -41,6 +42,24 @@ describe("PATCH /api/org", () => {
 			body: { name: "Updated Org Name" },
 		});
 		expect(res.status).toBe(200);
+	});
+
+	test("master can clear optional org fields with null and update contact email", async () => {
+		const res = await testRequest("/api/org", {
+			method: "PATCH",
+			token: seed.masterUser.token,
+			body: {
+				website: null,
+				logo_url: null,
+				contact_email: "contact@envsync.local",
+			},
+		});
+		expect(res.status).toBe(200);
+
+		const org = await OrgService.getOrg(seed.org.id);
+		expect(org.website).toBeNull();
+		expect(org.logo_url).toBeNull();
+		expect(org.metadata).toMatchObject({ contact_email: "contact@envsync.local" });
 	});
 
 	test("non-master gets 403", async () => {

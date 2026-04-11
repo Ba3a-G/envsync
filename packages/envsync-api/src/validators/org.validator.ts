@@ -3,8 +3,9 @@ import "zod-openapi/extend";
 
 export const updateOrgRequestSchema = z
 	.object({
-		logo_url: z.string().url().optional().openapi({ example: "https://example.com/logo.png" }),
-		website: z.string().url().optional().openapi({ example: "https://example.com" }),
+		logo_url: z.string().url().nullable().optional().openapi({ example: "https://example.com/logo.png" }),
+		contact_email: z.string().email().nullable().optional().openapi({ example: "contact@example.com" }),
+		website: z.string().url().nullable().optional().openapi({ example: "https://example.com" }),
 		name: z.string().optional().openapi({ example: "Updated Organization Name" }),
 		slug: z.string().optional().openapi({ example: "updated-org-name" }),
 	})
