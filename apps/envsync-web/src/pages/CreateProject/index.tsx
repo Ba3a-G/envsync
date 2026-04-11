@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { ENV_TYPE_COLORS } from "@/constants";
+import { createUuid } from "@/utils/uuid";
 
 interface CreateProjectFormData {
   name: string;
@@ -154,7 +155,7 @@ export const CreateProject = () => {
 
     setPendingEnvTypes((prev) => [
       ...prev,
-      { tempId: crypto.randomUUID(), name, color: envTypeInput.color },
+      { tempId: createUuid(), name, color: envTypeInput.color },
     ]);
     setEnvTypeInput({ name: "", color: ENV_TYPE_COLORS[Math.floor(Math.random() * ENV_TYPE_COLORS.length)] });
     setEnvTypeErrors({});
@@ -181,7 +182,7 @@ export const CreateProject = () => {
       ...prev,
       ...newPresets.map((preset) => ({
         ...preset,
-        tempId: crypto.randomUUID(),
+        tempId: createUuid(),
       })),
     ]);
   }, [pendingEnvTypes]);
