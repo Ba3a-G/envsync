@@ -143,9 +143,15 @@ export class CacheClient {
 			} : {}),
 		}, async () => {
 			cacheOperations.add(1, { "db.operation.name": "GET" });
-			return this._clientMode === "production"
+			const value = this._clientMode === "production"
 				? await this._redisClient.get(key)
 				: (this._nodeClient.get(key) as string) || null;
+			infoLogs(
+				`Cache GET key=${key} cache_hit=${value !== null}`,
+				LogTypes.LOGS,
+				"CACHE:GET",
+			);
+			return value;
 		}, isRedis ? SpanKind.CLIENT : SpanKind.INTERNAL);
 	}
 

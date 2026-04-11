@@ -17,6 +17,10 @@ export class FGAClient {
 
 	private constructor() {}
 
+	private static errorMessage(err: unknown): string {
+		return err instanceof Error ? err.message : String(err);
+	}
+
 	static getInstance(): Promise<FGAClient> {
 		this.instance ??= this._getInstance().catch(err => {
 			this.instance = undefined;
@@ -34,47 +38,52 @@ export class FGAClient {
 	private async init(): Promise<void> {
 		const apiUrl = config.OPENFGA_API_URL;
 
-		// If store ID is pre-configured, use it directly
-		if (config.OPENFGA_STORE_ID) {
-			this.storeId = config.OPENFGA_STORE_ID;
-			this.modelId = config.OPENFGA_MODEL_ID || "";
+		try {
+			// If store ID is pre-configured, use it directly
+			if (config.OPENFGA_STORE_ID) {
+				this.storeId = config.OPENFGA_STORE_ID;
+				this.modelId = config.OPENFGA_MODEL_ID || "";
+
+				this.client = new OpenFgaClient({
+					apiUrl,
+					storeId: this.storeId,
+					authorizationModelId: this.modelId || undefined,
+				});
+
+				infoLogs(`OpenFGA connected (store=${this.storeId})`, LogTypes.LOGS, "OpenFGA");
+				return;
+			}
+
+			// Bootstrap: create store and write model
+			const bootstrapClient = new OpenFgaClient({ apiUrl });
+
+			// Create store
+			const { id: storeId } = await bootstrapClient.createStore({ name: "envsync" });
+			if (!storeId) throw new Error("OpenFGA: failed to create store");
+			this.storeId = storeId;
+
+			// Write authorization model
+			const modelClient = new OpenFgaClient({ apiUrl, storeId: this.storeId });
+			const { authorization_model_id: modelId } = await modelClient.writeAuthorizationModel(authorizationModelDef);
+			if (!modelId) throw new Error("OpenFGA: failed to write authorization model");
+			this.modelId = modelId;
 
 			this.client = new OpenFgaClient({
 				apiUrl,
 				storeId: this.storeId,
-				authorizationModelId: this.modelId || undefined,
+				authorizationModelId: this.modelId,
 			});
 
-			infoLogs(`OpenFGA connected (store=${this.storeId})`, LogTypes.LOGS, "OpenFGA");
-			return;
+			infoLogs(
+				`OpenFGA bootstrapped (store=${this.storeId}, model=${this.modelId}). ` +
+					`Set OPENFGA_STORE_ID=${this.storeId} and OPENFGA_MODEL_ID=${this.modelId} in .env to skip bootstrap next time.`,
+				LogTypes.LOGS,
+				"OpenFGA",
+			);
+		} catch (err) {
+			infoLogs(`OpenFGA initialization failed: ${FGAClient.errorMessage(err)}`, LogTypes.ERROR, "OpenFGA");
+			throw err;
 		}
-
-		// Bootstrap: create store and write model
-		const bootstrapClient = new OpenFgaClient({ apiUrl });
-
-		// Create store
-		const { id: storeId } = await bootstrapClient.createStore({ name: "envsync" });
-		if (!storeId) throw new Error("OpenFGA: failed to create store");
-		this.storeId = storeId;
-
-		// Write authorization model
-		const modelClient = new OpenFgaClient({ apiUrl, storeId: this.storeId });
-		const { authorization_model_id: modelId } = await modelClient.writeAuthorizationModel(authorizationModelDef);
-		if (!modelId) throw new Error("OpenFGA: failed to write authorization model");
-		this.modelId = modelId;
-
-		this.client = new OpenFgaClient({
-			apiUrl,
-			storeId: this.storeId,
-			authorizationModelId: this.modelId,
-		});
-
-		infoLogs(
-			`OpenFGA bootstrapped (store=${this.storeId}, model=${this.modelId}). ` +
-				`Set OPENFGA_STORE_ID=${this.storeId} and OPENFGA_MODEL_ID=${this.modelId} in .env to skip bootstrap next time.`,
-			LogTypes.LOGS,
-			"OpenFGA",
-		);
 	}
 
 	get store(): string {
@@ -100,8 +109,23 @@ export class FGAClient {
 			"fga.object": object,
 		}, async () => {
 			externalServiceCalls.add(1, { "peer.service": "openfga", "rpc.method": "check" });
-			const { allowed } = await this.client.check({ user, relation, object });
-			return allowed ?? false;
+			try {
+				const { allowed } = await this.client.check({ user, relation, object });
+				const result = allowed ?? false;
+				infoLogs(
+					`check succeeded user=${user} relation=${relation} object=${object} allowed=${result}`,
+					LogTypes.LOGS,
+					"OpenFGA",
+				);
+				return result;
+			} catch (err) {
+				infoLogs(
+					`check failed user=${user} relation=${relation} object=${object}: ${FGAClient.errorMessage(err)}`,
+					LogTypes.ERROR,
+					"OpenFGA",
+				);
+				throw err;
+			}
 		}, SpanKind.CLIENT);
 	}
 
@@ -119,20 +143,30 @@ export class FGAClient {
 			"fga.batch_size": checks.length,
 		}, async () => {
 			externalServiceCalls.add(1, { "peer.service": "openfga", "rpc.method": "batchCheck" });
-			const results = new Map<string, boolean>();
+			try {
+				const results = new Map<string, boolean>();
 
-			const responses = await Promise.all(
-				checks.map(async c => {
-					const { allowed } = await this.client.check(c);
-					return { key: `${c.relation}:${c.object}`, allowed: allowed ?? false };
-				}),
-			);
+				const responses = await Promise.all(
+					checks.map(async c => {
+						const { allowed } = await this.client.check(c);
+						return { key: `${c.relation}:${c.object}`, allowed: allowed ?? false };
+					}),
+				);
 
-			for (const r of responses) {
-				results.set(r.key, r.allowed);
+				for (const r of responses) {
+					results.set(r.key, r.allowed);
+				}
+
+				infoLogs(`batchCheck succeeded count=${checks.length}`, LogTypes.LOGS, "OpenFGA");
+				return results;
+			} catch (err) {
+				infoLogs(
+					`batchCheck failed count=${checks.length}: ${FGAClient.errorMessage(err)}`,
+					LogTypes.ERROR,
+					"OpenFGA",
+				);
+				throw err;
 			}
-
-			return results;
 		}, SpanKind.CLIENT);
 	}
 
@@ -151,13 +185,23 @@ export class FGAClient {
 			"fga.batch_size": tuples.length,
 		}, async () => {
 			externalServiceCalls.add(1, { "peer.service": "openfga", "rpc.method": "writeTuples" });
-			const BATCH_SIZE = 10;
-			for (let i = 0; i < tuples.length; i += BATCH_SIZE) {
-				const batch = tuples.slice(i, i + BATCH_SIZE);
-				await this.client.write(
-					{ writes: batch },
-					{ authorizationModelId: this.modelId },
+			try {
+				const BATCH_SIZE = 10;
+				for (let i = 0; i < tuples.length; i += BATCH_SIZE) {
+					const batch = tuples.slice(i, i + BATCH_SIZE);
+					await this.client.write(
+						{ writes: batch },
+						{ authorizationModelId: this.modelId },
+					);
+				}
+				infoLogs(`writeTuples succeeded count=${tuples.length}`, LogTypes.LOGS, "OpenFGA");
+			} catch (err) {
+				infoLogs(
+					`writeTuples failed count=${tuples.length}: ${FGAClient.errorMessage(err)}`,
+					LogTypes.ERROR,
+					"OpenFGA",
 				);
+				throw err;
 			}
 		}, SpanKind.CLIENT);
 	}
@@ -176,13 +220,23 @@ export class FGAClient {
 			"fga.batch_size": tuples.length,
 		}, async () => {
 			externalServiceCalls.add(1, { "peer.service": "openfga", "rpc.method": "deleteTuples" });
-			const BATCH_SIZE = 10;
-			for (let i = 0; i < tuples.length; i += BATCH_SIZE) {
-				const batch = tuples.slice(i, i + BATCH_SIZE);
-				await this.client.write(
-					{ deletes: batch },
-					{ authorizationModelId: this.modelId },
+			try {
+				const BATCH_SIZE = 10;
+				for (let i = 0; i < tuples.length; i += BATCH_SIZE) {
+					const batch = tuples.slice(i, i + BATCH_SIZE);
+					await this.client.write(
+						{ deletes: batch },
+						{ authorizationModelId: this.modelId },
+					);
+				}
+				infoLogs(`deleteTuples succeeded count=${tuples.length}`, LogTypes.LOGS, "OpenFGA");
+			} catch (err) {
+				infoLogs(
+					`deleteTuples failed count=${tuples.length}: ${FGAClient.errorMessage(err)}`,
+					LogTypes.ERROR,
+					"OpenFGA",
 				);
+				throw err;
 			}
 		}, SpanKind.CLIENT);
 	}
@@ -191,7 +245,21 @@ export class FGAClient {
 	 * Write and delete tuples in a single transaction.
 	 */
 	async writeTx(req: ClientWriteRequest): Promise<void> {
-		await this.client.write(req, { authorizationModelId: this.modelId });
+		try {
+			await this.client.write(req, { authorizationModelId: this.modelId });
+			infoLogs(
+				`writeTx succeeded writes=${req.writes?.length ?? 0} deletes=${req.deletes?.length ?? 0}`,
+				LogTypes.LOGS,
+				"OpenFGA",
+			);
+		} catch (err) {
+			infoLogs(
+				`writeTx failed writes=${req.writes?.length ?? 0} deletes=${req.deletes?.length ?? 0}: ${FGAClient.errorMessage(err)}`,
+				LogTypes.ERROR,
+				"OpenFGA",
+			);
+			throw err;
+		}
 	}
 
 	/**
@@ -209,8 +277,23 @@ export class FGAClient {
 			"fga.object": type,
 		}, async () => {
 			externalServiceCalls.add(1, { "peer.service": "openfga", "rpc.method": "listObjects" });
-			const { objects } = await this.client.listObjects({ user, relation, type });
-			return objects ?? [];
+			try {
+				const { objects } = await this.client.listObjects({ user, relation, type });
+				const result = objects ?? [];
+				infoLogs(
+					`listObjects succeeded user=${user} relation=${relation} type=${type} count=${result.length}`,
+					LogTypes.LOGS,
+					"OpenFGA",
+				);
+				return result;
+			} catch (err) {
+				infoLogs(
+					`listObjects failed user=${user} relation=${relation} type=${type}: ${FGAClient.errorMessage(err)}`,
+					LogTypes.ERROR,
+					"OpenFGA",
+				);
+				throw err;
+			}
 		}, SpanKind.CLIENT);
 	}
 
@@ -228,8 +311,15 @@ export class FGAClient {
 			"network.peer.address": apiUrl.hostname,
 		}, async () => {
 			externalServiceCalls.add(1, { "peer.service": "openfga", "rpc.method": "readTuples" });
-			const response = await this.client.read(tupleKey as ClientReadRequest);
-			return (response.tuples ?? []).map(t => t.key as TupleKey);
+			try {
+				const response = await this.client.read(tupleKey as ClientReadRequest);
+				const tuples = (response.tuples ?? []).map(t => t.key as TupleKey);
+				infoLogs(`readTuples succeeded count=${tuples.length}`, LogTypes.LOGS, "OpenFGA");
+				return tuples;
+			} catch (err) {
+				infoLogs(`readTuples failed: ${FGAClient.errorMessage(err)}`, LogTypes.ERROR, "OpenFGA");
+				throw err;
+			}
 		}, SpanKind.CLIENT);
 	}
 
