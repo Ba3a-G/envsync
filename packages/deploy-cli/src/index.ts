@@ -1421,6 +1421,18 @@ function renderNginxConf(kind: "web" | "landing") {
 		"  server_name _;",
 		`  root /srv/${kind};`,
 		"  index index.html;",
+		"  location = /runtime-config.js {",
+		"    add_header Cache-Control \"no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0\" always;",
+		"    add_header Pragma \"no-cache\" always;",
+		"    add_header Expires \"0\" always;",
+		"    try_files /runtime-config.js =404;",
+		"  }",
+		"  location = /index.html {",
+		"    add_header Cache-Control \"no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0\" always;",
+		"    add_header Pragma \"no-cache\" always;",
+		"    add_header Expires \"0\" always;",
+		"    try_files /index.html =404;",
+		"  }",
 		"  location / {",
 		"    try_files $uri $uri/ /index.html;",
 		"  }",
@@ -2391,6 +2403,11 @@ function readRenderedRuntimeConfig(filePath: string) {
 	if (!raw.startsWith(prefix) || !raw.endsWith(";")) return null;
 	try {
 		return JSON.parse(raw.slice(prefix.length, -1)) as {
+			apiBaseUrl?: string;
+			appBaseUrl?: string;
+			authBaseUrl?: string;
+			apiDocsUrl?: string;
+			otelEndpoint?: string;
 			hyperdxApiKey?: string;
 			hyperdxUrl?: string;
 			hyperdxDisabled?: boolean;
@@ -2908,6 +2925,24 @@ function printHealthSummary(checks: {
 		tags: { configured: boolean; missing: string[] };
 	};
 	public: Record<string, string>;
+	frontend_runtime: {
+		web: {
+			api_base_url: string | null;
+			app_base_url: string | null;
+			auth_base_url: string | null;
+			api_docs_url: string | null;
+			release_version: string | null;
+			active_api_slot: string | null;
+		};
+		landing: {
+			api_base_url: string | null;
+			app_base_url: string | null;
+			auth_base_url: string | null;
+			api_docs_url: string | null;
+			release_version: string | null;
+			active_api_slot: string | null;
+		};
+	};
 }) {
 	printHealthSection("EnvSync Health");
 	printHealthLine("Bootstrap", formatHealthStatus(checks.bootstrap.completed));
@@ -2959,6 +2994,28 @@ function printHealthSummary(checks: {
 	printHealthLine("Obs UI", checks.observability.obs_ui.url);
 	printHealthLine("Obs API", checks.observability.obs_api.url);
 	printHealthLine("Obs OTLP", checks.observability.obs_otlp.url);
+
+	printHealthSection("Frontend Runtime");
+	printHealthLine("Web API", checks.frontend_runtime.web.api_base_url ?? chalk.dim("missing"));
+	printHealthLine("Web App", checks.frontend_runtime.web.app_base_url ?? chalk.dim("missing"));
+	printHealthLine("Web Auth", checks.frontend_runtime.web.auth_base_url ?? chalk.dim("missing"));
+	printHealthLine("Web Docs", checks.frontend_runtime.web.api_docs_url ?? chalk.dim("missing"));
+	if (checks.frontend_runtime.web.release_version) {
+		printHealthLine("Web Release", `v${checks.frontend_runtime.web.release_version}`);
+	}
+	if (checks.frontend_runtime.web.active_api_slot) {
+		printHealthLine("Web Slot", checks.frontend_runtime.web.active_api_slot);
+	}
+	printHealthLine("Landing API", checks.frontend_runtime.landing.api_base_url ?? chalk.dim("missing"));
+	printHealthLine("Landing App", checks.frontend_runtime.landing.app_base_url ?? chalk.dim("missing"));
+	printHealthLine("Landing Auth", checks.frontend_runtime.landing.auth_base_url ?? chalk.dim("missing"));
+	printHealthLine("Landing Docs", checks.frontend_runtime.landing.api_docs_url ?? chalk.dim("missing"));
+	if (checks.frontend_runtime.landing.release_version) {
+		printHealthLine("Landing Release", `v${checks.frontend_runtime.landing.release_version}`);
+	}
+	if (checks.frontend_runtime.landing.active_api_slot) {
+		printHealthLine("Landing Slot", checks.frontend_runtime.landing.active_api_slot);
+	}
 
 	printHealthSection("Public URLs");
 	for (const [label, url] of Object.entries(checks.public)) {
@@ -3505,6 +3562,24 @@ async function cmdHealth(asJson: boolean) {
 			api: publicHttpsUrl(config, hosts.api, "/health"),
 			auth: publicHttpsUrl(config, hosts.auth, `/realms/${config.auth.keycloak_realm}/.well-known/openid-configuration`),
 			obs: publicHttpsUrl(config, hosts.obs),
+		},
+		frontend_runtime: {
+			web: {
+				api_base_url: webRuntimeConfig?.apiBaseUrl ?? null,
+				app_base_url: webRuntimeConfig?.appBaseUrl ?? null,
+				auth_base_url: webRuntimeConfig?.authBaseUrl ?? null,
+				api_docs_url: webRuntimeConfig?.apiDocsUrl ?? null,
+				release_version: webRuntimeConfig?.releaseVersion ?? null,
+				active_api_slot: webRuntimeConfig?.activeApiSlot ?? null,
+			},
+			landing: {
+				api_base_url: landingRuntimeConfig?.apiBaseUrl ?? null,
+				app_base_url: landingRuntimeConfig?.appBaseUrl ?? null,
+				auth_base_url: landingRuntimeConfig?.authBaseUrl ?? null,
+				api_docs_url: landingRuntimeConfig?.apiDocsUrl ?? null,
+				release_version: landingRuntimeConfig?.releaseVersion ?? null,
+				active_api_slot: landingRuntimeConfig?.activeApiSlot ?? null,
+			},
 		},
 	};
 	if (asJson) {

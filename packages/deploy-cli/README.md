@@ -64,6 +64,39 @@ bunx @envsync-cloud/deploy-cli@0.6.26 upgrade 0.6.25
 
 Blue/green keeps the previous API slot around for rollback after promotion.
 
+## Frontend Runtime Config
+
+Self-hosted frontend runtime values are injected at deploy time through `runtime-config.js`, not baked at build time.
+
+Important behavior:
+
+- `runtime-config.js` is written into the active `web/current` and `landing/current` release directories during deploy.
+- `runtime-config.js` is intentionally served with `Cache-Control: no-store` so frontend URLs and telemetry settings do not stay stale after upgrade.
+- `index.html` is also served with `no-store` to avoid pinning old runtime references.
+
+Post-deploy verification:
+
+```bash
+curl -I https://app.example.com/runtime-config.js
+curl -I https://example.com/runtime-config.js
+curl -I https://app.example.com/index.html
+curl -I https://example.com/index.html
+curl -s https://app.example.com/runtime-config.js
+curl -s https://example.com/runtime-config.js
+```
+
+Expected:
+
+- `Cache-Control: no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0`
+- runtime config values point to the real public `api`, `app`, and `auth` hosts rather than local `lvh.me` defaults
+
+Operator visibility:
+
+- `envsync-deploy health`
+- `envsync-deploy health --json`
+
+Both now surface the effective frontend runtime config for `web` and `landing`.
+
 ## 🛟 Rollback / Backup
 
 Create a backup before upgrades:
