@@ -9,9 +9,11 @@ import {
 	updateEnvRequestSchema,
 	deleteEnvRequestSchema,
 	getEnvRequestSchema,
+	exportEnvRequestSchema,
 	batchEnvsRequestSchema,
 	envResponseSchema,
 	envsResponseSchema,
+	exportEnvResponseSchema,
 	batchEnvsDeleteRequestSchema,
 	batchEnvsResponseSchema,
 	envHistoryRequestSchema,
@@ -45,6 +47,36 @@ app.use(cliMiddleware());
 // could offer (e.g., can_view, can_edit, can_manage_protected per env_type).
 
 // Existing routes
+app.post(
+	"/export",
+	describeRoute({
+		operationId: "exportEnvironment",
+		summary: "Export Environment",
+		description: "Export environment variables and optionally secrets for an application environment in a single payload.",
+		tags: ["Environment Variables"],
+		responses: {
+			200: {
+				description: "Environment exported successfully",
+				content: {
+					"application/json": {
+						schema: resolver(exportEnvResponseSchema),
+					},
+				},
+			},
+			400: {
+				description: "Invalid export request",
+				content: {
+					"application/json": {
+						schema: resolver(errorResponseSchema),
+					},
+				},
+			},
+		},
+	}),
+	zValidator("json", exportEnvRequestSchema),
+	EnvController.exportEnv,
+);
+
 app.post(
 	"/",
 	describeRoute({

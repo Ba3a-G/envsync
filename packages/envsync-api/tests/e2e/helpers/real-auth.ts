@@ -4,9 +4,15 @@
  * Uses the same DB seed helpers as mock tests, plus real FGA/KMS clients.
  * Tokens are real JWTs issued by the real Keycloak instance.
  */
+import fs from "node:fs";
+import path from "node:path";
 import { v4 as uuidv4 } from "uuid";
 
-import { createKeycloakTestUser, getKeycloakAccessToken } from "./keycloak-bootstrap";
+import {
+	bootstrapKeycloakClient,
+	createKeycloakTestUser,
+	getKeycloakAccessToken,
+} from "./keycloak-bootstrap";
 import { ensureE2EEnv } from "./bootstrap-env";
 
 ensureE2EEnv();
@@ -32,34 +38,126 @@ export interface E2ESeed {
 
 // ── Keycloak credentials (cached from env) ──────────────────────────
 
-let keycloakCreds: {
+type KeycloakCreds = {
 	url: string;
 	realm: string;
 	adminUser: string;
 	adminPassword: string;
 	clientId: string;
 	clientSecret: string;
-} | null = null;
+};
 
-function initKeycloakCredentials(): typeof keycloakCreds & {} {
-	if (keycloakCreds) return keycloakCreds;
+let keycloakCreds: KeycloakCreds | null = null;
+let keycloakCredsPromise: Promise<KeycloakCreds> | null = null;
 
+function getBaseKeycloakCredentials() {
 	const url = process.env.KEYCLOAK_URL;
 	const realm = process.env.KEYCLOAK_REALM;
 	const adminUser = process.env.KEYCLOAK_ADMIN_USER;
 	const adminPassword = process.env.KEYCLOAK_ADMIN_PASSWORD;
-	const clientId = process.env.KEYCLOAK_E2E_CLIENT_ID;
-	const clientSecret = process.env.KEYCLOAK_E2E_CLIENT_SECRET;
 
-	if (!url || !realm || !adminUser || !adminPassword || !clientId || !clientSecret) {
+	if (!url || !realm || !adminUser || !adminPassword) {
 		throw new Error(
-			"Missing Keycloak E2E credentials. Ensure KEYCLOAK_URL, KEYCLOAK_REALM, KEYCLOAK_ADMIN_USER, KEYCLOAK_ADMIN_PASSWORD, KEYCLOAK_E2E_CLIENT_ID, and KEYCLOAK_E2E_CLIENT_SECRET are set. " +
+			"Missing Keycloak E2E admin credentials. Ensure KEYCLOAK_URL, KEYCLOAK_REALM, KEYCLOAK_ADMIN_USER, and KEYCLOAK_ADMIN_PASSWORD are set. " +
 			"Run 'bun run e2e:init' first.",
 		);
 	}
 
-	keycloakCreds = { url, realm, adminUser, adminPassword, clientId, clientSecret };
-	return keycloakCreds;
+	return { url, realm, adminUser, adminPassword };
+}
+
+function findProjectRoot(): string {
+	let dir = path.resolve(import.meta.dir, "../../..");
+	for (;;) {
+		if (fs.existsSync(path.join(dir, "package.json"))) {
+			try {
+				const pkg = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8"));
+				if (pkg.name === "envsync-api") return dir;
+			} catch {}
+		}
+		const parent = path.dirname(dir);
+		if (parent === dir) break;
+		dir = parent;
+	}
+	return path.resolve(import.meta.dir, "../../..");
+}
+
+function persistKeycloakClientCredentials(clientId: string, clientSecret: string): void {
+	const envPath = path.join(findProjectRoot(), ".env.e2e.test");
+	const existing = fs.existsSync(envPath) ? fs.readFileSync(envPath, "utf8") : "";
+	const lines = existing.length > 0 ? existing.split(/\r?\n/) : [];
+	const next = new Map<string, string>([
+		["KEYCLOAK_E2E_CLIENT_ID", clientId],
+		["KEYCLOAK_E2E_CLIENT_SECRET", clientSecret],
+	]);
+
+	const updatedLines = lines.map((line) => {
+		const match = line.match(/^([A-Z0-9_]+)=(.*)$/);
+		if (!match) return line;
+		const key = match[1];
+		if (!next.has(key)) return line;
+		const value = next.get(key)!;
+		next.delete(key);
+		return `${key}=${value}`;
+	});
+
+	for (const [key, value] of next.entries()) {
+		updatedLines.push(`${key}=${value}`);
+	}
+
+	fs.writeFileSync(envPath, `${updatedLines.filter(Boolean).join("\n")}\n`, "utf8");
+}
+
+async function bootstrapAndPersistKeycloakClient(baseCreds: ReturnType<typeof getBaseKeycloakCredentials>): Promise<KeycloakCreds> {
+	const client = await bootstrapKeycloakClient(
+		baseCreds.url,
+		baseCreds.realm,
+		baseCreds.adminUser,
+		baseCreds.adminPassword,
+	);
+
+	process.env.KEYCLOAK_E2E_CLIENT_ID = client.clientId;
+	process.env.KEYCLOAK_E2E_CLIENT_SECRET = client.clientSecret;
+	persistKeycloakClientCredentials(client.clientId, client.clientSecret);
+
+	return {
+		...baseCreds,
+		clientId: client.clientId,
+		clientSecret: client.clientSecret,
+	};
+}
+
+async function ensureKeycloakCredentials(forceRefresh = false): Promise<KeycloakCreds> {
+	if (!forceRefresh && keycloakCreds) return keycloakCreds;
+	if (!forceRefresh && keycloakCredsPromise) return keycloakCredsPromise;
+
+	const promise = (async () => {
+		const baseCreds = getBaseKeycloakCredentials();
+		const clientId = process.env.KEYCLOAK_E2E_CLIENT_ID;
+		const clientSecret = process.env.KEYCLOAK_E2E_CLIENT_SECRET;
+
+		if (!forceRefresh && clientId && clientSecret) {
+			return {
+				...baseCreds,
+				clientId,
+				clientSecret,
+			};
+		}
+
+		return bootstrapAndPersistKeycloakClient(baseCreds);
+	})();
+
+	keycloakCredsPromise = promise;
+	try {
+		keycloakCreds = await promise;
+		return keycloakCreds;
+	} finally {
+		keycloakCredsPromise = null;
+	}
+}
+
+function isInvalidClientError(err: unknown): boolean {
+	return err instanceof Error && err.message.includes("invalid_client");
 }
 
 // ── Seed helpers ────────────────────────────────────────────────────
@@ -206,7 +304,7 @@ export async function seedE2EUser(
 	orgId: string,
 	roleId: string,
 ): Promise<E2EUser> {
-	const creds = initKeycloakCredentials();
+	let creds = await ensureKeycloakCredentials();
 	const { CertificateService } = await import("@/services/certificate.service");
 	const { DB } = await import("@/libs/db");
 	const db = await DB.getInstance();
@@ -237,14 +335,31 @@ export async function seedE2EUser(
 		.execute();
 
 	// 3. Get real JWT access token from Keycloak
-	const token = await getKeycloakAccessToken(
-		creds.url,
-		creds.realm,
-		creds.clientId,
-		creds.clientSecret,
-		email,
-		password,
-	);
+	let token: string;
+	try {
+		token = await getKeycloakAccessToken(
+			creds.url,
+			creds.realm,
+			creds.clientId,
+			creds.clientSecret,
+			email,
+			password,
+		);
+	} catch (err) {
+		if (!isInvalidClientError(err)) {
+			throw err;
+		}
+
+		creds = await ensureKeycloakCredentials(true);
+		token = await getKeycloakAccessToken(
+			creds.url,
+			creds.realm,
+			creds.clientId,
+			creds.clientSecret,
+			email,
+			password,
+		);
+	}
 
 	// 4. Issue member cert if org CA is already initialized
 	//    (skipped for the master user created inside seedE2EOrg — their cert

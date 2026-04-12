@@ -138,18 +138,25 @@ export const RoleRow = ({ role }: RoleRowProps) => {
         </div>
       </td>
       <td className="p-4">
-        {role.users.length > 0 ? (
-          <AvatarGroup
-            items={role.users.map((user) => ({
-              name: user.full_name,
-              avatar: user.profile_picture_url,
-            }))}
-            show={3}
-            className="max-w-[200px]"
-          />
-        ) : (
-          <span className="text-sm text-gray-400">No users assigned</span>
-        )}
+        <div className="space-y-2">
+          {role.users.length > 0 ? (
+            <AvatarGroup
+              items={role.users.map((user) => ({
+                name: user.full_name,
+                avatar: user.profile_picture_url,
+              }))}
+              show={3}
+              className="max-w-[200px]"
+            />
+          ) : (
+            <span className="text-sm text-gray-400">No users assigned</span>
+          )}
+          {role.teamCount > 0 && (
+            <span className="inline-flex rounded-full bg-blue-500/10 px-2 py-1 text-xs text-blue-300">
+              {role.teamCount} team{role.teamCount > 1 ? "s" : ""}
+            </span>
+          )}
+        </div>
       </td>
       <td className="p-4">
         <span className="text-sm text-gray-400">
@@ -200,10 +207,10 @@ export const RoleRow = ({ role }: RoleRowProps) => {
                   ? This action cannot be undone.
                 </DialogDescription>
               </DialogHeader>
-              {role.users.length > 0 && (
+              {(role.users.length > 0 || role.teamCount > 0) && (
                 <p className="text-red-400 bg-gray-900 p-2 border border-red-400/40 rounded-md text-sm">
-                  Note: This role cannot be deleted as it has{" "}
-                  {role.users.length} user(s) assigned to it.
+                  Note: This role cannot be deleted while it is assigned to{" "}
+                  {role.users.length} user(s) and {role.teamCount} team(s).
                 </p>
               )}
               <DialogFooter>
@@ -218,7 +225,7 @@ export const RoleRow = ({ role }: RoleRowProps) => {
                 <Button
                   variant="destructive"
                   onClick={() => deleteRole.mutate(role.id)}
-                  disabled={deleteRole.isPending || role.users.length > 0}
+                  disabled={deleteRole.isPending || role.users.length > 0 || role.teamCount > 0}
                 >
                   Delete
                 </Button>

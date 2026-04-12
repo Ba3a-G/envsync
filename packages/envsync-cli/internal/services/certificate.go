@@ -19,6 +19,8 @@ type CertificateService interface {
 	RevokeCert(ctx context.Context, serialHex string, reason int) (responses.RevokeCertResponse, error)
 	GetCRL(ctx context.Context) (domain.CRLResult, error)
 	CheckOCSP(ctx context.Context, serialHex string) (domain.OCSPResult, error)
+	RenewCert(ctx context.Context, id string, description string, revokePrevious bool) (domain.Certificate, error)
+	RotateCert(ctx context.Context, id string, description string, revokePrevious bool, reason int) (domain.Certificate, error)
 }
 
 type certService struct {
@@ -93,4 +95,20 @@ func (s *certService) CheckOCSP(ctx context.Context, serialHex string) (domain.O
 		return domain.OCSPResult{}, err
 	}
 	return mappers.OCSPResponseToDomain(res), nil
+}
+
+func (s *certService) RenewCert(ctx context.Context, id string, description string, revokePrevious bool) (domain.Certificate, error) {
+	res, err := s.repo.Renew(ctx, id, description, revokePrevious)
+	if err != nil {
+		return domain.Certificate{}, err
+	}
+	return mappers.MemberCertResponseToDomain(res), nil
+}
+
+func (s *certService) RotateCert(ctx context.Context, id string, description string, revokePrevious bool, reason int) (domain.Certificate, error) {
+	res, err := s.repo.Rotate(ctx, id, description, revokePrevious, reason)
+	if err != nil {
+		return domain.Certificate{}, err
+	}
+	return mappers.MemberCertResponseToDomain(res), nil
 }

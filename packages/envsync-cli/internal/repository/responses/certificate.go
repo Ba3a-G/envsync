@@ -1,14 +1,14 @@
 package responses
 
 type OrgCAResponse struct {
-	ID        string  `json:"id"`
-	OrgID     string  `json:"org_id"`
-	SerialHex string  `json:"serial_hex"`
-	CertType  string  `json:"cert_type"`
-	SubjectCN string  `json:"subject_cn"`
-	Status    string  `json:"status"`
-	CertPEM   string  `json:"cert_pem,omitempty"`
-	CreatedAt string  `json:"created_at"`
+	ID        string `json:"id"`
+	OrgID     string `json:"org_id"`
+	SerialHex string `json:"serial_hex"`
+	CertType  string `json:"cert_type"`
+	SubjectCN string `json:"subject_cn"`
+	Status    string `json:"status"`
+	CertPEM   string `json:"cert_pem,omitempty"`
+	CreatedAt string `json:"created_at"`
 }
 
 type MemberCertResponse struct {
@@ -26,21 +26,22 @@ type MemberCertResponse struct {
 }
 
 type CertificateResponse struct {
-	ID               string            `json:"id"`
-	OrgID            string            `json:"org_id"`
-	SerialHex        string            `json:"serial_hex"`
-	CertType         string            `json:"cert_type"`
-	SubjectCN        string            `json:"subject_cn"`
-	SubjectEmail     *string           `json:"subject_email"`
-	Status           string            `json:"status"`
-	NotBefore        *string           `json:"not_before"`
-	NotAfter         *string           `json:"not_after"`
-	Description      *string           `json:"description"`
-	Metadata         map[string]string `json:"metadata,omitempty"`
-	RevokedAt        *string           `json:"revoked_at"`
-	RevocationReason *int              `json:"revocation_reason"`
-	CreatedAt        string            `json:"created_at"`
-	UpdatedAt        string            `json:"updated_at"`
+	ID                      string            `json:"id"`
+	OrgID                   string            `json:"org_id"`
+	SerialHex               string            `json:"serial_hex"`
+	CertType                string            `json:"cert_type"`
+	SubjectCN               string            `json:"subject_cn"`
+	SubjectEmail            *string           `json:"subject_email"`
+	Status                  string            `json:"status"`
+	NotBefore               *string           `json:"not_before"`
+	NotAfter                *string           `json:"not_after"`
+	Description             *string           `json:"description"`
+	Metadata                map[string]string `json:"metadata,omitempty"`
+	RevokedAt               *string           `json:"revoked_at"`
+	RevocationReason        *int              `json:"revocation_reason"`
+	SupersedesCertificateID *string           `json:"supersedes_certificate_id,omitempty"`
+	CreatedAt               string            `json:"created_at"`
+	UpdatedAt               string            `json:"updated_at"`
 }
 
 type RevokeCertResponse struct {

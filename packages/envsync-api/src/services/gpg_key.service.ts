@@ -150,6 +150,8 @@ export class GpgKeyService {
 								trust_level: "ultimate",
 								expires_at: expiresAt,
 								is_default: is_default || false,
+								status: "active",
+								supersedes_gpg_key_id: null,
 								created_at: now,
 								updated_at: now,
 							})
@@ -288,6 +290,8 @@ export class GpgKeyService {
 						usage_flags: new JsonValue(["sign", "encrypt"]),
 						trust_level: "unknown",
 						is_default: false,
+						status: "active",
+						supersedes_gpg_key_id: null,
 						created_at: now,
 						updated_at: now,
 					})
@@ -320,7 +324,7 @@ export class GpgKeyService {
 			.select([
 				"id", "org_id", "user_id", "name", "email", "fingerprint",
 				"key_id", "algorithm", "key_size", "usage_flags", "trust_level",
-				"expires_at", "revoked_at", "is_default", "created_at", "updated_at",
+				"status", "expires_at", "revoked_at", "is_default", "supersedes_gpg_key_id", "created_at", "updated_at",
 			])
 			.where("org_id", "=", org_id)
 			.orderBy("created_at", "desc")
@@ -396,6 +400,7 @@ export class GpgKeyService {
 			.set({
 				revoked_at: now,
 				revocation_reason: reason || null,
+				status: "revoked",
 				updated_at: now,
 			})
 			.where("id", "=", id)
@@ -590,5 +595,100 @@ export class GpgKeyService {
 		} catch {
 			return { valid: false, signer_fingerprint: null, signer_key_id: null };
 		}
+	};
+
+	public static rotateKey = async ({
+		id,
+		org_id,
+		user_id,
+		name,
+		email,
+		algorithm,
+		key_size,
+		expires_in_days,
+		revoke_previous,
+		set_new_default,
+	}: {
+		id: string;
+		org_id: string;
+		user_id: string;
+		name?: string;
+		email?: string;
+		algorithm?: GpgAlgorithm;
+		key_size?: number;
+		expires_in_days?: number;
+		revoke_previous: boolean;
+		set_new_default: boolean;
+	}) => {
+		const key = await this.getKey(id, org_id);
+		const rotated = await this.generateKey({
+			org_id,
+			user_id,
+			name: name || `${key.name} Rotated`,
+			email: email || key.email,
+			algorithm: algorithm || (key.algorithm as GpgAlgorithm),
+			key_size: key_size || key.key_size || undefined,
+			usage_flags: key.usage_flags,
+			expires_in_days,
+			is_default: set_new_default,
+		});
+
+		const db = await DB.getInstance();
+		await db
+			.updateTable("gpg_keys")
+			.set({
+				supersedes_gpg_key_id: id,
+				updated_at: new Date(),
+			})
+			.where("id", "=", rotated.id as string)
+			.execute();
+
+		await db
+			.updateTable("gpg_keys")
+			.set({
+				status: revoke_previous ? "superseded" : key.status,
+				is_default: set_new_default ? false : key.is_default,
+				updated_at: new Date(),
+			})
+			.where("id", "=", id)
+			.execute();
+		await invalidateCache(CacheKeys.gpgKey(id));
+
+		if (revoke_previous) {
+			await this.revokeKey(id, org_id, "Superseded by rotated key");
+			await db
+				.updateTable("gpg_keys")
+				.set({
+					status: "superseded",
+					updated_at: new Date(),
+				})
+				.where("id", "=", id)
+				.execute();
+			await invalidateCache(CacheKeys.gpgKey(id));
+		}
+
+		return this.getKey(rotated.id as string, org_id);
+	};
+
+	public static extendExpiry = async (id: string, org_id: string, expiresInDays: number) => {
+		const key = await this.getKey(id, org_id);
+		if (key.revoked_at) {
+			throw new BusinessRuleError("Cannot extend expiry for a revoked key.");
+		}
+
+		const expiresAt = new Date(Date.now() + expiresInDays*24*60*60*1000);
+		const db = await DB.getInstance();
+		await db
+			.updateTable("gpg_keys")
+			.set({
+				expires_at: expiresAt,
+				status: "active",
+				updated_at: new Date(),
+			})
+			.where("id", "=", id)
+			.execute();
+
+		await invalidateCache(CacheKeys.gpgKey(id));
+		return this.getKey(id, org_id);
 	};
 }

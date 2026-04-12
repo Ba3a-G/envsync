@@ -23,6 +23,28 @@ export const permissionMessageResponseSchema = z
 	})
 	.openapi({ ref: "PermissionMessageResponse" });
 
+export const grantEntrySchema = z.object({
+	subject_id: z.string(),
+	subject_type: z.enum(["user", "team"]),
+	relation: z.enum(["admin", "editor", "viewer"]),
+});
+
+export const grantsListResponseSchema = z
+	.array(grantEntrySchema)
+	.openapi({ ref: "GrantsListResponse" });
+
+export const effectiveAccessResponseSchema = z
+	.array(
+		z.object({
+			user_id: z.string(),
+			email: z.string(),
+			relation: z.enum(["admin", "editor", "viewer"]).nullable(),
+			source: z.enum(["direct", "team", "both"]).nullable(),
+			teams: z.array(z.string()),
+		}),
+	)
+	.openapi({ ref: "EffectiveAccessResponse" });
+
 export const effectivePermissionsResponseSchema = z
 	.object({
 		can_view: z.boolean(),

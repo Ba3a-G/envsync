@@ -20,6 +20,8 @@ import {
   MoreVertical,
   DatabaseBackup,
   History,
+  GitPullRequest,
+  LockKeyhole,
 } from "lucide-react";
 
 interface ProjectEnvironmentsHeaderProps {
@@ -227,6 +229,22 @@ export const ProjectEnvironmentsHeader = ({
 
         {/* Actions */}
         <div className="flex items-center space-x-3">
+          <Button
+            variant="outline"
+            className="text-white border-gray-700 hover:bg-gray-800"
+            onClick={() => navigate(`/applications/${projectNameId}/access`)}
+          >
+            <LockKeyhole className="w-4 h-4 mr-2" />
+            Access
+          </Button>
+          <Button
+            variant="outline"
+            className="text-white border-gray-700 hover:bg-gray-800"
+            onClick={() => navigate("/change-requests")}
+          >
+            <GitPullRequest className="w-4 h-4 mr-2" />
+            Change Requests
+          </Button>
           {/* Options Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

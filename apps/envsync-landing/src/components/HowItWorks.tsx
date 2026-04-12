@@ -1,107 +1,98 @@
-import { Terminal, Upload, RefreshCw, ArrowRight } from "lucide-react";
+import { GitPullRequestArrow, ShieldCheck, Terminal, Workflow } from "lucide-react";
 import { motion } from "framer-motion";
 
 const steps = [
   {
-    number: 1,
+    number: "01",
     icon: Terminal,
-    title: "Install the CLI",
-    code: "npm install -g @envsync/cli",
+    title: "Connect",
+    command: "envsync login && envsync init",
+    result: "Bind repo and app",
   },
   {
-    number: 2,
-    icon: Upload,
-    title: "Push your .env",
-    code: "envsync push --env .env",
+    number: "02",
+    icon: Workflow,
+    title: "Push",
+    command: "envsync push --env staging",
+    result: "Create a reviewed change set",
   },
   {
-    number: 3,
-    icon: RefreshCw,
-    title: "Sync environments",
-    code: "envsync pull --env production",
+    number: "03",
+    icon: GitPullRequestArrow,
+    title: "Approve",
+    command: "envsync push --env production --strict",
+    result: "Gate prod with policy",
+  },
+  {
+    number: "04",
+    icon: ShieldCheck,
+    title: "Inject",
+    command: "envsync pull --env production",
+    result: "Sync CI or runtime",
   },
 ];
 
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.2
-    }
-  }
-};
-
-const stepVariants = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { 
-    opacity: 1, 
-    y: 0,
-    transition: { duration: 0.5 }
-  }
-};
-
 const HowItWorks = () => {
   return (
-    <section className="container mx-auto border-x border-t border-border py-0 px-0">
-      <div className="container mx-auto px-0">
+    <section className="container mx-auto border-x border-t border-border px-0 py-0">
+      <div className="grid gap-0 lg:grid-cols-[0.78fr_1.22fr]">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.35 }}
-          className="relative overflow-hidden border border-border bg-[hsl(var(--surface-1))] p-6 text-left md:p-8 md:py-12"
+          className="border border-border bg-[hsl(var(--surface-1))] p-6 md:p-8"
         >
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 opacity-45"
-            style={{
-              backgroundImage:
-                "linear-gradient(hsl(var(--border) / 0.7) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--border) / 0.7) 1px, transparent 1px)",
-              backgroundSize: "36px 36px",
-            }}
-          />
-          <div className="relative z-10">
-            <h2 className="mb-4 text-4xl font-bold text-foreground md:text-5xl">
-              Get started in three steps
-            </h2>
-            <p className="max-w-2xl text-lg text-muted-foreground md:text-xl">
-              From install to production sync in three repeatable commands.
-            </p>
+          <div className="mb-4 inline-flex items-center gap-2 border border-border bg-[hsl(var(--surface-2))] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            Workflow
           </div>
+          <h2 className="max-w-sm text-3xl font-bold leading-tight text-foreground md:text-4xl">
+            Move from local edits to runtime-safe delivery in one path.
+          </h2>
+          <p className="mt-4 max-w-sm text-base leading-relaxed text-muted-foreground">
+            Connect, push, approve, and inject without inventing a new team ritual.
+          </p>
         </motion.div>
 
         <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          whileInView="visible"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="relative grid w-full grid-cols-1 gap-0 md:grid-cols-3"
+          transition={{ duration: 0.35, delay: 0.05 }}
+          className="relative overflow-hidden border border-border bg-[linear-gradient(180deg,hsl(var(--surface-1)),#0a0f15)] p-5 md:p-6"
         >
-          {steps.map((step, index) => (
-            <motion.div
-              variants={stepVariants}
-              key={step.number}
-              className="group relative border border-border bg-[hsl(var(--surface-1))] p-6"
-            >
-              <div className="mb-5 flex h-14 w-14 items-center justify-center border border-border bg-[hsl(var(--surface-2))] transition-colors group-hover:border-primary/50">
-                <step.icon className="h-6 w-6 text-primary" />
-              </div>
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 opacity-35"
+            style={{
+              backgroundImage:
+                "linear-gradient(hsl(var(--border) / 0.45) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--border) / 0.45) 1px, transparent 1px)",
+              backgroundSize: "24px 24px",
+            }}
+          />
+          <div className="relative z-10">
+            <div className="pointer-events-none absolute left-8 right-8 top-10 hidden h-px bg-border md:block" />
+            <div className="grid gap-4 md:grid-cols-4">
+              {steps.map((step) => (
+                <div key={step.number} className="relative">
+                  <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full border border-border bg-[hsl(var(--surface-2))]">
+                    <step.icon className="h-5 w-5 text-primary" />
+                  </div>
 
-              <span className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
-                Step {step.number}
-              </span>
-
-              <h3 className="mb-5 text-2xl font-semibold text-foreground">{step.title}</h3>
-
-              <div className="border border-border bg-[hsl(var(--surface-2))] p-4 text-left">
-                <p className="mb-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">Command</p>
-                <code className="block font-mono text-xs text-foreground sm:text-sm">
-                  <span className="text-primary">$</span> {step.code}
-                </code>
-              </div>
-            </motion.div>
-          ))}
+                  <div className="rounded-[1.1rem] border border-border bg-[hsl(var(--surface-1))/0.95] p-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <h3 className="text-lg font-semibold text-foreground">{step.title}</h3>
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">{step.number}</span>
+                    </div>
+                    <div className="rounded-xl border border-border bg-[#091019] px-3 py-2 font-mono text-[11px] text-foreground">
+                      <span className="text-primary">$</span> {step.command}
+                    </div>
+                    <p className="mt-3 text-sm text-muted-foreground">{step.result}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </motion.div>
       </div>
     </section>

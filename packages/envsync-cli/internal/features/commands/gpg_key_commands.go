@@ -17,6 +17,8 @@ func GpgKeyCommands(handler *handlers.GpgKeyHandler) *cli.Command {
 			gpgVerifyCommand(handler),
 			gpgExportCommand(handler),
 			gpgRevokeCommand(handler),
+			gpgRotateCommand(handler),
+			gpgExtendExpiryCommand(handler),
 			gpgDeleteCommand(handler),
 		},
 	}
@@ -173,6 +175,36 @@ func gpgDeleteCommand(handler *handlers.GpgKeyHandler) *cli.Command {
 				Usage:    "GPG key ID to delete",
 				Required: true,
 			},
+		},
+	}
+}
+
+func gpgRotateCommand(handler *handlers.GpgKeyHandler) *cli.Command {
+	return &cli.Command{
+		Name:   "rotate",
+		Usage:  "Rotate a GPG key and optionally make the new key default",
+		Action: handler.Rotate,
+		Flags: []cli.Flag{
+			&cli.StringFlag{Name: "key-id", Usage: "GPG key ID to rotate", Required: true},
+			&cli.StringFlag{Name: "name", Usage: "Override key owner name"},
+			&cli.StringFlag{Name: "email", Usage: "Override key owner email"},
+			&cli.StringFlag{Name: "algorithm", Usage: "Override algorithm"},
+			&cli.IntFlag{Name: "key-size", Usage: "Override key size for RSA"},
+			&cli.IntFlag{Name: "expires-in-days", Usage: "New key expiry in days", Value: 365},
+			&cli.BoolFlag{Name: "revoke-previous", Usage: "Revoke the previous key after rotation", Value: false},
+			&cli.BoolFlag{Name: "set-new-default", Usage: "Set the new key as default", Value: true},
+		},
+	}
+}
+
+func gpgExtendExpiryCommand(handler *handlers.GpgKeyHandler) *cli.Command {
+	return &cli.Command{
+		Name:   "extend-expiry",
+		Usage:  "Extend the expiry of a non-revoked GPG key",
+		Action: handler.ExtendExpiry,
+		Flags: []cli.Flag{
+			&cli.StringFlag{Name: "key-id", Usage: "GPG key ID", Required: true},
+			&cli.IntFlag{Name: "expires-in-days", Usage: "Additional validity window in days", Required: true},
 		},
 	}
 }

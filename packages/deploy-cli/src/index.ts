@@ -1868,10 +1868,10 @@ function ensureRepoCheckout(config: DeployConfig) {
 	logSuccess(`Pinned repo checkout ready at ${config.source.ref}`);
 }
 
-function extractStaticBundle(image: string, targetDir: string) {
-	logStep(`Extracting static bundle from ${image}`);
+function extractStaticBundle(kind: "web" | "landing", image: string, targetDir: string) {
+	logStep(`Extracting ${kind} static bundle from ${image}`);
 	if (currentOptions.dryRun) {
-		logDryRun(`Would extract ${image} into ${targetDir}`);
+		logDryRun(`Would extract ${kind} bundle from ${image} into ${targetDir}`);
 		return;
 	}
 	fs.rmSync(targetDir, { recursive: true, force: true });
@@ -1882,7 +1882,9 @@ function extractStaticBundle(image: string, targetDir: string) {
 	} finally {
 		run("docker", ["rm", "-f", containerId], { quiet: true });
 	}
-	logSuccess(`Static bundle extracted to ${targetDir}`);
+	normalizeExtractedStaticBundle(kind, targetDir);
+	validateStaticBundle(kind, targetDir);
+	logSuccess(`${kind} static bundle extracted to ${targetDir}`);
 }
 
 function releaseAssetDir(kind: "web" | "landing", version: string) {
@@ -1895,7 +1897,7 @@ function currentReleaseDir(kind: "web" | "landing") {
 
 function stageFrontendRelease(kind: "web" | "landing", image: string, version: string) {
 	const targetDir = releaseAssetDir(kind, version);
-	extractStaticBundle(image, targetDir);
+	extractStaticBundle(kind, image, targetDir);
 }
 
 function activateFrontendRelease(kind: "web" | "landing", version: string, runtimeConfig: string) {
@@ -1909,10 +1911,47 @@ function activateFrontendRelease(kind: "web" | "landing", version: string, runti
 	if (!exists(stagedDir)) {
 		throw new Error(`Missing staged ${kind} release at ${stagedDir}`);
 	}
+	validateStaticBundle(kind, stagedDir);
 	fs.rmSync(currentDir, { recursive: true, force: true });
 	ensureDir(currentDir);
 	fs.cpSync(stagedDir, currentDir, { recursive: true });
 	writeFile(path.join(currentDir, "runtime-config.js"), runtimeConfig);
+	validateStaticBundle(kind, currentDir);
+}
+
+function normalizeExtractedStaticBundle(kind: "web" | "landing", targetDir: string) {
+	const directIndex = path.join(targetDir, "index.html");
+	if (exists(directIndex)) {
+		return;
+	}
+
+	const childDirs = fs
+		.readdirSync(targetDir, { withFileTypes: true })
+		.filter(entry => entry.isDirectory())
+		.map(entry => path.join(targetDir, entry.name));
+
+	const candidateRoots = childDirs.filter(dir => exists(path.join(dir, "index.html")));
+	if (candidateRoots.length !== 1) {
+		return;
+	}
+
+	const nestedRoot = candidateRoots[0];
+	logWarn(`Detected nested ${kind} static bundle root at ${nestedRoot}; flattening into ${targetDir}.`);
+	for (const entry of fs.readdirSync(nestedRoot)) {
+		fs.cpSync(path.join(nestedRoot, entry), path.join(targetDir, entry), { recursive: true });
+	}
+	fs.rmSync(nestedRoot, { recursive: true, force: true });
+}
+
+function validateStaticBundle(kind: "web" | "landing", targetDir: string) {
+	if (exists(path.join(targetDir, "index.html"))) {
+		return;
+	}
+
+	const entries = exists(targetDir) ? fs.readdirSync(targetDir).slice(0, 20).join(", ") : "";
+	throw new Error(
+		`Invalid ${kind} static bundle at ${targetDir}: missing index.html${entries ? `. Found: ${entries}` : ""}`,
+	);
 }
 
 function createApiDbUpgradeBackup(config: DeployConfig, fromVersion: string, toVersion: string) {

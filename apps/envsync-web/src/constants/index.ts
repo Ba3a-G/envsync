@@ -7,6 +7,7 @@ export enum API_KEYS {
   ALL_USERS = "users/all",
   USERS_PAGE = "users/page",
   ALL_ROLES = "roles/all",
+  ALL_TEAMS = "teams/all",
   ALL_ENVIRONMENTS = "environments/all",
   ALL_ORGANIZATIONS = "organizations/all",
   ALL_AUDIT_LOGS = "audit-logs/all",
@@ -15,6 +16,9 @@ export enum API_KEYS {
   ALL_PITCHANGES = "pit-changes/all",
   ALL_GPG_KEYS = "gpg-keys/all",
   ALL_CERTIFICATES = "certificates/all",
+  APP_GRANTS = "permissions/app/grants",
+  APP_EFFECTIVE_ACCESS = "permissions/app/effective-access",
+  CHANGE_REQUESTS = "change-requests/all",
 }
 
 export const SCOPES = getRegisteredScopeIds();

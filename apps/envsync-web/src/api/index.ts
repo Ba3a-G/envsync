@@ -6,6 +6,9 @@ import { users } from "./users.api";
 import { webhooks } from "./webhooks.api";
 import { gpgKeys } from "./gpg-keys.api";
 import { certificates } from "./certificates.api";
+import { teams } from "./teams.api";
+import { permissions } from "./permissions.api";
+import { changeRequests } from "./change-requests.api";
 
 export const api = {
   sdk,
@@ -16,6 +19,9 @@ export const api = {
   webhooks,
   gpgKeys,
   certificates,
+  teams,
+  permissions,
+  changeRequests,
 };
 
 export * from "./base";

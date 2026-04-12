@@ -2,13 +2,14 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { ArrowRight, MessageCircle, Shield } from "lucide-react";
 
 type Integration = {
   name: string;
   description: string;
   icon: string;
-  status: "coming-soon";
+  status: "coming-soon" | "live";
 };
 
 const notificationIntegrations: Integration[] = [
@@ -16,13 +17,13 @@ const notificationIntegrations: Integration[] = [
     name: "Slack",
     description: "Route environment and security alerts directly into operational channels.",
     icon: "/images/Slack.svg",
-    status: "coming-soon",
+    status: "live",
   },
   {
     name: "Discord",
     description: "Stream change notifications to Discord for distributed engineering teams.",
     icon: "https://raw.githubusercontent.com/tandpfun/skill-icons/refs/heads/main/icons/Discord.svg",
-    status: "coming-soon",
+    status: "live",
   },
 ];
 
@@ -49,7 +50,7 @@ const platformIntegrations: Integration[] = [
     name: "GitHub Actions",
     description: "Inject managed environment values into CI workflows with less drift risk.",
     icon: "https://raw.githubusercontent.com/tandpfun/skill-icons/refs/heads/main/icons/GithubActions-Dark.svg",
-    status: "coming-soon",
+    status: "live",
   },
 ];
 
@@ -67,8 +68,16 @@ const IntegrationGrid = ({ integrations }: { integrations: Integration[] }) => (
             </div>
             <h3 className="text-xl font-semibold text-foreground">{integration.name}</h3>
           </div>
-          <Badge className="rounded-none border border-border bg-[hsl(var(--surface-2))] text-xs text-muted-foreground hover:bg-[hsl(var(--surface-2))]">
-            Coming soon
+          <Badge
+            className={cn(
+              "rounded-none border text-xs font-medium",
+              integration.status === "live" &&
+                "border-primary/35 bg-primary/15 text-primary hover:bg-primary/20",
+              integration.status === "coming-soon" &&
+                "border-amber-500/30 bg-amber-500/10 text-amber-100/90 hover:bg-amber-500/15",
+            )}
+          >
+            {integration.status}
           </Badge>
         </div>
         <p className="text-sm leading-relaxed text-muted-foreground md:text-base">{integration.description}</p>

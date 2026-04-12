@@ -26,20 +26,22 @@ func GpgKeyResponseToDomain(res responses.GpgKeyResponse) domain.GpgKey {
 	updatedAt, _ := time.Parse(time.RFC3339, res.UpdatedAt)
 
 	return domain.GpgKey{
-		ID:          res.ID,
-		Name:        res.Name,
-		Email:       res.Email,
-		Fingerprint: res.Fingerprint,
-		KeyID:       res.KeyID,
-		Algorithm:   res.Algorithm,
-		KeySize:     res.KeySize,
-		UsageFlags:  res.UsageFlags,
-		TrustLevel:  res.TrustLevel,
-		ExpiresAt:   expiresAt,
-		RevokedAt:   revokedAt,
-		IsDefault:   res.IsDefault,
-		CreatedAt:   createdAt,
-		UpdatedAt:   updatedAt,
+		ID:                 res.ID,
+		Name:               res.Name,
+		Email:              res.Email,
+		Fingerprint:        res.Fingerprint,
+		KeyID:              res.KeyID,
+		Algorithm:          res.Algorithm,
+		KeySize:            res.KeySize,
+		UsageFlags:         res.UsageFlags,
+		TrustLevel:         res.TrustLevel,
+		Status:             res.Status,
+		ExpiresAt:          expiresAt,
+		RevokedAt:          revokedAt,
+		IsDefault:          res.IsDefault,
+		SupersedesGpgKeyID: res.SupersedesGpgKeyID,
+		CreatedAt:          createdAt,
+		UpdatedAt:          updatedAt,
 	}
 }
 

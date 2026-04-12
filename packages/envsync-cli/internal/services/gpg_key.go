@@ -18,6 +18,8 @@ type GpgKeyService interface {
 	ExportKey(ctx context.Context, id string) (string, string, error)
 	Sign(ctx context.Context, req requests.SignDataRequest) (domain.GpgSignatureResult, error)
 	Verify(ctx context.Context, req requests.VerifySignatureRequest) (domain.GpgVerifyResult, error)
+	RotateKey(ctx context.Context, id string, payload map[string]any) (domain.GpgKey, error)
+	ExtendExpiry(ctx context.Context, id string, expiresInDays int) (domain.GpgKey, error)
 }
 
 type gpgKeyService struct {
@@ -92,4 +94,20 @@ func (s *gpgKeyService) Verify(ctx context.Context, req requests.VerifySignature
 		return domain.GpgVerifyResult{}, err
 	}
 	return mappers.GpgVerifyResponseToDomain(res), nil
+}
+
+func (s *gpgKeyService) RotateKey(ctx context.Context, id string, payload map[string]any) (domain.GpgKey, error) {
+	res, err := s.repo.Rotate(ctx, id, payload)
+	if err != nil {
+		return domain.GpgKey{}, err
+	}
+	return mappers.GpgKeyResponseToDomain(res), nil
+}
+
+func (s *gpgKeyService) ExtendExpiry(ctx context.Context, id string, expiresInDays int) (domain.GpgKey, error) {
+	res, err := s.repo.ExtendExpiry(ctx, id, expiresInDays)
+	if err != nil {
+		return domain.GpgKey{}, err
+	}
+	return mappers.GpgKeyResponseToDomain(res), nil
 }

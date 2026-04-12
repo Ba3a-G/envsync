@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { MutationOptions, sdk } from "./base";
+import { apiRequest, MutationOptions, sdk } from "./base";
 import { API_KEYS } from "../constants";
 import { useInvalidateQueries } from "@/hooks/useApi";
 import type {
@@ -134,6 +134,52 @@ const useCheckOCSP = (serialHex: string) => {
   });
 };
 
+const useRenewCert = ({
+  onSuccess,
+  onError,
+}: MutationOptions<MemberCertResponse, { id: string; description?: string; revoke_previous?: boolean }> = {}) => {
+  const { invalidateCertificates } = useInvalidateQueries();
+
+  return useMutation({
+    mutationFn: ({ id, description, revoke_previous = true }: { id: string; description?: string; revoke_previous?: boolean }) =>
+      apiRequest<MemberCertResponse>(`/api/certificate/${id}/renew`, {
+        method: "POST",
+        body: JSON.stringify({ description, revoke_previous }),
+      }),
+    onSuccess: (data, variables) => {
+      onSuccess?.({ data, variables });
+      invalidateCertificates();
+    },
+    onError: (error, variables) => {
+      console.error("Failed to renew certificate:", error);
+      onError?.({ error: error as Error, variables });
+    },
+  });
+};
+
+const useRotateCert = ({
+  onSuccess,
+  onError,
+}: MutationOptions<MemberCertResponse, { id: string; description?: string; revoke_previous?: boolean; reason?: number }> = {}) => {
+  const { invalidateCertificates } = useInvalidateQueries();
+
+  return useMutation({
+    mutationFn: ({ id, description, revoke_previous = true, reason = 0 }: { id: string; description?: string; revoke_previous?: boolean; reason?: number }) =>
+      apiRequest<MemberCertResponse>(`/api/certificate/${id}/rotate`, {
+        method: "POST",
+        body: JSON.stringify({ description, revoke_previous, reason }),
+      }),
+    onSuccess: (data, variables) => {
+      onSuccess?.({ data, variables });
+      invalidateCertificates();
+    },
+    onError: (error, variables) => {
+      console.error("Failed to rotate certificate:", error);
+      onError?.({ error: error as Error, variables });
+    },
+  });
+};
+
 export const certificates = {
   getCertificates: useCertificates,
   getOrgCA: useOrgCA,
@@ -143,4 +189,6 @@ export const certificates = {
   revokeCert: useRevokeCert,
   getCRL: useCRL,
   checkOCSP: useCheckOCSP,
+  renewCert: useRenewCert,
+  rotateCert: useRotateCert,
 };

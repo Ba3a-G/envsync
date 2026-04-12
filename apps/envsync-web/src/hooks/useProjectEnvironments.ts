@@ -11,6 +11,12 @@ import {
 } from "@/constants";
 
 function getApiErrorMessage(error: unknown, fallback: string): string {
+  if (
+    error instanceof ApiError &&
+    String(error.body?.code || "").toUpperCase() === "PROTECTED_ENV_REQUIRES_CHANGE_REQUEST"
+  ) {
+    return "This environment is protected. Create a change request from the project or Change Requests page.";
+  }
   if (error instanceof ApiError && error.body?.error) {
     return error.body.error;
   }

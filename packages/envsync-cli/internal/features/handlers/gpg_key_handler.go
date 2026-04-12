@@ -8,6 +8,7 @@ import (
 
 	gpg_key "github.com/EnvSync-Cloud/envsync/packages/envsync-cli/internal/features/usecases/gpg_key"
 	"github.com/EnvSync-Cloud/envsync/packages/envsync-cli/internal/presentation/formatters"
+	"github.com/EnvSync-Cloud/envsync/packages/envsync-cli/internal/services"
 )
 
 type GpgKeyHandler struct {
@@ -18,6 +19,7 @@ type GpgKeyHandler struct {
 	exportUseCase   gpg_key.ExportUseCase
 	revokeUseCase   gpg_key.RevokeUseCase
 	deleteUseCase   gpg_key.DeleteKeyUseCase
+	service         services.GpgKeyService
 	formatter       *formatters.GpgKeyFormatter
 }
 
@@ -29,6 +31,7 @@ func NewGpgKeyHandler(
 	exportUseCase gpg_key.ExportUseCase,
 	revokeUseCase gpg_key.RevokeUseCase,
 	deleteUseCase gpg_key.DeleteKeyUseCase,
+	service services.GpgKeyService,
 	formatter *formatters.GpgKeyFormatter,
 ) *GpgKeyHandler {
 	return &GpgKeyHandler{
@@ -39,6 +42,7 @@ func NewGpgKeyHandler(
 		exportUseCase:   exportUseCase,
 		revokeUseCase:   revokeUseCase,
 		deleteUseCase:   deleteUseCase,
+		service:         service,
 		formatter:       formatter,
 	}
 }
@@ -193,6 +197,54 @@ func (h *GpgKeyHandler) Delete(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	return h.formatter.FormatSuccess(cmd.Writer, "GPG key deleted: "+keyID)
+}
+
+func (h *GpgKeyHandler) Rotate(ctx context.Context, cmd *cli.Command) error {
+	keyID := cmd.String("key-id")
+	payload := map[string]any{
+		"set_new_default": cmd.Bool("set-new-default"),
+		"revoke_previous": cmd.Bool("revoke-previous"),
+	}
+	if cmd.IsSet("expires-in-days") {
+		payload["expires_in_days"] = int(cmd.Int("expires-in-days"))
+	}
+	if cmd.IsSet("name") {
+		payload["name"] = cmd.String("name")
+	}
+	if cmd.IsSet("email") {
+		payload["email"] = cmd.String("email")
+	}
+	if cmd.IsSet("algorithm") {
+		payload["algorithm"] = cmd.String("algorithm")
+	}
+	if cmd.IsSet("key-size") {
+		payload["key_size"] = int(cmd.Int("key-size"))
+	}
+
+	key, err := h.service.RotateKey(ctx, keyID, payload)
+	if err != nil {
+		return h.formatError(cmd, err)
+	}
+
+	if cmd.Bool("json") {
+		return h.formatter.FormatJSON(cmd.Writer, key)
+	}
+	return h.formatter.FormatSuccess(cmd.Writer, "GPG key rotated: "+key.ID)
+}
+
+func (h *GpgKeyHandler) ExtendExpiry(ctx context.Context, cmd *cli.Command) error {
+	keyID := cmd.String("key-id")
+	expiresInDays := int(cmd.Int("expires-in-days"))
+
+	key, err := h.service.ExtendExpiry(ctx, keyID, expiresInDays)
+	if err != nil {
+		return h.formatError(cmd, err)
+	}
+
+	if cmd.Bool("json") {
+		return h.formatter.FormatJSON(cmd.Writer, key)
+	}
+	return h.formatter.FormatSuccess(cmd.Writer, "GPG key expiry extended: "+key.ID)
 }
 
 func (h *GpgKeyHandler) formatError(cmd *cli.Command, err error) error {

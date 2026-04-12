@@ -25,6 +25,21 @@ export const revokeCertRequestSchema = z
 	})
 	.openapi({ ref: "RevokeCertRequest" });
 
+export const renewCertRequestSchema = z
+	.object({
+		description: z.string().optional(),
+		revoke_previous: z.boolean().default(true),
+	})
+	.openapi({ ref: "RenewCertRequest" });
+
+export const rotateCertRequestSchema = z
+	.object({
+		description: z.string().optional(),
+		revoke_previous: z.boolean().default(true),
+		reason: z.number().int().min(0).max(10).default(0),
+	})
+	.openapi({ ref: "RotateCertRequest" });
+
 export const getCRLQuerySchema = z
 	.object({
 		delta_only: z.string().optional().openapi({ example: "false" }),
@@ -77,6 +92,7 @@ export const certificateListResponseSchema = z
 			description: z.string().nullable().openapi({ example: null }),
 			metadata: z.record(z.string(), z.string()).nullable().optional().openapi({ example: null }),
 			revoked_at: z.string().nullable().openapi({ example: null }),
+			supersedes_certificate_id: z.string().nullable().optional().openapi({ example: null }),
 			created_at: z.string().openapi({ example: "2024-01-01T00:00:00Z" }),
 			updated_at: z.string().openapi({ example: "2024-01-01T00:00:00Z" }),
 		}),

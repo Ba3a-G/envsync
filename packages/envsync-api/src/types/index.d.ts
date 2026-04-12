@@ -102,12 +102,24 @@ type TeamAuditActions =
 	| "team_viewed"
 	| "teams_viewed"
 	| "team_member_added"
-	| "team_member_removed";
+	| "team_member_removed"
+	| "team_role_assigned"
+	| "team_role_unassigned";
 
 type PermissionAuditActions =
 	| "permission_granted"
 	| "permission_revoked"
-	| "permissions_viewed";
+	| "permissions_viewed"
+	| "app_access_granted"
+	| "app_access_revoked";
+
+type ChangeRequestAuditActions =
+	| "change_request_created"
+	| "change_request_approved"
+	| "change_request_rejected"
+	| "change_request_cancelled"
+	| "promotion_request_created"
+	| "promotion_request_applied";
 
 type GpgKeyAuditActions =
 	| "gpg_key_generated"
@@ -118,14 +130,18 @@ type GpgKeyAuditActions =
 	| "gpg_key_revoked"
 	| "gpg_key_trust_updated"
 	| "gpg_data_signed"
-	| "gpg_signature_verified";
+	| "gpg_signature_verified"
+	| "gpg_key_rotated"
+	| "gpg_key_expiry_extended";
 
 type CertificateAuditActions =
 	| "cert_ca_initialized"
 	| "cert_member_issued"
 	| "certs_viewed"
 	| "cert_viewed"
-	| "cert_revoked";
+	| "cert_revoked"
+	| "certificate_renewed"
+	| "certificate_rotated";
 
 type CliAuditActions = "cli_command_executed";
 
@@ -143,6 +159,7 @@ type AuditActions =
 	| WebHookAuditActions
 	| TeamAuditActions
 	| PermissionAuditActions
+	| ChangeRequestAuditActions
 	| GpgKeyAuditActions
 	| CertificateAuditActions
 	| CliAuditActions;

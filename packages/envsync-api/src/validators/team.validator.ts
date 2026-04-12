@@ -16,6 +16,7 @@ export const createTeamResponseSchema = z
 		org_id: z.string().openapi({ example: "org_123" }),
 		description: z.string().nullable().openapi({ example: "Team for backend developers" }),
 		color: z.string().openapi({ example: "#3357FF" }),
+		role_id: z.string().nullable().optional().openapi({ example: "role_123" }),
 		created_at: z.string().openapi({ example: "2023-01-01T00:00:00Z" }),
 		updated_at: z.string().openapi({ example: "2023-01-01T00:00:00Z" }),
 	})
@@ -28,6 +29,7 @@ export const getTeamResponseSchema = z
 		org_id: z.string().openapi({ example: "org_123" }),
 		description: z.string().nullable().openapi({ example: "Team for backend developers" }),
 		color: z.string().openapi({ example: "#3357FF" }),
+		role_id: z.string().nullable().optional().openapi({ example: "role_123" }),
 		created_at: z.string().openapi({ example: "2023-01-01T00:00:00Z" }),
 		updated_at: z.string().openapi({ example: "2023-01-01T00:00:00Z" }),
 		members: z
@@ -53,6 +55,7 @@ export const getTeamsResponseSchema = z
 			org_id: z.string().openapi({ example: "org_123" }),
 			description: z.string().nullable().openapi({ example: "Team for backend developers" }),
 			color: z.string().openapi({ example: "#3357FF" }),
+			role_id: z.string().nullable().optional().openapi({ example: "role_123" }),
 			created_at: z.string().openapi({ example: "2023-01-01T00:00:00Z" }),
 			updated_at: z.string().openapi({ example: "2023-01-01T00:00:00Z" }),
 		}),
@@ -72,6 +75,12 @@ export const addTeamMemberRequestBodySchema = z
 		user_id: z.string().openapi({ example: "user_123" }),
 	})
 	.openapi({ ref: "AddTeamMemberRequest" });
+
+export const assignTeamRoleRequestBodySchema = z
+	.object({
+		role_id: z.string().openapi({ example: "role_123" }),
+	})
+	.openapi({ ref: "AssignTeamRoleRequest" });
 
 export const messageResponseSchema = z
 	.object({

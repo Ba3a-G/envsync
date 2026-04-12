@@ -14,6 +14,8 @@ func CertificateCommands(handler *handlers.CertificateHandler) *cli.Command {
 			certCACommands(handler),
 			certIssueCommand(handler),
 			certListCommand(handler),
+			certRenewCommand(handler),
+			certRotateCommand(handler),
 			certRevokeCommand(handler),
 			certOCSPCommand(handler),
 			certCRLCommand(handler),
@@ -155,6 +157,33 @@ func certRootCACommand(handler *handlers.CertificateHandler) *cli.Command {
 				Name:  "output",
 				Usage: "Output file path (default: stdout)",
 			},
+		},
+	}
+}
+
+func certRenewCommand(handler *handlers.CertificateHandler) *cli.Command {
+	return &cli.Command{
+		Name:   "renew",
+		Usage:  "Renew a member certificate and link it to the previous certificate",
+		Action: handler.RenewCert,
+		Flags: []cli.Flag{
+			&cli.StringFlag{Name: "id", Usage: "Certificate ID", Required: true},
+			&cli.StringFlag{Name: "description", Usage: "Replacement certificate description"},
+			&cli.BoolFlag{Name: "revoke-previous", Usage: "Revoke the previous certificate", Value: true},
+		},
+	}
+}
+
+func certRotateCommand(handler *handlers.CertificateHandler) *cli.Command {
+	return &cli.Command{
+		Name:   "rotate",
+		Usage:  "Rotate a certificate and optionally revoke the old certificate as superseded",
+		Action: handler.RotateCert,
+		Flags: []cli.Flag{
+			&cli.StringFlag{Name: "id", Usage: "Certificate ID", Required: true},
+			&cli.StringFlag{Name: "description", Usage: "Replacement certificate description"},
+			&cli.BoolFlag{Name: "revoke-previous", Usage: "Revoke the previous certificate", Value: true},
+			&cli.IntFlag{Name: "reason", Usage: "Revocation reason code", Value: 4},
 		},
 	}
 }

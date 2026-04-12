@@ -9,6 +9,7 @@ import (
 
 	certUC "github.com/EnvSync-Cloud/envsync/packages/envsync-cli/internal/features/usecases/certificate"
 	"github.com/EnvSync-Cloud/envsync/packages/envsync-cli/internal/presentation/formatters"
+	"github.com/EnvSync-Cloud/envsync/packages/envsync-cli/internal/services"
 )
 
 type CertificateHandler struct {
@@ -20,6 +21,7 @@ type CertificateHandler struct {
 	checkOCSPUseCase  certUC.CheckOCSPUseCase
 	getCRLUseCase     certUC.GetCRLUseCase
 	getRootCAUseCase  certUC.GetRootCAUseCase
+	service           services.CertificateService
 	formatter         *formatters.CertificateFormatter
 }
 
@@ -32,6 +34,7 @@ func NewCertificateHandler(
 	checkOCSPUseCase certUC.CheckOCSPUseCase,
 	getCRLUseCase certUC.GetCRLUseCase,
 	getRootCAUseCase certUC.GetRootCAUseCase,
+	service services.CertificateService,
 	formatter *formatters.CertificateFormatter,
 ) *CertificateHandler {
 	return &CertificateHandler{
@@ -43,6 +46,7 @@ func NewCertificateHandler(
 		checkOCSPUseCase:  checkOCSPUseCase,
 		getCRLUseCase:     getCRLUseCase,
 		getRootCAUseCase:  getRootCAUseCase,
+		service:           service,
 		formatter:         formatter,
 	}
 }
@@ -227,6 +231,39 @@ func (h *CertificateHandler) GetRootCA(ctx context.Context, cmd *cli.Command) er
 	}
 
 	return h.formatter.FormatCertPEM(cmd.Writer, certPEM)
+}
+
+func (h *CertificateHandler) RenewCert(ctx context.Context, cmd *cli.Command) error {
+	id := cmd.String("id")
+	description := cmd.String("description")
+	revokePrevious := cmd.Bool("revoke-previous")
+
+	cert, err := h.service.RenewCert(ctx, id, description, revokePrevious)
+	if err != nil {
+		return h.formatError(cmd, err)
+	}
+
+	if cmd.Bool("json") {
+		return h.formatter.FormatJSON(cmd.Writer, cert)
+	}
+	return h.formatter.FormatIssuedCert(cmd.Writer, cert)
+}
+
+func (h *CertificateHandler) RotateCert(ctx context.Context, cmd *cli.Command) error {
+	id := cmd.String("id")
+	description := cmd.String("description")
+	revokePrevious := cmd.Bool("revoke-previous")
+	reason := int(cmd.Int("reason"))
+
+	cert, err := h.service.RotateCert(ctx, id, description, revokePrevious, reason)
+	if err != nil {
+		return h.formatError(cmd, err)
+	}
+
+	if cmd.Bool("json") {
+		return h.formatter.FormatJSON(cmd.Writer, cert)
+	}
+	return h.formatter.FormatIssuedCert(cmd.Writer, cert)
 }
 
 func (h *CertificateHandler) formatError(cmd *cli.Command, err error) error {

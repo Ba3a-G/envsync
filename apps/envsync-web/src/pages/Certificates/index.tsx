@@ -8,6 +8,7 @@ import {
   AlertCircle,
   Copy,
   Trash2,
+  RefreshCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -77,6 +78,22 @@ const Certificates = () => {
     },
     onError: ({ error }) => toast.error(error.message || "Failed to revoke certificate"),
   });
+  const renewCert = api.certificates.renewCert({
+    onSuccess: ({ data }) => {
+      toast.success("Certificate renewed");
+      setIssuedCert({ cert_pem: data.cert_pem || "", key_pem: data.key_pem || "" });
+      setIsIssueOpen(true);
+    },
+    onError: ({ error }) => toast.error(error.message || "Failed to renew certificate"),
+  });
+  const rotateCert = api.certificates.rotateCert({
+    onSuccess: ({ data }) => {
+      toast.success("Certificate rotated");
+      setIssuedCert({ cert_pem: data.cert_pem || "", key_pem: data.key_pem || "" });
+      setIsIssueOpen(true);
+    },
+    onError: ({ error }) => toast.error(error.message || "Failed to rotate certificate"),
+  });
 
   const handleInitCA = useCallback(() => {
     if (!caOrgName) return;
@@ -110,6 +127,8 @@ const Certificates = () => {
         return <Badge variant="destructive">Revoked</Badge>;
       case "expired":
         return <Badge className="bg-yellow-600">Expired</Badge>;
+      case "superseded":
+        return <Badge className="bg-blue-600">Superseded</Badge>;
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
@@ -380,6 +399,28 @@ const Certificates = () => {
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex justify-end gap-1">
+                          {cert.status === "active" && cert.cert_type !== "org_ca" && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-blue-400 hover:text-blue-300"
+                              onClick={() => renewCert.mutate({ id: cert.id, revoke_previous: true })}
+                              title="Renew"
+                            >
+                              <RefreshCcw className="w-4 h-4" />
+                            </Button>
+                          )}
+                          {cert.status === "active" && cert.cert_type !== "org_ca" && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-cyan-400 hover:text-cyan-300"
+                              onClick={() => rotateCert.mutate({ id: cert.id, revoke_previous: true, reason: 4 })}
+                              title="Rotate"
+                            >
+                              <ShieldCheck className="w-4 h-4" />
+                            </Button>
+                          )}
                           {cert.status === "active" && cert.cert_type !== "org_ca" && (
                             <Button
                               variant="ghost"

@@ -4,6 +4,7 @@ import { AuthorizationService } from "@/services/authorization.service";
 import { AppService } from "@/services/app.service";
 import { EnvTypeService } from "@/services/env_type.service";
 import { AuditLogService } from "@/services/audit_log.service";
+import { DB } from "@/libs/db";
 
 export class PermissionController {
 	public static readonly grantAppAccess = async (c: Context) => {
@@ -23,7 +24,7 @@ export class PermissionController {
 		await AuthorizationService.grantAppAccess(subject_id, subject_type, app_id, relation);
 
 		await AuditLogService.notifyAuditSystem({
-			action: "permission_granted",
+			action: "app_access_granted",
 			org_id,
 			user_id: c.get("user_id"),
 			message: `Granted ${relation} access on app ${app.name} to ${subject_type}:${subject_id}.`,
@@ -50,7 +51,7 @@ export class PermissionController {
 		await AuthorizationService.revokeAppAccess(subject_id, subject_type, app_id, relation);
 
 		await AuditLogService.notifyAuditSystem({
-			action: "permission_revoked",
+			action: "app_access_revoked",
 			org_id,
 			user_id: c.get("user_id"),
 			message: `Revoked ${relation} access on app ${app.name} from ${subject_type}:${subject_id}.`,
@@ -121,5 +122,107 @@ export class PermissionController {
 		const permissions = await AuthorizationService.getUserOrgPermissions(user_id, org_id);
 
 		return c.json(permissions);
+	};
+
+	public static readonly listAppGrants = async (c: Context) => {
+		const org_id = c.get("org_id");
+		const app_id = c.req.param("app_id");
+		const app = await AppService.getApp({ id: app_id });
+		if (app.org_id !== org_id) {
+			return c.json({ error: "App does not belong to your organization." }, 403);
+		}
+		const grants = await AuthorizationService.listResourceGrants("app", app_id);
+		return c.json(grants, 200);
+	};
+
+	public static readonly listEnvTypeGrants = async (c: Context) => {
+		const org_id = c.get("org_id");
+		const env_type_id = c.req.param("id");
+		const envType = await EnvTypeService.getEnvType(env_type_id);
+		if (envType.org_id !== org_id) {
+			return c.json({ error: "Environment type does not belong to your organization." }, 403);
+		}
+		const grants = await AuthorizationService.listResourceGrants("env_type", env_type_id);
+		return c.json(grants, 200);
+	};
+
+	public static readonly effectiveAppAccess = async (c: Context) => {
+		const org_id = c.get("org_id");
+		const app_id = c.req.param("app_id");
+		const app = await AppService.getApp({ id: app_id });
+		if (app.org_id !== org_id) {
+			return c.json({ error: "App does not belong to your organization." }, 403);
+		}
+
+		const db = await DB.getInstance();
+		const [users, grants, teamMemberships] = await Promise.all([
+			db.selectFrom("users").select(["id", "email"]).where("org_id", "=", org_id).execute(),
+			AuthorizationService.listResourceGrants("app", app_id),
+			db
+				.selectFrom("team_members")
+				.innerJoin("teams", "teams.id", "team_members.team_id")
+				.select(["team_members.user_id", "team_members.team_id", "teams.name as team_name"])
+				.where("teams.org_id", "=", org_id)
+				.execute(),
+		]);
+
+		const directByUser = new Map<string, "admin" | "editor" | "viewer">();
+		const teamByUser = new Map<string, "admin" | "editor" | "viewer">();
+		const userTeams = new Map<string, string[]>();
+		const teamMembers = new Map<string, string[]>();
+		const priority = { viewer: 1, editor: 2, admin: 3 } as const;
+
+		for (const membership of teamMemberships) {
+			const current = userTeams.get(membership.user_id) ?? [];
+			current.push(membership.team_name);
+			userTeams.set(membership.user_id, current);
+
+			const teamUsers = teamMembers.get(membership.team_id) ?? [];
+			teamUsers.push(membership.user_id);
+			teamMembers.set(membership.team_id, teamUsers);
+		}
+
+		for (const grant of grants) {
+			if (grant.subject_type === "user") {
+				const current = directByUser.get(grant.subject_id);
+				if (!current || priority[grant.relation] > priority[current]) {
+					directByUser.set(grant.subject_id, grant.relation);
+				}
+				continue;
+			}
+
+			for (const userId of teamMembers.get(grant.subject_id) ?? []) {
+				const current = teamByUser.get(userId);
+				if (!current || priority[grant.relation] > priority[current]) {
+					teamByUser.set(userId, grant.relation);
+				}
+			}
+		}
+
+		const result = users.map((user) => {
+			const direct = directByUser.get(user.id);
+			const team = teamByUser.get(user.id);
+			let relation: "admin" | "editor" | "viewer" | null = null;
+			if (direct && team) {
+				relation = priority[direct] >= priority[team] ? direct : team;
+			} else {
+				relation = direct ?? team ?? null;
+			}
+
+			let source: "direct" | "team" | "both" | null = null;
+			if (direct && team) source = "both";
+			else if (direct) source = "direct";
+			else if (team) source = "team";
+
+			return {
+				user_id: user.id,
+				email: user.email,
+				relation,
+				source,
+				teams: userTeams.get(user.id) ?? [],
+			};
+		});
+
+		return c.json(result, 200);
 	};
 }
