@@ -8,6 +8,7 @@ import Compare from "@/components/Compare";
 import SocialProof from "@/components/SocialProof";
 import CTA from "@/components/CTA";
 import Footer from "@/components/Footer";
+import IntegrationWorkflowStrip from "@/components/IntegrationWorkflowStrip";
 
 const Index = () => {
   return (
@@ -18,6 +19,7 @@ const Index = () => {
       <Features />
       <HowItWorks />
       <CLIShowcase />
+      <IntegrationWorkflowStrip />
       <Compare />
       <CTA />
       <Footer />

@@ -1,80 +1,72 @@
-
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Menu, X } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { motion } from "framer-motion";
 import { runtimeConfig } from "@/utils/runtime-config";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const location = useLocation();
 
+  const navLinks = [
+    { label: "Integrations", href: "/integrations", external: false },
+    { label: "API Reference", href: runtimeConfig.apiDocsUrl, external: true },
+    { label: "GitHub", href: "https://github.com/EnvSync-Cloud/envsync", external: true },
+  ];
+
   return (
-    <motion.header
-      initial={{ y: -100 }}
-      animate={{ y: 0 }}
-      transition={{ duration: 0.35 }}
-      className="fixed top-0 z-50 w-full border-b border-border bg-background/95"
-    >
+    <header className="sticky top-0 z-50 w-full border-b border-border bg-background/90 backdrop-blur-xl">
       <div className="container mx-auto border-x border-border px-0">
-        <div className="flex justify-between items-center h-16">
-          <Link to="/" className="flex items-center space-x-2 ml-4">
-            <img
-              src="/EnvSync.svg"
-              alt="EnvSync Logo"
-              className="h-8 w-8"
-            />
+        <div className="flex h-16 items-center justify-between">
+          <Link to="/" className="ml-4 flex items-center space-x-2">
+            <img src="/EnvSync.svg" alt="EnvSync Logo" className="h-8 w-8" />
             <span className="text-xl font-bold text-foreground">EnvSync</span>
             <Badge className="rounded-none border border-sky-500/60 bg-sky-500/15 px-2 py-1 text-xs font-bold text-sky-300 hover:bg-sky-500/20">
               BETA
             </Badge>
           </Link>
 
-          <nav className="hidden md:flex items-center space-x-8 h-full">
-            <Link
-              to="/about"
-              className={`transition-colors ${
-                location.pathname === "/about"
-                  ? "text-primary"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              About
-            </Link>
-            <Link
-              to="/integrations"
-              className={`transition-colors ${
-                location.pathname === "/integrations"
-                  ? "text-primary"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Integrations
-            </Link>
-            <a
-              href="https://blog.envsync.cloud"
-              className="text-muted-foreground transition-colors hover:text-foreground"
-            >
-              Blog
-            </a>
+          <nav className="hidden h-full items-center gap-5 md:flex">
+            {navLinks.map((link) =>
+              link.external ? (
+                <a
+                  key={link.label}
+                  href={link.href}
+                  className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  {link.label}
+                </a>
+              ) : (
+                <Link
+                  key={link.label}
+                  to={link.href}
+                  className={`text-sm font-medium transition-colors ${
+                    location.pathname === link.href
+                      ? "text-primary"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {link.label}
+                </Link>
+              ),
+            )}
             <a href={runtimeConfig.appBaseUrl} className="h-full">
               <Button
                 variant="outline"
-                className="border-border bg-card text-foreground hover:bg-accent h-full px-8"
+                className="h-full border-border bg-[hsl(var(--surface-1))] px-5 text-foreground hover:bg-accent"
               >
                 Sign In
               </Button>
             </a>
             <Link to="/onboarding" className="h-full !ml-0">
-              <Button className="bg-primary text-primary-foreground hover:bg-primary/90 h-full px-8">
+              <Button className="h-full px-6 text-primary-foreground hover:bg-primary/90">
                 Get Started
               </Button>
             </Link>
           </nav>
 
-          <div className="md:hidden mr-4">
+          <div className="mr-4 md:hidden">
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               className="text-muted-foreground hover:text-foreground"
@@ -87,40 +79,33 @@ const Header = () => {
         {isMenuOpen && (
           <div className="border-t border-border py-4 md:hidden">
             <nav className="flex flex-col space-y-4">
-              <Link
-                to="/about"
-                className={`transition-colors ${
-                  location.pathname === "/about"
-                    ? "text-primary"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-                onClick={() => setIsMenuOpen(false)}
-              >
-                About
-              </Link>
-              <Link
-                to="/integrations"
-                className={`transition-colors ${
-                  location.pathname === "/integrations"
-                    ? "text-primary"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Integrations
-              </Link>
-              <a
-                href="https://blog.envsync.cloud"
-                className="text-muted-foreground transition-colors hover:text-foreground"
-              >
-                Blog
-              </a>
+              {navLinks.map((link) =>
+                link.external ? (
+                  <a
+                    key={link.label}
+                    href={link.href}
+                    className="text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    {link.label}
+                  </a>
+                ) : (
+                  <Link
+                    key={link.label}
+                    to={link.href}
+                    className={`transition-colors ${
+                      location.pathname === link.href
+                        ? "text-primary"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    {link.label}
+                  </Link>
+                ),
+              )}
               <div className="flex flex-col space-y-2 pt-4">
                 <a href={runtimeConfig.appBaseUrl}>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start border-border bg-card text-foreground hover:bg-accent"
-                  >
+                  <Button variant="outline" className="w-full justify-start border-border bg-card text-foreground hover:bg-accent">
                     Sign In
                   </Button>
                 </a>
@@ -134,7 +119,7 @@ const Header = () => {
           </div>
         )}
       </div>
-    </motion.header>
+    </header>
   );
 };
 

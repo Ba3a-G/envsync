@@ -1,4 +1,4 @@
-import { Check, X, Minus } from "lucide-react";
+import { Check, Minus, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
 import {
@@ -21,57 +21,48 @@ interface ComparisonRow {
 }
 
 const rows: ComparisonRow[] = [
-  { feature: "End-to-end encryption", envsync: "check", doppler: "check", vault: "check", dotenv: "x" },
-  { feature: "Open source", envsync: "check", doppler: "x", vault: "check", dotenv: "check" },
-  { feature: "CLI support", envsync: "check", doppler: "check", vault: "check", dotenv: "minus" },
-  { feature: "Team management", envsync: "check", doppler: "check", vault: "check", dotenv: "x" },
-  { feature: "GPG key management", envsync: "check", doppler: "x", vault: "minus", dotenv: "x" },
-  { feature: "Secret versioning", envsync: "check", doppler: "check", vault: "check", dotenv: "x" },
-  { feature: "Self-hosted option", envsync: "check", doppler: "x", vault: "check", dotenv: "check" },
-  { feature: "Audit logging", envsync: "check", doppler: "check", vault: "check", dotenv: "x" },
-  { feature: "Free to start", envsync: "check", doppler: "minus", vault: "check", dotenv: "check" },
-  { feature: "Zero-Trust architecture", envsync: "check", doppler: "x", vault: "x", dotenv: "x" },
+  { feature: "Environment promotion flow", envsync: "check", doppler: "minus", vault: "minus", dotenv: "x" },
+  { feature: "Approval gates before prod", envsync: "check", doppler: "minus", vault: "minus", dotenv: "x" },
+  { feature: "Versioned rollback context", envsync: "check", doppler: "check", vault: "minus", dotenv: "x" },
+  { feature: "CLI-first workflow", envsync: "check", doppler: "check", vault: "check", dotenv: "minus" },
+  { feature: "CI injection path", envsync: "check", doppler: "check", vault: "minus", dotenv: "x" },
+  { feature: "Self-host option", envsync: "check", doppler: "x", vault: "check", dotenv: "check" },
+  { feature: "Certificates and key ops", envsync: "check", doppler: "x", vault: "minus", dotenv: "x" },
+  { feature: "Team-scoped access control", envsync: "check", doppler: "check", vault: "check", dotenv: "x" },
+  { feature: "Audit history on changes", envsync: "check", doppler: "check", vault: "check", dotenv: "x" },
 ];
 
 const CellIcon = ({ value }: { value: CellValue }) => {
   switch (value) {
     case "check":
-      return <Check className="h-5 w-5 text-emerald-500 mx-auto" />;
+      return <Check className="mx-auto h-5 w-5 text-emerald-500" />;
     case "x":
-      return <X className="h-5 w-5 text-red-500/80 mx-auto" />;
+      return <X className="mx-auto h-5 w-5 text-red-500/80" />;
     case "minus":
-      return <Minus className="h-5 w-5 text-yellow-500/80 mx-auto" />;
+      return <Minus className="mx-auto h-5 w-5 text-yellow-500/80" />;
   }
 };
 
 const Compare = () => {
   return (
     <section className="container mx-auto border-x border-t border-border p-0">
-      <div className="relative container mx-auto px-0 z-10">
+      <div className="grid gap-0 lg:grid-cols-[0.74fr_1.26fr]">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.35 }}
-          className="relative overflow-hidden border border-border bg-[hsl(var(--surface-1))] p-6 text-left md:p-8 md:py-12"
+          className="border border-border bg-[hsl(var(--surface-1))] p-6 md:p-8"
         >
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 opacity-45"
-            style={{
-              backgroundImage:
-                "linear-gradient(hsl(var(--border) / 0.7) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--border) / 0.7) 1px, transparent 1px)",
-              backgroundSize: "36px 36px",
-            }}
-          />
-          <div className="relative z-10">
-            <h2 className="mb-4 text-4xl font-bold text-foreground md:text-5xl">
-              See how EnvSync compares
-            </h2>
-            <p className="max-w-2xl text-lg text-muted-foreground md:text-xl">
-              Compare operational depth and security coverage at a glance.
-            </p>
+          <div className="mb-4 inline-flex items-center gap-2 border border-border bg-[hsl(var(--surface-2))] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            Compare
           </div>
+          <h2 className="max-w-sm text-3xl font-bold leading-tight text-foreground md:text-4xl">
+            Compare the delivery workflow, not just the secret store.
+          </h2>
+          <p className="mt-4 max-w-sm text-base leading-relaxed text-muted-foreground">
+            The difference shows up when config moves through approvals, CI, and rollback.
+          </p>
         </motion.div>
 
         <motion.div
@@ -84,36 +75,34 @@ const Compare = () => {
           <Table>
             <TableHeader>
               <TableRow className="border-border hover:bg-transparent">
-                <TableHead className="w-[250px] py-5 pl-8 text-base font-semibold text-foreground">Feature</TableHead>
-                <TableHead className="border-x border-primary/30 bg-primary/10 py-5 text-center">
+                <TableHead className="w-[250px] py-4 pl-6 text-sm font-semibold text-foreground">Workflow capability</TableHead>
+                <TableHead className="border-x border-primary/30 bg-primary/10 py-4 text-center">
                   <div className="flex flex-col items-center gap-2">
-                    <span className="text-lg font-bold text-foreground">EnvSync</span>
+                    <span className="text-base font-bold text-foreground">EnvSync</span>
                     <Badge className="rounded-none border border-primary/40 bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary hover:bg-primary/10">
-                      Recommended
+                      Delivery-focused
                     </Badge>
                   </div>
                 </TableHead>
-                <TableHead className="py-5 text-center font-semibold text-foreground">Doppler</TableHead>
-                <TableHead className="py-5 text-center font-semibold text-foreground">Vault</TableHead>
-                <TableHead className="py-5 text-center font-semibold text-foreground">.env files</TableHead>
+                <TableHead className="py-4 text-center text-sm font-semibold text-foreground">Doppler</TableHead>
+                <TableHead className="py-4 text-center text-sm font-semibold text-foreground">Vault</TableHead>
+                <TableHead className="py-4 text-center text-sm font-semibold text-foreground">.env files</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.map((row) => (
                 <TableRow key={row.feature} className="border-border transition-colors hover:bg-[hsl(var(--surface-2))]">
-                  <TableCell className="py-4 pl-8 font-medium text-foreground">
-                    {row.feature}
-                  </TableCell>
-                  <TableCell className="border-x border-primary/20 bg-primary/[0.06] py-4 text-center">
+                  <TableCell className="py-3 pl-6 text-sm font-medium text-foreground">{row.feature}</TableCell>
+                  <TableCell className="border-x border-primary/20 bg-primary/[0.06] py-3 text-center">
                     <CellIcon value={row.envsync} />
                   </TableCell>
-                  <TableCell className="py-4 text-center">
+                  <TableCell className="py-3 text-center">
                     <CellIcon value={row.doppler} />
                   </TableCell>
-                  <TableCell className="py-4 text-center">
+                  <TableCell className="py-3 text-center">
                     <CellIcon value={row.vault} />
                   </TableCell>
-                  <TableCell className="py-4 text-center">
+                  <TableCell className="py-3 text-center">
                     <CellIcon value={row.dotenv} />
                   </TableCell>
                 </TableRow>

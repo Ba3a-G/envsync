@@ -13,42 +13,42 @@ import {
 const features = [
   {
     title: "End-to-end encryption",
-    description: "AES-256 with a zero-knowledge model keeps plaintext out of places it should never be.",
+    description: "AES-256 and zero-knowledge handling keep plaintext out of the wrong places.",
     header: <EncryptionVisual />,
     icon: <Shield className="h-4 w-4 text-primary" />,
     className: "md:col-span-2",
   },
   {
     title: "Fast sync",
-    description: "Ship config updates across environments in seconds, not deployment windows.",
+    description: "Propagate reviewed config across environments in seconds.",
     header: <SyncVisual />,
     icon: <Zap className="h-4 w-4 text-primary" />,
     className: "md:col-span-1",
   },
   {
     title: "Multi-environment control",
-    description: "Operate dev, staging, and production with the same policy and approval surface.",
+    description: "Operate dev, staging, and prod from one promotion surface.",
     header: <EnvironmentControlVisual />,
     icon: <Globe className="h-4 w-4 text-primary" />,
     className: "md:col-span-1",
   },
   {
     title: "Versioned workflows",
-    description: "Track every config change with history, diff visibility, and rollback support.",
+    description: "Track every change with diff visibility and rollback context.",
     header: <WorkflowVisual />,
     icon: <GitBranch className="h-4 w-4 text-primary" />,
     className: "md:col-span-2",
   },
   {
     title: "Team-level access",
-    description: "Control secret visibility with scoped permissions mapped to your org structure.",
+    description: "Map secret visibility and approvals to team-scoped permissions.",
     header: <AccessVisual />,
     icon: <Users className="h-4 w-4 text-primary" />,
     className: "md:col-span-2",
   },
   {
     title: "Key lifecycle",
-    description: "Manage certificates and signing keys in one operational workflow.",
+    description: "Issue, rotate, expire, and renew keys in one operational flow.",
     header: <LifecycleVisual />,
     icon: <Lock className="h-4 w-4 text-primary" />,
     className: "md:col-span-1",
@@ -57,15 +57,14 @@ const features = [
 
 const Features = () => {
   return (
-    <section id="features" className="container mx-auto border-x border-t border-border py-0 px-0">
-      <div className="relative container mx-auto px-0 z-10">
-
+    <section id="features" className="container mx-auto border-x border-t border-border px-0 py-0">
+      <div className="grid gap-0 lg:grid-cols-[0.76fr_1.24fr]">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.35 }}
-          className="relative overflow-hidden border border-border bg-[hsl(var(--surface-1))] p-6 text-left md:p-8 md:py-12"
+          className="relative overflow-hidden border border-border bg-[hsl(var(--surface-1))] p-6 md:p-8"
         >
           <div
             aria-hidden="true"
@@ -77,28 +76,32 @@ const Features = () => {
             }}
           />
           <div className="relative z-10">
-            <h2 className="mb-4 text-4xl font-bold text-foreground md:text-5xl">
-              Everything you need to secure your secrets
+            <div className="mb-4 inline-flex items-center gap-2 border border-border bg-[hsl(var(--surface-2))] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Operational capability
+            </div>
+            <h2 className="max-w-sm text-3xl font-bold leading-tight text-foreground md:text-4xl">
+              Ship through approvals, drift control, and secure runtime sync.
             </h2>
-            <p className="max-w-3xl text-lg text-muted-foreground md:text-xl">
-              Built for teams shipping across multiple stages with strict security and fast release cycles.
+            <p className="mt-4 max-w-sm text-base leading-relaxed text-muted-foreground">
+              The controls here matter when config moves through dev, staging, CI, and production.
             </p>
           </div>
         </motion.div>
 
-        <BentoGrid>
-          {features.map((feature, i) => (
-            <BentoGridItem
-              key={i}
-              title={feature.title}
-              description={feature.description}
-              header={feature.header}
-              icon={feature.icon}
-              className={feature.className}
-            />
-          ))}
-        </BentoGrid>
-
+        <div className="min-w-0">
+          <BentoGrid className="md:auto-rows-[16rem]">
+            {features.map((feature, i) => (
+              <BentoGridItem
+                key={i}
+                title={feature.title}
+                description={feature.description}
+                header={feature.header}
+                icon={feature.icon}
+                className={feature.className}
+              />
+            ))}
+          </BentoGrid>
+        </div>
       </div>
     </section>
   );
