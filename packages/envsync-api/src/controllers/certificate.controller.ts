@@ -149,4 +149,34 @@ export class CertificateController {
 
 		return c.json(result, 200);
 	};
+
+	public static readonly renewCert = async (c: Context) => {
+		const org_id = c.get("org_id");
+		const user_id = c.get("user_id");
+		const id = c.req.param("id");
+		const { revoke_previous = true, reason = 0, description } = await c.req.json();
+
+		const cert = await CertificateService.renewCert({
+			id,
+			org_id,
+			user_id,
+			revoke_previous,
+			reason,
+			description,
+		});
+
+		await AuditLogService.notifyAuditSystem({
+			action: "certificate_renewed",
+			org_id,
+			user_id,
+			message: `Certificate renewed: ${id}`,
+			details: { certificate_id: id, revoke_previous },
+		});
+
+		return c.json(cert, 200);
+	};
+
+	public static readonly rotateCert = async (c: Context) => {
+		return this.renewCert(c);
+	};
 }

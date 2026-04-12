@@ -55,12 +55,16 @@ export function BentoStatCard({
   iconColor: string;
 }) {
   return (
-    <div className="flex items-center justify-between h-full">
-      <div>
+    <div className="flex h-full items-start justify-between gap-4">
+      <div className="flex min-w-0 flex-col">
         <p className="text-sm text-gray-400">{label}</p>
-        <p className="text-3xl font-bold text-gray-100 mt-1 tabular-nums">{value}</p>
+        <p className="mt-2 text-3xl font-bold text-gray-100 tabular-nums">
+          {value}
+        </p>
       </div>
-      <div className={`p-2.5 rounded-xl ring-1 ring-white/5 bg-gradient-to-br ${gradient}`}>
+      <div
+        className={`flex size-14 shrink-0 items-center justify-center rounded-2xl ring-1 ring-white/5 bg-gradient-to-br ${gradient}`}
+      >
         <Icon className={`size-5 ${iconColor}`} />
       </div>
     </div>

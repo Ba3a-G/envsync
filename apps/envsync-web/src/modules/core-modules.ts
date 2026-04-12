@@ -67,6 +67,12 @@ export const coreWebModules: WebModule[] = [
         loadComponent: () => import("@/pages/ManageEnvironment"),
       },
       {
+        id: "applications-access",
+        layout: "root",
+        path: "applications/:projectNameId/access",
+        loadComponent: () => import("@/pages/ProjectAccess"),
+      },
+      {
         id: "applications-pit",
         layout: "root",
         path: "applications/pit/:projectNameId",
@@ -83,6 +89,18 @@ export const coreWebModules: WebModule[] = [
         layout: "root",
         path: "users",
         loadComponent: () => import("@/pages/Users"),
+      },
+      {
+        id: "teams",
+        layout: "root",
+        path: "teams",
+        loadComponent: () => import("@/pages/Teams"),
+      },
+      {
+        id: "change-requests",
+        layout: "root",
+        path: "change-requests",
+        loadComponent: () => import("@/pages/ChangeRequests"),
       },
       {
         id: "settings",
@@ -157,8 +175,10 @@ export const coreWebModules: WebModule[] = [
       {
         label: "Collaboration",
         items: [
-          { id: "users", name: "Team", href: "/users", icon: Users },
+          { id: "users", name: "Users", href: "/users", icon: Users },
+          { id: "teams", name: "Teams", href: "/teams", icon: Users },
           { id: "roles", name: "Roles", href: "/roles", icon: ShieldAlert },
+          { id: "change-requests", name: "Change Requests", href: "/change-requests", icon: ShieldCheck },
           { id: "webhooks", name: "Webhooks", href: "/webhooks", icon: Anchor },
         ],
       },
@@ -176,7 +196,9 @@ export const coreWebModules: WebModule[] = [
       apikeys: user => user.role.have_api_access || user.role.is_admin || user.role.is_master,
       applications: user => user.role.can_edit || user.role.is_admin || user.role.is_master || user.role.can_view,
       users: () => true,
+      teams: () => true,
       roles: user => user.role.is_admin || user.role.is_master,
+      "change-requests": user => user.role.can_edit || user.role.is_admin || user.role.is_master,
       organisation: user => user.role.is_admin || user.role.is_master,
       audit: user => user.role.is_admin || user.role.is_master,
       settings: () => true,

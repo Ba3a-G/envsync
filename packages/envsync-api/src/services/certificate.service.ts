@@ -4,7 +4,7 @@ import { DB, JsonValue } from "@/libs/db";
 import { KMSClient } from "@/libs/kms/client";
 import { cacheAside, invalidateCache } from "@/helpers/cache";
 import { CacheKeys, CacheTTL } from "@/helpers/cache-keys";
-import { orNotFound, ConflictError, BusinessRuleError } from "@/libs/errors";
+import { orNotFound, ConflictError, BusinessRuleError, NotFoundError } from "@/libs/errors";
 import { runSaga } from "@/helpers/saga";
 import { AuthorizationService } from "@/services/authorization.service";
 
@@ -75,6 +75,7 @@ export class CertificateService {
 							status: "active",
 							description: description || null,
 							metadata: metadata ? new JsonValue(metadata) : new JsonValue({}),
+							supersedes_certificate_id: null,
 							created_at: now,
 							updated_at: now,
 						})
@@ -141,6 +142,11 @@ export class CertificateService {
 		let memberKeyPem = "";
 		let memberSerialHex = "";
 
+		const certificateMetadata = {
+			...(metadata || {}),
+			role,
+		};
+
 		await runSaga("issueMemberCert", {}, [
 			{
 				name: "kms-issue-cert",
@@ -168,7 +174,8 @@ export class CertificateService {
 							subject_email: member_email,
 							status: "active",
 							description: description || null,
-							metadata: metadata ? new JsonValue(metadata) : new JsonValue({}),
+							metadata: new JsonValue(certificateMetadata),
+							supersedes_certificate_id: null,
 							created_at: now,
 							updated_at: now,
 						})
@@ -297,5 +304,65 @@ export class CertificateService {
 		const kms = await KMSClient.getInstance();
 		const result = await kms.getRootCA();
 		return { cert_pem: result.certPem };
+	};
+
+	public static renewCert = async ({
+		id,
+		org_id,
+		user_id,
+		revoke_previous,
+		reason,
+		description,
+	}: {
+		id: string;
+		org_id: string;
+		user_id: string;
+		revoke_previous: boolean;
+		reason: number;
+		description?: string;
+	}) => {
+		const cert = await this.getCertificate(id);
+		if (cert.org_id !== org_id) {
+			throw new NotFoundError("Certificate", id);
+		}
+		if (cert.cert_type !== "member" || !cert.subject_email) {
+			throw new BusinessRuleError("Only member certificates can be renewed.");
+		}
+
+		const priorMetadata = (cert.metadata as Record<string, string> | undefined) ?? {};
+		const certificateRole = priorMetadata.role || "renewed";
+
+		const renewed = await this.issueMemberCert(
+			org_id,
+			user_id,
+			cert.subject_email,
+			certificateRole,
+			description || cert.description || undefined,
+			priorMetadata,
+		);
+
+		const db = await DB.getInstance();
+		await db
+			.updateTable("org_certificates")
+			.set({
+				supersedes_certificate_id: cert.id,
+				updated_at: new Date(),
+			})
+			.where("id", "=", renewed.id)
+			.execute();
+
+		if (revoke_previous) {
+			await this.revokeCert(cert.serial_hex, org_id, reason);
+			await db
+				.updateTable("org_certificates")
+				.set({
+					status: "superseded",
+					updated_at: new Date(),
+				})
+				.where("id", "=", cert.id)
+				.execute();
+		}
+
+		return this.getCertificate(renewed.id);
 	};
 }

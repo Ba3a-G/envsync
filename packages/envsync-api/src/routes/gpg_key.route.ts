@@ -11,6 +11,8 @@ import {
 	verifySignatureRequestSchema,
 	revokeGpgKeyRequestSchema,
 	updateTrustLevelRequestSchema,
+	rotateGpgKeyRequestSchema,
+	extendGpgKeyExpiryRequestSchema,
 	gpgKeyResponseSchema,
 	gpgKeyDetailResponseSchema,
 	gpgKeysResponseSchema,
@@ -237,6 +239,52 @@ app.post(
 	}),
 	zValidator("json", revokeGpgKeyRequestSchema),
 	GpgKeyController.revokeKey,
+);
+
+app.post(
+	"/:id/rotate",
+	requirePermission("can_manage_gpg_keys", "org"),
+	describeRoute({
+		operationId: "rotateGpgKey",
+		summary: "Rotate GPG Key",
+		description: "Create a replacement GPG key, optionally promote it to default, and supersede the original key.",
+		tags: ["GPG Keys"],
+		responses: {
+			200: {
+				description: "GPG key rotated successfully",
+				content: { "application/json": { schema: resolver(gpgKeyDetailResponseSchema) } },
+			},
+			500: {
+				description: "Internal server error",
+				content: { "application/json": { schema: resolver(errorResponseSchema) } },
+			},
+		},
+	}),
+	zValidator("json", rotateGpgKeyRequestSchema),
+	GpgKeyController.rotateKey,
+);
+
+app.post(
+	"/:id/extend-expiry",
+	requirePermission("can_manage_gpg_keys", "org"),
+	describeRoute({
+		operationId: "extendGpgKeyExpiry",
+		summary: "Extend GPG Key Expiry",
+		description: "Extend the expiry date of an active GPG key without rotating it.",
+		tags: ["GPG Keys"],
+		responses: {
+			200: {
+				description: "GPG key expiry extended successfully",
+				content: { "application/json": { schema: resolver(gpgKeyDetailResponseSchema) } },
+			},
+			500: {
+				description: "Internal server error",
+				content: { "application/json": { schema: resolver(errorResponseSchema) } },
+			},
+		},
+	}),
+	zValidator("json", extendGpgKeyExpiryRequestSchema),
+	GpgKeyController.extendExpiry,
 );
 
 // ─── Update trust level ────────────────────────────────────────────

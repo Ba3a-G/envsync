@@ -15,6 +15,10 @@ export const useInvalidateQueries = () => {
       queryClient.invalidateQueries({
         queryKey: [API_KEYS.ALL_ROLES],
       }),
+    invalidateTeams: () =>
+      queryClient.invalidateQueries({
+        queryKey: [API_KEYS.ALL_TEAMS],
+      }),
     invalidateUsers: () =>
       Promise.all([
         queryClient.invalidateQueries({ queryKey: [API_KEYS.ALL_USERS] }),
@@ -34,5 +38,16 @@ export const useInvalidateQueries = () => {
       queryClient.invalidateQueries({ queryKey: [API_KEYS.ALL_GPG_KEYS] }),
     invalidateCertificates: () =>
       queryClient.invalidateQueries({ queryKey: [API_KEYS.ALL_CERTIFICATES] }),
+    invalidatePermissions: (appId?: string) =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: [API_KEYS.APP_GRANTS, appId] }),
+        queryClient.invalidateQueries({ queryKey: [API_KEYS.APP_EFFECTIVE_ACCESS, appId] }),
+      ]),
+    invalidateChangeRequests: () =>
+      queryClient.invalidateQueries({ queryKey: [API_KEYS.CHANGE_REQUESTS] }),
+    invalidateProjectData: (projectNameId?: string) =>
+      queryClient.invalidateQueries({
+        queryKey: ["project-environments", projectNameId],
+      }),
   };
 };

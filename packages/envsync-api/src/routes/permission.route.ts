@@ -10,6 +10,8 @@ import {
 	revokeAccessRequestBodySchema,
 	permissionMessageResponseSchema,
 	effectivePermissionsResponseSchema,
+	grantsListResponseSchema,
+	effectiveAccessResponseSchema,
 } from "@/validators/permission.validator";
 import { errorResponseSchema } from "@/validators/common";
 
@@ -112,6 +114,42 @@ app.post(
 	PermissionController.revokeAppAccess,
 );
 
+app.get(
+	"/app/:app_id/grants",
+	describeRoute({
+		operationId: "listAppGrants",
+		summary: "List App Grants",
+		description: "List direct user and team grants on an app",
+		tags: ["Permissions"],
+		responses: {
+			200: {
+				description: "App grants listed successfully",
+				content: { "application/json": { schema: resolver(grantsListResponseSchema) } },
+			},
+		},
+	}),
+	requirePermission("can_manage_apps", "org"),
+	PermissionController.listAppGrants,
+);
+
+app.get(
+	"/app/:app_id/effective-access",
+	describeRoute({
+		operationId: "getAppEffectiveAccess",
+		summary: "Get App Effective Access",
+		description: "List user effective access for an app including team inheritance",
+		tags: ["Permissions"],
+		responses: {
+			200: {
+				description: "Effective app access returned successfully",
+				content: { "application/json": { schema: resolver(effectiveAccessResponseSchema) } },
+			},
+		},
+	}),
+	requirePermission("can_manage_apps", "org"),
+	PermissionController.effectiveAppAccess,
+);
+
 // ─── Env type-level permissions ──────────────────────────────────────
 
 app.post(
@@ -174,6 +212,24 @@ app.post(
 	zValidator("json", revokeAccessRequestBodySchema),
 	requirePermission("can_manage_apps", "org"),
 	PermissionController.revokeEnvTypeAccess,
+);
+
+app.get(
+	"/env_type/:id/grants",
+	describeRoute({
+		operationId: "listEnvTypeGrants",
+		summary: "List Env Type Grants",
+		description: "List direct user and team grants on an environment type",
+		tags: ["Permissions"],
+		responses: {
+			200: {
+				description: "Env type grants listed successfully",
+				content: { "application/json": { schema: resolver(grantsListResponseSchema) } },
+			},
+		},
+	}),
+	requirePermission("can_manage_apps", "org"),
+	PermissionController.listEnvTypeGrants,
 );
 
 export default app;

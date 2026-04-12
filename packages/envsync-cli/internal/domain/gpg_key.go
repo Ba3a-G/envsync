@@ -3,20 +3,22 @@ package domain
 import "time"
 
 type GpgKey struct {
-	ID          string     `json:"id"`
-	Name        string     `json:"name"`
-	Email       string     `json:"email"`
-	Fingerprint string     `json:"fingerprint"`
-	KeyID       string     `json:"key_id"`
-	Algorithm   string     `json:"algorithm"`
-	KeySize     *int       `json:"key_size,omitempty"`
-	UsageFlags  []string   `json:"usage_flags"`
-	TrustLevel  string     `json:"trust_level"`
-	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
-	RevokedAt   *time.Time `json:"revoked_at,omitempty"`
-	IsDefault   bool       `json:"is_default"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	ID                 string     `json:"id"`
+	Name               string     `json:"name"`
+	Email              string     `json:"email"`
+	Fingerprint        string     `json:"fingerprint"`
+	KeyID              string     `json:"key_id"`
+	Algorithm          string     `json:"algorithm"`
+	KeySize            *int       `json:"key_size,omitempty"`
+	UsageFlags         []string   `json:"usage_flags"`
+	TrustLevel         string     `json:"trust_level"`
+	Status             string     `json:"status"`
+	ExpiresAt          *time.Time `json:"expires_at,omitempty"`
+	RevokedAt          *time.Time `json:"revoked_at,omitempty"`
+	IsDefault          bool       `json:"is_default"`
+	SupersedesGpgKeyID *string    `json:"supersedes_gpg_key_id,omitempty"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
 }
 
 type GpgSignRequest struct {

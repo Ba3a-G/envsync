@@ -20,6 +20,8 @@ type CertificateRepository interface {
 	Revoke(ctx context.Context, serialHex string, req requests.RevokeCertRequest) (responses.RevokeCertResponse, error)
 	GetCRL(ctx context.Context) (responses.CRLResponse, error)
 	CheckOCSP(ctx context.Context, serialHex string) (responses.OCSPResponse, error)
+	Renew(ctx context.Context, id string, description string, revokePrevious bool) (responses.MemberCertResponse, error)
+	Rotate(ctx context.Context, id string, description string, revokePrevious bool, reason int) (responses.MemberCertResponse, error)
 }
 
 type certRepo struct {
@@ -180,6 +182,53 @@ func (r *certRepo) CheckOCSP(ctx context.Context, serialHex string) (responses.O
 		Status:    resp.Status,
 		RevokedAt: resp.RevokedAt,
 	}, nil
+}
+
+func (r *certRepo) Renew(ctx context.Context, id string, description string, revokePrevious bool) (responses.MemberCertResponse, error) {
+	client := createHTTPClient()
+	var result responses.MemberCertResponse
+	body := map[string]any{
+		"revoke_previous": revokePrevious,
+	}
+	if description != "" {
+		body["description"] = description
+	}
+	resp, err := client.R().
+		SetContext(ctx).
+		SetBody(body).
+		SetResult(&result).
+		Post(fmt.Sprintf("/api/certificate/%s/renew", id))
+	if err != nil {
+		return responses.MemberCertResponse{}, err
+	}
+	if resp.IsError() {
+		return responses.MemberCertResponse{}, fmt.Errorf("renew certificate failed: %s", resp.String())
+	}
+	return result, nil
+}
+
+func (r *certRepo) Rotate(ctx context.Context, id string, description string, revokePrevious bool, reason int) (responses.MemberCertResponse, error) {
+	client := createHTTPClient()
+	var result responses.MemberCertResponse
+	body := map[string]any{
+		"revoke_previous": revokePrevious,
+		"reason":          reason,
+	}
+	if description != "" {
+		body["description"] = description
+	}
+	resp, err := client.R().
+		SetContext(ctx).
+		SetBody(body).
+		SetResult(&result).
+		Post(fmt.Sprintf("/api/certificate/%s/rotate", id))
+	if err != nil {
+		return responses.MemberCertResponse{}, err
+	}
+	if resp.IsError() {
+		return responses.MemberCertResponse{}, fmt.Errorf("rotate certificate failed: %s", resp.String())
+	}
+	return result, nil
 }
 
 func sdkOrgCaToResponse(resp *sdk.OrgCaResponse) responses.OrgCAResponse {

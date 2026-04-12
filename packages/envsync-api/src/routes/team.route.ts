@@ -12,9 +12,11 @@ import {
 	getTeamsResponseSchema,
 	updateTeamRequestBodySchema,
 	addTeamMemberRequestBodySchema,
+	assignTeamRoleRequestBodySchema,
 	messageResponseSchema,
 } from "@/validators/team.validator";
 import { errorResponseSchema } from "@/validators/common";
+import { effectivePermissionsResponseSchema } from "@/validators/permission.validator";
 
 const app = new Hono();
 
@@ -229,6 +231,85 @@ app.delete(
 	}),
 	requirePermission("can_manage_users", "org"),
 	TeamController.removeTeamMember,
+);
+
+app.post(
+	"/:id/assign-role",
+	describeRoute({
+		operationId: "assignTeamRole",
+		summary: "Assign Team Role",
+		description: "Assign an organization role to a team so members inherit its permissions.",
+		tags: ["Teams"],
+		responses: {
+			200: {
+				description: "Team role assigned successfully",
+				content: {
+					"application/json": {
+						schema: resolver(messageResponseSchema),
+					},
+				},
+			},
+			500: {
+				description: "Internal server error",
+				content: {
+					"application/json": {
+						schema: resolver(errorResponseSchema),
+					},
+				},
+			},
+		},
+	}),
+	zValidator("json", assignTeamRoleRequestBodySchema),
+	requirePermission("can_manage_users", "org"),
+	TeamController.assignRole,
+);
+
+app.post(
+	"/:id/unassign-role",
+	describeRoute({
+		operationId: "unassignTeamRole",
+		summary: "Unassign Team Role",
+		description: "Remove the inherited organization role from a team.",
+		tags: ["Teams"],
+		responses: {
+			200: {
+				description: "Team role removed successfully",
+				content: {
+					"application/json": {
+						schema: resolver(messageResponseSchema),
+					},
+				},
+			},
+			500: {
+				description: "Internal server error",
+				content: {
+					"application/json": {
+						schema: resolver(errorResponseSchema),
+					},
+				},
+			},
+		},
+	}),
+	requirePermission("can_manage_users", "org"),
+	TeamController.unassignRole,
+);
+
+app.get(
+	"/:id/effective-permissions",
+	describeRoute({
+		operationId: "getTeamEffectivePermissions",
+		summary: "Get Team Effective Permissions",
+		description: "Get the org-level permissions inherited by team members through the team role",
+		tags: ["Teams"],
+		responses: {
+			200: {
+				description: "Team effective permissions returned successfully",
+				content: { "application/json": { schema: resolver(effectivePermissionsResponseSchema) } },
+			},
+		},
+	}),
+	requirePermission("can_manage_users", "org"),
+	TeamController.getEffectivePermissions,
 );
 
 export default app;

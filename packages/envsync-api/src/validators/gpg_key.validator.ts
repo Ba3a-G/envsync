@@ -58,6 +58,24 @@ export const updateTrustLevelRequestSchema = z
 	})
 	.openapi({ ref: "UpdateTrustLevelRequest" });
 
+export const rotateGpgKeyRequestSchema = z
+	.object({
+		name: z.string().min(1).optional(),
+		email: z.string().email().optional(),
+		algorithm: gpgAlgorithmSchema.optional(),
+		key_size: z.number().int().optional(),
+		expires_in_days: z.number().int().positive().optional(),
+		revoke_previous: z.boolean().default(false),
+		set_new_default: z.boolean().default(true),
+	})
+	.openapi({ ref: "RotateGpgKeyRequest" });
+
+export const extendGpgKeyExpiryRequestSchema = z
+	.object({
+		expires_in_days: z.number().int().positive(),
+	})
+	.openapi({ ref: "ExtendGpgKeyExpiryRequest" });
+
 // ─── Response schemas ───────────────────────────────────────────────
 
 export const gpgKeyResponseSchema = z
@@ -73,8 +91,10 @@ export const gpgKeyResponseSchema = z
 		key_size: z.number().nullable().openapi({ example: null }),
 		usage_flags: z.array(z.string()).openapi({ example: ["sign"] }),
 		trust_level: z.string().openapi({ example: "ultimate" }),
+		status: z.string().openapi({ example: "active" }),
 		expires_at: z.string().nullable().openapi({ example: null }),
 		revoked_at: z.string().nullable().openapi({ example: null }),
+		supersedes_gpg_key_id: z.string().nullable().optional().openapi({ example: null }),
 		is_default: z.boolean().openapi({ example: false }),
 		created_at: z.string().openapi({ example: "2024-01-01T00:00:00Z" }),
 		updated_at: z.string().openapi({ example: "2024-01-01T00:00:00Z" }),

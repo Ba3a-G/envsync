@@ -285,4 +285,51 @@ export class TeamService {
 			},
 		]);
 	};
+
+	public static assignRole = async (team_id: string, role_id: string) => {
+		const db = await DB.getInstance();
+		const team = await this.getTeam(team_id);
+		const role = await db
+			.selectFrom("org_role")
+			.select(["id", "org_id", "name"])
+			.where("id", "=", role_id)
+			.executeTakeFirstOrThrow();
+
+		if (role.org_id !== team.org_id) {
+			throw new Error("Role does not belong to the same organization.");
+		}
+
+		await AuthorizationService.removeTeamOrgPermissions(team_id, team.org_id);
+		await AuthorizationService.assignRoleToTeam(team_id, team.org_id, role_id);
+
+		await db
+			.updateTable("teams")
+			.set({
+				role_id,
+				updated_at: new Date(),
+			})
+			.where("id", "=", team_id)
+			.execute();
+
+		await invalidateCache(CacheKeys.team(team_id), CacheKeys.teamsByOrg(team.org_id));
+		return { team_id, role_id, role_name: role.name };
+	};
+
+	public static unassignRole = async (team_id: string) => {
+		const db = await DB.getInstance();
+		const team = await this.getTeam(team_id);
+
+		await AuthorizationService.removeTeamOrgPermissions(team_id, team.org_id);
+		await db
+			.updateTable("teams")
+			.set({
+				role_id: null,
+				updated_at: new Date(),
+			})
+			.where("id", "=", team_id)
+			.execute();
+
+		await invalidateCache(CacheKeys.team(team_id), CacheKeys.teamsByOrg(team.org_id));
+		return { team_id };
+	};
 }

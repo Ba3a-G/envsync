@@ -202,4 +202,53 @@ export class GpgKeyController {
 
 		return c.json(result, 200);
 	};
+
+	public static readonly rotateKey = async (c: Context) => {
+		const org_id = c.get("org_id");
+		const user_id = c.get("user_id");
+		const id = c.req.param("id");
+		const { name, email, algorithm, key_size, expires_in_days, revoke_previous = false, set_new_default = true } = await c.req.json();
+
+		const key = await GpgKeyService.rotateKey({
+			id,
+			org_id,
+			user_id,
+			name,
+			email,
+			algorithm,
+			key_size,
+			expires_in_days,
+			revoke_previous,
+			set_new_default,
+		});
+
+		await AuditLogService.notifyAuditSystem({
+			action: "gpg_key_rotated",
+			org_id,
+			user_id,
+			message: `GPG key rotated: ${id}`,
+			details: { gpg_key_id: id, revoke_previous, set_new_default },
+		});
+
+		return c.json(key, 200);
+	};
+
+	public static readonly extendExpiry = async (c: Context) => {
+		const org_id = c.get("org_id");
+		const user_id = c.get("user_id");
+		const id = c.req.param("id");
+		const { expires_in_days } = await c.req.json();
+
+		const key = await GpgKeyService.extendExpiry(id, org_id, expires_in_days);
+
+		await AuditLogService.notifyAuditSystem({
+			action: "gpg_key_expiry_extended",
+			org_id,
+			user_id,
+			message: `GPG key expiry extended: ${id}`,
+			details: { gpg_key_id: id, expires_in_days },
+		});
+
+		return c.json(key, 200);
+	};
 }

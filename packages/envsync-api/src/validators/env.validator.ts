@@ -29,6 +29,38 @@ export const getEnvRequestSchema = z
 	})
 	.openapi({ ref: "GetEnvRequest" });
 
+const exportModeSchema = z.enum(["auto", "true", "false"]);
+
+export const exportEnvRequestSchema = z
+	.object({
+		app_id: z.string().openapi({ example: "app_123" }),
+		env_type_id: z.string().optional().openapi({ example: "env_type_123" }),
+		env_type: z.string().optional().openapi({ example: "production" }),
+		enable_secrets: exportModeSchema.optional().openapi({ example: "auto" }),
+		is_secret_managed: exportModeSchema.optional().openapi({ example: "auto" }),
+		private_key: z
+			.string()
+			.optional()
+			.openapi({ example: "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----" }),
+	})
+	.openapi({ ref: "ExportEnvRequest" });
+
+export const exportEnvResponseSchema = z
+	.object({
+		resolved_app_id: z.string().openapi({ example: "app_123" }),
+		resolved_env_type_id: z.string().openapi({ example: "env_type_123" }),
+		resolved_env_type_name: z.string().openapi({ example: "production" }),
+		secrets_enabled: z.boolean().openapi({ example: true }),
+		managed_secrets: z.boolean().openapi({ example: true }),
+		environment: z.record(z.string(), z.string()).openapi({
+			example: {
+				API_HOST: "api.envsync.cloud",
+				API_TOKEN: "secret-token",
+			},
+		}),
+	})
+	.openapi({ ref: "ExportEnvResponse" });
+
 export const batchEnvsRequestSchema = z
 	.object({
 		app_id: z.string().openapi({ example: "app_123" }),

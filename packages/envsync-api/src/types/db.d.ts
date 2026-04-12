@@ -167,6 +167,7 @@ export interface Team extends BaseTable {
 	name: ColumnType<string>;
 	description?: ColumnType<string | null>;
 	color: ColumnType<string>;
+	role_id?: ColumnType<string | null>;
 }
 
 export interface TeamMember {
@@ -193,6 +194,8 @@ export interface GpgKey extends BaseTable {
 	revoked_at?: ColumnType<Date | null>;
 	revocation_reason?: ColumnType<string | null>;
 	is_default: ColumnType<boolean>;
+	status: ColumnType<string>;
+	supersedes_gpg_key_id?: ColumnType<string | null>;
 }
 
 export interface OrgCertificate extends BaseTable {
@@ -209,6 +212,39 @@ export interface OrgCertificate extends BaseTable {
 	metadata?: ColumnType<Record<string, string> | null>;
 	revoked_at?: ColumnType<Date | null>;
 	revocation_reason?: ColumnType<number | null>;
+	supersedes_certificate_id?: ColumnType<string | null>;
+}
+
+export interface ChangeRequest extends BaseTable {
+	org_id: ColumnType<string>;
+	app_id: ColumnType<string>;
+	request_kind: ColumnType<"direct" | "promotion">;
+	source_env_type_id?: ColumnType<string | null>;
+	target_env_type_id: ColumnType<string>;
+	status: ColumnType<"pending" | "approved" | "rejected" | "cancelled">;
+	title: ColumnType<string>;
+	message: ColumnType<string>;
+	requested_by_user_id: ColumnType<string>;
+	reviewed_by_user_id?: ColumnType<string | null>;
+	reviewed_at?: ColumnType<Date | null>;
+	applied_at?: ColumnType<Date | null>;
+	rejection_reason?: ColumnType<string | null>;
+}
+
+export interface ChangeRequestEnvItem extends BaseTable {
+	change_request_id: ColumnType<string>;
+	key: ColumnType<string>;
+	previous_value?: ColumnType<string | null>;
+	proposed_value?: ColumnType<string | null>;
+	operation: ColumnType<"CREATE" | "UPDATE" | "DELETE">;
+}
+
+export interface ChangeRequestSecretItem extends BaseTable {
+	change_request_id: ColumnType<string>;
+	key: ColumnType<string>;
+	previous_value?: ColumnType<string | null>;
+	proposed_value?: ColumnType<string | null>;
+	operation: ColumnType<"CREATE" | "UPDATE" | "DELETE">;
 }
 
 export interface BaseDatabase {
@@ -231,6 +267,9 @@ export interface BaseDatabase {
 	team_members: TeamMember;
 	gpg_keys: GpgKey;
 	org_certificates: OrgCertificate;
+	change_request: ChangeRequest;
+	change_request_env_item: ChangeRequestEnvItem;
+	change_request_secret_item: ChangeRequestSecretItem;
 }
 
 /**

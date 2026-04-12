@@ -32,11 +32,14 @@ func (f *GpgKeyFormatter) FormatKeyList(writer io.Writer, keys []domain.GpgKey) 
 			fp = fp[:4] + "..." + fp[len(fp)-8:]
 		}
 
-		status := "active"
-		if key.RevokedAt != nil {
-			status = "revoked"
-		} else if key.ExpiresAt != nil && key.ExpiresAt.Before(key.CreatedAt) {
-			status = "expired"
+		status := key.Status
+		if status == "" {
+			status = "active"
+			if key.RevokedAt != nil {
+				status = "revoked"
+			} else if key.ExpiresAt != nil && key.ExpiresAt.Before(key.CreatedAt) {
+				status = "expired"
+			}
 		}
 
 		sb.WriteString(fmt.Sprintf("%-36s  %-20s  %-30s  %-16s  %-10s  %-8s\n",

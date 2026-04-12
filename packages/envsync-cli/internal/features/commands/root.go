@@ -35,6 +35,9 @@ type CommandRegistry struct {
 	genPEMKeyHandler   *handlers.GenPEMKeyHandler
 	gpgKeyHandler      *handlers.GpgKeyHandler
 	certificateHandler *handlers.CertificateHandler
+	teamHandler        *handlers.TeamHandler
+	accessHandler      *handlers.AccessHandler
+	requestHandler     *handlers.RequestHandler
 }
 
 func NewCommandRegistry(
@@ -49,6 +52,9 @@ func NewCommandRegistry(
 	genPEMKeyHandler *handlers.GenPEMKeyHandler,
 	gpgKeyHandler *handlers.GpgKeyHandler,
 	certificateHandler *handlers.CertificateHandler,
+	teamHandler *handlers.TeamHandler,
+	accessHandler *handlers.AccessHandler,
+	requestHandler *handlers.RequestHandler,
 ) *CommandRegistry {
 	return &CommandRegistry{
 		appHandler:         appHandler,
@@ -62,6 +68,9 @@ func NewCommandRegistry(
 		genPEMKeyHandler:   genPEMKeyHandler,
 		gpgKeyHandler:      gpgKeyHandler,
 		certificateHandler: certificateHandler,
+		teamHandler:        teamHandler,
+		accessHandler:      accessHandler,
+		requestHandler:     requestHandler,
 	}
 }
 
@@ -95,6 +104,9 @@ func (r *CommandRegistry) RegisterCLI() *cli.Command {
 			GenereatePrivateKeyCommand(r.genPEMKeyHandler),
 			GpgKeyCommands(r.gpgKeyHandler),
 			CertificateCommands(r.certificateHandler),
+			TeamCommands(r.teamHandler),
+			AccessCommands(r.accessHandler),
+			RequestCommands(r.requestHandler),
 		},
 	}
 }

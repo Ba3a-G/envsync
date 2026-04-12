@@ -91,4 +91,9 @@ export const coreApiModules: ApiModule[] = [
 		mountPath: "/certificate",
 		createRouter: async () => (await import("@/routes/certificate.route")).default,
 	},
+	{
+		name: "change_request",
+		mountPath: "/change_request",
+		createRouter: async () => (await import("@/routes/change_request.route")).default,
+	},
 ];

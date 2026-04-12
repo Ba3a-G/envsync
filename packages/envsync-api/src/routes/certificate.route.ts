@@ -8,6 +8,8 @@ import {
 	initOrgCARequestSchema,
 	issueMemberCertRequestSchema,
 	revokeCertRequestSchema,
+	renewCertRequestSchema,
+	rotateCertRequestSchema,
 	orgCAResponseSchema,
 	memberCertResponseSchema,
 	certificateListResponseSchema,
@@ -213,6 +215,52 @@ app.post(
 	}),
 	zValidator("json", revokeCertRequestSchema),
 	CertificateController.revokeCert,
+);
+
+app.post(
+	"/:id/renew",
+	requirePermission("can_manage_certificates", "org"),
+	describeRoute({
+		operationId: "renewCertificate",
+		summary: "Renew Certificate",
+		description: "Issue a renewed replacement certificate linked to the existing certificate lineage.",
+		tags: ["Certificates"],
+		responses: {
+			200: {
+				description: "Certificate renewed successfully",
+				content: { "application/json": { schema: resolver(memberCertResponseSchema) } },
+			},
+			500: {
+				description: "Internal server error",
+				content: { "application/json": { schema: resolver(errorResponseSchema) } },
+			},
+		},
+	}),
+	zValidator("json", renewCertRequestSchema),
+	CertificateController.renewCert,
+);
+
+app.post(
+	"/:id/rotate",
+	requirePermission("can_manage_certificates", "org"),
+	describeRoute({
+		operationId: "rotateCertificate",
+		summary: "Rotate Certificate",
+		description: "Rotate a certificate by issuing a replacement and optionally revoking the previous certificate.",
+		tags: ["Certificates"],
+		responses: {
+			200: {
+				description: "Certificate rotated successfully",
+				content: { "application/json": { schema: resolver(memberCertResponseSchema) } },
+			},
+			500: {
+				description: "Internal server error",
+				content: { "application/json": { schema: resolver(errorResponseSchema) } },
+			},
+		},
+	}),
+	zValidator("json", rotateCertRequestSchema),
+	CertificateController.rotateCert,
 );
 
 // Check OCSP status

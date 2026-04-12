@@ -19,6 +19,7 @@ import (
 	"github.com/EnvSync-Cloud/envsync/packages/envsync-cli/internal/features/usecases/run"
 	syncUseCase "github.com/EnvSync-Cloud/envsync/packages/envsync-cli/internal/features/usecases/sync"
 	"github.com/EnvSync-Cloud/envsync/packages/envsync-cli/internal/presentation/formatters"
+	"github.com/EnvSync-Cloud/envsync/packages/envsync-cli/internal/services"
 )
 
 func main() {
@@ -38,6 +39,9 @@ func main() {
 		container.GenPEMKeyHandler,
 		container.GpgKeyHandler,
 		container.CertificateHandler,
+		container.TeamHandler,
+		container.AccessHandler,
+		container.RequestHandler,
 	)
 
 	// Build CLI app
@@ -62,6 +66,9 @@ type Container struct {
 	GenPEMKeyHandler   *handlers.GenPEMKeyHandler
 	GpgKeyHandler      *handlers.GpgKeyHandler
 	CertificateHandler *handlers.CertificateHandler
+	TeamHandler        *handlers.TeamHandler
+	AccessHandler      *handlers.AccessHandler
+	RequestHandler     *handlers.RequestHandler
 }
 
 // buildDependencyContainer creates and wires all handler dependencies
@@ -108,6 +115,7 @@ func buildDependencyContainer() *Container {
 	genPEMKeyUseCase := genpem.NewGenKeyPairUseCase()
 
 	// GPG key use cases
+	gpgService := services.NewGpgKeyService()
 	gpgListKeysUseCase := gpgUseCases.NewListKeysUseCase()
 	gpgGenerateKeyUseCase := gpgUseCases.NewGenerateKeyUseCase()
 	gpgSignUseCase := gpgUseCases.NewSignUseCase()
@@ -117,6 +125,7 @@ func buildDependencyContainer() *Container {
 	gpgDeleteKeyUseCase := gpgUseCases.NewDeleteKeyUseCase()
 
 	// Certificate use cases
+	certService := services.NewCertificateService()
 	certInitCAUseCase := certUseCases.NewInitCAUseCase()
 	certCAStatusUseCase := certUseCases.NewCAStatusUseCase()
 	certIssueCertUseCase := certUseCases.NewIssueCertUseCase()
@@ -191,6 +200,7 @@ func buildDependencyContainer() *Container {
 		gpgExportUseCase,
 		gpgRevokeUseCase,
 		gpgDeleteKeyUseCase,
+		gpgService,
 		gpgKeyFormatter,
 	)
 
@@ -204,8 +214,13 @@ func buildDependencyContainer() *Container {
 		certCheckOCSPUseCase,
 		certGetCRLUseCase,
 		certGetRootCAUseCase,
+		certService,
 		certFormatter,
 	)
+
+	c.TeamHandler = handlers.NewTeamHandler()
+	c.AccessHandler = handlers.NewAccessHandler()
+	c.RequestHandler = handlers.NewRequestHandler()
 
 	return c
 }

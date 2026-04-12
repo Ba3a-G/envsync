@@ -29,20 +29,21 @@ func CertificateResponseToDomain(res responses.CertificateResponse) domain.Certi
 	createdAt, _ := time.Parse(time.RFC3339, res.CreatedAt)
 
 	return domain.Certificate{
-		ID:               res.ID,
-		OrgID:            res.OrgID,
-		SerialHex:        res.SerialHex,
-		CertType:         res.CertType,
-		SubjectCN:        res.SubjectCN,
-		SubjectEmail:     res.SubjectEmail,
-		Status:           res.Status,
-		Description:      res.Description,
-		Metadata:         res.Metadata,
-		NotBefore:        notBefore,
-		NotAfter:         notAfter,
-		RevokedAt:        revokedAt,
-		RevocationReason: res.RevocationReason,
-		CreatedAt:        createdAt,
+		ID:                      res.ID,
+		OrgID:                   res.OrgID,
+		SerialHex:               res.SerialHex,
+		CertType:                res.CertType,
+		SubjectCN:               res.SubjectCN,
+		SubjectEmail:            res.SubjectEmail,
+		Status:                  res.Status,
+		Description:             res.Description,
+		Metadata:                res.Metadata,
+		NotBefore:               notBefore,
+		NotAfter:                notAfter,
+		RevokedAt:               revokedAt,
+		RevocationReason:        res.RevocationReason,
+		SupersedesCertificateID: res.SupersedesCertificateID,
+		CreatedAt:               createdAt,
 	}
 }
 

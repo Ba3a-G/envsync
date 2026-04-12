@@ -79,6 +79,56 @@ export const getSDK = () => {
 
 export const sdk = getSDK();
 
+export class ApiRequestError extends Error {
+  status: number;
+  code?: string;
+  body?: unknown;
+
+  constructor(message: string, status: number, code?: string, body?: unknown) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+    this.code = code;
+    this.body = body;
+  }
+}
+
+export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const method = init.method || "GET";
+  const headers = new Headers(init.headers || {});
+
+  if (!headers.has("Content-Type") && init.body) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  if (isUnsafeMethod(method)) {
+    const csrfToken = readCookie(CSRF_COOKIE);
+    if (csrfToken) {
+      headers.set("X-CSRF-Token", csrfToken);
+    }
+  }
+
+  const response = await fetch(`${runtimeConfig.apiBaseUrl}${path}`, {
+    ...init,
+    method,
+    credentials: "include",
+    headers,
+  });
+
+  const body = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new ApiRequestError(
+      String((body as { error?: string } | null)?.error || response.statusText || "Request failed"),
+      response.status,
+      String((body as { code?: string } | null)?.code || ""),
+      body,
+    );
+  }
+
+  return body as T;
+}
+
 export interface MutationOptions<TData = unknown, TVariables = unknown> {
   before?: Function<TVariables>;
   onSuccess?: Function<{ data: TData; variables?: TVariables }>;

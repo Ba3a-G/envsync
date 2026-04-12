@@ -7,7 +7,7 @@ import { RoleService } from "@/services/role.service";
  * Maps an org_role record's boolean flags to FGA tuples for a user in an org.
  */
 function roleFlagsToTuples(
-	userId: string,
+	subject: string,
 	orgId: string,
 	role: {
 		is_master: boolean;
@@ -22,23 +22,22 @@ function roleFlagsToTuples(
 		have_audit_access: boolean;
 	},
 ): TupleKey[] {
-	const user = `user:${userId}`;
 	const org = `org:${orgId}`;
 	const tuples: TupleKey[] = [];
 
 	// Always add member
-	tuples.push({ user, relation: "member", object: org });
+	tuples.push({ user: subject, relation: "member", object: org });
 
-	if (role.is_master) tuples.push({ user, relation: "master", object: org });
-	if (role.is_admin) tuples.push({ user, relation: "admin", object: org });
-	if (role.can_view) tuples.push({ user, relation: "can_view", object: org });
-	if (role.can_edit) tuples.push({ user, relation: "can_edit", object: org });
-	if (role.have_api_access) tuples.push({ user, relation: "have_api_access", object: org });
-	if (role.have_billing_options) tuples.push({ user, relation: "have_billing_options", object: org });
-	if (role.have_webhook_access) tuples.push({ user, relation: "have_webhook_access", object: org });
-	if (role.have_gpg_access) tuples.push({ user, relation: "have_gpg_access", object: org });
-	if (role.have_cert_access) tuples.push({ user, relation: "have_cert_access", object: org });
-	if (role.have_audit_access) tuples.push({ user, relation: "have_audit_access", object: org });
+	if (role.is_master) tuples.push({ user: subject, relation: "master", object: org });
+	if (role.is_admin) tuples.push({ user: subject, relation: "admin", object: org });
+	if (role.can_view) tuples.push({ user: subject, relation: "can_view", object: org });
+	if (role.can_edit) tuples.push({ user: subject, relation: "can_edit", object: org });
+	if (role.have_api_access) tuples.push({ user: subject, relation: "have_api_access", object: org });
+	if (role.have_billing_options) tuples.push({ user: subject, relation: "have_billing_options", object: org });
+	if (role.have_webhook_access) tuples.push({ user: subject, relation: "have_webhook_access", object: org });
+	if (role.have_gpg_access) tuples.push({ user: subject, relation: "have_gpg_access", object: org });
+	if (role.have_cert_access) tuples.push({ user: subject, relation: "have_cert_access", object: org });
+	if (role.have_audit_access) tuples.push({ user: subject, relation: "have_audit_access", object: org });
 
 	return tuples;
 }
@@ -91,6 +90,19 @@ export class AuthorizationService {
 		return fga.batchCheck(fgaChecks);
 	}
 
+	static async batchCheckForSubject(
+		subject: string,
+		checks: { relation: string; objectType: string; objectId: string }[],
+	): Promise<Map<string, boolean>> {
+		const fga = await FGAClient.getInstance();
+		const fgaChecks = checks.map(c => ({
+			user: subject,
+			relation: c.relation,
+			object: `${c.objectType}:${c.objectId}`,
+		}));
+		return fga.batchCheck(fgaChecks);
+	}
+
 	// ─── Role template → FGA tuples ────────────────────────────────────
 
 	/**
@@ -99,7 +111,7 @@ export class AuthorizationService {
 	 */
 	static async assignRoleToUser(userId: string, orgId: string, roleId: string): Promise<void> {
 		const role = await RoleService.getRole(roleId);
-		const tuples = roleFlagsToTuples(userId, orgId, {
+		const tuples = roleFlagsToTuples(`user:${userId}`, orgId, {
 			...role,
 			is_master: role.is_master ?? false,
 			have_gpg_access: role.have_gpg_access ?? false,
@@ -133,6 +145,29 @@ export class AuthorizationService {
 	static async resyncUserRole(userId: string, orgId: string, newRoleId: string): Promise<void> {
 		await this.removeUserOrgPermissions(userId, orgId);
 		await this.assignRoleToUser(userId, orgId, newRoleId);
+	}
+
+	static async assignRoleToTeam(teamId: string, orgId: string, roleId: string): Promise<void> {
+		const role = await RoleService.getRole(roleId);
+		const tuples = roleFlagsToTuples(`team:${teamId}#member`, orgId, {
+			...role,
+			is_master: role.is_master ?? false,
+			have_gpg_access: role.have_gpg_access ?? false,
+			have_cert_access: role.have_cert_access ?? false,
+			have_audit_access: role.have_audit_access ?? false,
+		});
+		const fga = await FGAClient.getInstance();
+		await fga.writeTuples(tuples);
+	}
+
+	static async removeTeamOrgPermissions(teamId: string, orgId: string): Promise<void> {
+		const fga = await FGAClient.getInstance();
+		const user = `team:${teamId}#member`;
+		const org = `org:${orgId}`;
+		const existing = await fga.readTuples({ user, object: org });
+		if (existing.length > 0) {
+			await fga.deleteTuples(existing);
+		}
 	}
 
 	/**
@@ -408,7 +443,7 @@ export class AuthorizationService {
 		];
 
 		const checks = relations.map(r => ({ relation: r, objectType: "org", objectId: orgId }));
-		const results = await this.batchCheck(userId, checks);
+		const results = await this.batchCheckForSubject(`user:${userId}`, checks);
 
 		return {
 			can_view: results.get(`can_view:org:${orgId}`) ?? false,
@@ -427,5 +462,68 @@ export class AuthorizationService {
 			can_manage_org_settings: results.get(`can_manage_org_settings:org:${orgId}`) ?? false,
 			can_manage_invites: results.get(`can_manage_invites:org:${orgId}`) ?? false,
 		};
+	}
+
+	static async getTeamOrgPermissions(teamId: string, orgId: string) {
+		const relations = [
+			"can_view",
+			"can_edit",
+			"have_api_access",
+			"have_billing_options",
+			"have_webhook_access",
+			"admin",
+			"master",
+			"can_manage_roles",
+			"can_manage_users",
+			"can_manage_apps",
+			"can_manage_api_keys",
+			"can_manage_webhooks",
+			"can_view_audit_logs",
+			"can_manage_org_settings",
+			"can_manage_invites",
+		];
+
+		const checks = relations.map(r => ({ relation: r, objectType: "org", objectId: orgId }));
+		const results = await this.batchCheckForSubject(`team:${teamId}#member`, checks);
+
+		return {
+			can_view: results.get(`can_view:org:${orgId}`) ?? false,
+			can_edit: results.get(`can_edit:org:${orgId}`) ?? false,
+			have_api_access: results.get(`have_api_access:org:${orgId}`) ?? false,
+			have_billing_options: results.get(`have_billing_options:org:${orgId}`) ?? false,
+			have_webhook_access: results.get(`have_webhook_access:org:${orgId}`) ?? false,
+			is_admin: results.get(`admin:org:${orgId}`) ?? false,
+			is_master: results.get(`master:org:${orgId}`) ?? false,
+			can_manage_roles: results.get(`can_manage_roles:org:${orgId}`) ?? false,
+			can_manage_users: results.get(`can_manage_users:org:${orgId}`) ?? false,
+			can_manage_apps: results.get(`can_manage_apps:org:${orgId}`) ?? false,
+			can_manage_api_keys: results.get(`can_manage_api_keys:org:${orgId}`) ?? false,
+			can_manage_webhooks: results.get(`can_manage_webhooks:org:${orgId}`) ?? false,
+			can_view_audit_logs: results.get(`can_view_audit_logs:org:${orgId}`) ?? false,
+			can_manage_org_settings: results.get(`can_manage_org_settings:org:${orgId}`) ?? false,
+			can_manage_invites: results.get(`can_manage_invites:org:${orgId}`) ?? false,
+		};
+	}
+
+	static async listResourceGrants(objectType: "app" | "env_type", objectId: string) {
+		const fga = await FGAClient.getInstance();
+		const tuples = await fga.readTuples({ object: `${objectType}:${objectId}` });
+		return tuples
+			.filter((tuple) => ["admin", "editor", "viewer"].includes(tuple.relation))
+			.map((tuple) => {
+				if (tuple.user.startsWith("team:")) {
+					const teamId = tuple.user.replace("team:", "").replace("#member", "");
+					return {
+						subject_id: teamId,
+						subject_type: "team" as const,
+						relation: tuple.relation as "admin" | "editor" | "viewer",
+					};
+				}
+				return {
+					subject_id: tuple.user.replace("user:", ""),
+					subject_type: "user" as const,
+					relation: tuple.relation as "admin" | "editor" | "viewer",
+				};
+			});
 	}
 }

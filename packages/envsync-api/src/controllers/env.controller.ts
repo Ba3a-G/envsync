@@ -5,8 +5,166 @@ import { AuditLogService } from "@/services/audit_log.service";
 import { AuthorizationService } from "@/services/authorization.service";
 import { EnvTypeService } from "@/services/env_type.service";
 import { EnvStorePiTService } from "@/services/env_store_pit.service";
+import { AppService } from "@/services/app.service";
+import { SecretService } from "@/services/secret.service";
+import { rsaLayerDecrypt } from "@/helpers/key-store";
+
+function resolveAutoMode(value: unknown, fallback: boolean) {
+	const normalized = String(value ?? "auto").trim().toLowerCase();
+	if (normalized === "auto") return fallback;
+	if (normalized === "true") return true;
+	if (normalized === "false") return false;
+	throw new Error("Mode must be one of: auto, true, false");
+}
+
+async function resolveExportEnvType(org_id: string, app_id: string, env_type_id?: string, env_type_name?: string) {
+	if (env_type_id && env_type_name) {
+		throw new Error("Only one of env_type_id or env_type may be provided.");
+	}
+
+	if (env_type_id) {
+		const envType = await EnvTypeService.getEnvType(env_type_id);
+		if (envType.app_id !== app_id || envType.org_id !== org_id) {
+			throw new Error("Environment type does not belong to the requested app.");
+		}
+		return envType;
+	}
+
+	if (!env_type_name) {
+		throw new Error("env_type_id or env_type is required.");
+	}
+
+	const envTypes = await EnvTypeService.getEnvTypes(org_id);
+	const matches = envTypes.filter(
+		envType => envType.app_id === app_id && envType.name.toLowerCase() === env_type_name.toLowerCase(),
+	);
+
+	if (matches.length === 0) {
+		throw new Error(`Environment type "${env_type_name}" was not found for the requested app.`);
+	}
+
+	if (matches.length > 1) {
+		throw new Error(`Environment type "${env_type_name}" is ambiguous for the requested app.`);
+	}
+
+	return matches[0];
+}
+
+async function ensureEnvMutationAllowed(c: Context, env_type_id: string) {
+	const env_type = await EnvTypeService.getEnvType(env_type_id);
+	const canEdit = await AuthorizationService.check(
+		c.get("user_id"),
+		env_type.is_protected ? "can_manage_protected" : "can_edit",
+		"env_type",
+		env_type_id,
+	);
+	if (!canEdit) {
+		return {
+			env_type,
+			response: c.json({ error: "You do not have permission to perform this action." }, 403),
+		};
+	}
+	if (env_type.is_protected) {
+		return {
+			env_type,
+			response: c.json(
+				{
+					error: "Protected environments require a change request.",
+					code: "PROTECTED_ENV_REQUIRES_CHANGE_REQUEST",
+				},
+				409,
+			),
+		};
+	}
+	return { env_type, response: null };
+}
 
 export class EnvController {
+	public static readonly exportEnv = async (c: Context) => {
+		const org_id = c.get("org_id");
+		const user_id = c.get("user_id");
+		const {
+			app_id,
+			env_type_id,
+			env_type,
+			enable_secrets = "auto",
+			is_secret_managed = "auto",
+			private_key,
+		} = await c.req.json();
+
+		if (!org_id || !app_id) {
+			return c.json({ error: "org_id and app_id are required." }, 400);
+		}
+
+		try {
+			const app = await AppService.getApp({ id: app_id });
+			if (app.org_id !== org_id) {
+				return c.json({ error: "App does not belong to the organization." }, 403);
+			}
+
+			const resolvedEnvType = await resolveExportEnvType(org_id, app_id, env_type_id, env_type);
+			const canView = await AuthorizationService.check(user_id, "can_view", "env_type", resolvedEnvType.id);
+			if (!canView) {
+				return c.json({ error: "You do not have permission to view this environment." }, 403);
+			}
+
+			const envs = await EnvService.getAllEnv({
+				app_id,
+				org_id,
+				env_type_id: resolvedEnvType.id,
+				user_id,
+			});
+
+			const environmentEntries = envs.map(env => [env.key, env.value] as const);
+			const secretsEnabled = resolveAutoMode(enable_secrets, app.enable_secrets);
+			let managedSecrets = false;
+
+			if (secretsEnabled && app.enable_secrets) {
+				const resolvedManaged = resolveAutoMode(is_secret_managed, app.is_managed_secret);
+				const secrets = await SecretService.getAllSecret({
+					app_id,
+					org_id,
+					env_type_id: resolvedEnvType.id,
+					user_id,
+				});
+
+				let privateKey = private_key;
+				if (resolvedManaged) {
+					privateKey = await AppService.getManagedAppPrivateKey(app_id);
+				} else if (!privateKey) {
+					return c.json(
+						{ error: "private_key is required when exporting self-managed secrets.", code: "PRIVATE_KEY_REQUIRED" },
+						400,
+					);
+				}
+
+				for (const secret of secrets) {
+					environmentEntries.push([secret.key, rsaLayerDecrypt(secret.value, privateKey!)]);
+				}
+
+				managedSecrets = resolvedManaged;
+			}
+
+			const environment = Object.fromEntries(
+				environmentEntries.sort(([left], [right]) => left.localeCompare(right)),
+			);
+
+			return c.json({
+				resolved_app_id: app_id,
+				resolved_env_type_id: resolvedEnvType.id,
+				resolved_env_type_name: resolvedEnvType.name,
+				secrets_enabled: secretsEnabled && app.enable_secrets,
+				managed_secrets: managedSecrets,
+				environment,
+			});
+		} catch (error) {
+			return c.json(
+				{ error: error instanceof Error ? error.message : "Failed to export environment." },
+				400,
+			);
+		}
+	};
+
 	public static readonly createEnv = async (c: Context) => {
 		const org_id = c.get("org_id");
 		const user_id = c.get("user_id");
@@ -18,12 +176,8 @@ export class EnvController {
 		}
 
 		// env_type_id
-		const env_type = await EnvTypeService.getEnvType(env_type_id);
-
-		const canEdit = await AuthorizationService.check(c.get("user_id"), env_type.is_protected ? "can_manage_protected" : "can_edit", "env_type", env_type_id);
-		if (!canEdit) {
-			return c.json({ error: "You do not have permission to perform this action." }, 403);
-		}
+		const { response } = await ensureEnvMutationAllowed(c, env_type_id);
+		if (response) return response;
 
 		// Check if the environment variable already exists
 		const existingEnv = await EnvService.getEnv({
@@ -91,12 +245,8 @@ export class EnvController {
 		}
 
 		// env_type_id
-		const env_type = await EnvTypeService.getEnvType(env_type_id);
-
-		const canEdit = await AuthorizationService.check(c.get("user_id"), env_type.is_protected ? "can_manage_protected" : "can_edit", "env_type", env_type_id);
-		if (!canEdit) {
-			return c.json({ error: "You do not have permission to perform this action." }, 403);
-		}
+		const { response } = await ensureEnvMutationAllowed(c, env_type_id);
+		if (response) return response;
 
 		// Get current value for tracking
 		const currentEnv = await EnvService.getEnv({
@@ -164,12 +314,8 @@ export class EnvController {
 		}
 
 		// env_type_id
-		const env_type = await EnvTypeService.getEnvType(env_type_id);
-
-		const canEdit = await AuthorizationService.check(c.get("user_id"), env_type.is_protected ? "can_manage_protected" : "can_edit", "env_type", env_type_id);
-		if (!canEdit) {
-			return c.json({ error: "You do not have permission to perform this action." }, 403);
-		}
+		const { response } = await ensureEnvMutationAllowed(c, env_type_id);
+		if (response) return response;
 
 		// Get current value for tracking
 		const currentEnv = await EnvService.getEnv({
@@ -314,12 +460,8 @@ export class EnvController {
 		}
 
 		// env_type_id
-		const env_type = await EnvTypeService.getEnvType(env_type_id);
-
-		const canEdit = await AuthorizationService.check(c.get("user_id"), env_type.is_protected ? "can_manage_protected" : "can_edit", "env_type", env_type_id);
-		if (!canEdit) {
-			return c.json({ error: "You do not have permission to perform this action." }, 403);
-		}
+		const { response } = await ensureEnvMutationAllowed(c, env_type_id);
+		if (response) return response;
 
 		await EnvService.batchCreateEnvs(org_id, app_id, env_type_id, envs, user_id);
 
@@ -368,12 +510,8 @@ export class EnvController {
 		}
 
 		// env_type_id
-		const env_type = await EnvTypeService.getEnvType(env_type_id);
-
-		const canEdit = await AuthorizationService.check(c.get("user_id"), env_type.is_protected ? "can_manage_protected" : "can_edit", "env_type", env_type_id);
-		if (!canEdit) {
-			return c.json({ error: "You do not have permission to perform this action." }, 403);
-		}
+		const { response } = await ensureEnvMutationAllowed(c, env_type_id);
+		if (response) return response;
 
 		// Get current values for tracking changes
 		const currentEnvs = await Promise.all(
@@ -442,12 +580,8 @@ export class EnvController {
 		}
 
 		// env_type_id
-		const env_type = await EnvTypeService.getEnvType(env_type_id);
-
-		const canEdit = await AuthorizationService.check(c.get("user_id"), env_type.is_protected ? "can_manage_protected" : "can_edit", "env_type", env_type_id);
-		if (!canEdit) {
-			return c.json({ error: "You do not have permission to perform this action." }, 403);
-		}
+		const { response } = await ensureEnvMutationAllowed(c, env_type_id);
+		if (response) return response;
 
 		// Get current values for tracking deletions
 		const currentEnvs = await Promise.all(
@@ -664,12 +798,8 @@ export class EnvController {
 		}
 
 		// Check env type permissions
-		const env_type = await EnvTypeService.getEnvType(env_type_id);
-
-		const canEdit = await AuthorizationService.check(c.get("user_id"), env_type.is_protected ? "can_manage_protected" : "can_edit", "env_type", env_type_id);
-		if (!canEdit) {
-			return c.json({ error: "You do not have permission to perform this action." }, 403);
-		}
+		const { response } = await ensureEnvMutationAllowed(c, env_type_id);
+		if (response) return response;
 
 		// Get current state for comparison
 		const currentEnvs = await EnvService.getAllEnv({
@@ -792,12 +922,8 @@ export class EnvController {
 		}
 
 		// Check env type permissions
-		const env_type = await EnvTypeService.getEnvType(env_type_id);
-
-		const canEdit = await AuthorizationService.check(c.get("user_id"), env_type.is_protected ? "can_manage_protected" : "can_edit", "env_type", env_type_id);
-		if (!canEdit) {
-			return c.json({ error: "You do not have permission to perform this action." }, 403);
-		}
+		const { response } = await ensureEnvMutationAllowed(c, env_type_id);
+		if (response) return response;
 
 		// Validate timestamp
 		const targetTimestamp = new Date(timestamp);
@@ -928,12 +1054,8 @@ export class EnvController {
 		}
 
 		// Check env type permissions
-		const env_type = await EnvTypeService.getEnvType(env_type_id);
-
-		const canEdit = await AuthorizationService.check(c.get("user_id"), env_type.is_protected ? "can_manage_protected" : "can_edit", "env_type", env_type_id);
-		if (!canEdit) {
-			return c.json({ error: "You do not have permission to perform this action." }, 403);
-		}
+		const { response } = await ensureEnvMutationAllowed(c, env_type_id);
+		if (response) return response;
 
 		// Get current variable state
 		const currentEnv = await EnvService.getEnv({
@@ -1075,12 +1197,8 @@ export class EnvController {
 		}
 
 		// Check env type permissions
-		const env_type = await EnvTypeService.getEnvType(env_type_id);
-
-		const canEdit = await AuthorizationService.check(c.get("user_id"), env_type.is_protected ? "can_manage_protected" : "can_edit", "env_type", env_type_id);
-		if (!canEdit) {
-			return c.json({ error: "You do not have permission to perform this action." }, 403);
-		}
+		const { response } = await ensureEnvMutationAllowed(c, env_type_id);
+		if (response) return response;
 
 		// Validate timestamp
 		const targetTimestamp = new Date(timestamp);

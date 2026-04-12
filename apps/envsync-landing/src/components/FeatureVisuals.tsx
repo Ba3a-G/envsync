@@ -271,16 +271,19 @@ export const AccessVisual = () => (
 export const LifecycleVisual = () => (
   <FeatureFrame>
     <div className="flex w-full flex-col justify-between">
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-4 items-stretch gap-3">
         {[
           { label: "issue", icon: Check, tone: "primary" as const },
           { label: "rotate", icon: RefreshCw, tone: "default" as const },
           { label: "expire", icon: TriangleAlert, tone: "warning" as const },
           { label: "renew", icon: ShieldCheck, tone: "primary" as const },
         ].map(({ label, icon: Icon, tone }) => (
-          <div key={label} className="rounded-2xl border border-border bg-background/45 p-3 text-center">
+          <div
+            key={label}
+            className="flex min-h-[88px] flex-col items-center justify-center rounded-2xl border border-border bg-background/45 px-2 py-3 text-center"
+          >
             <div
-              className={`mx-auto mb-2 flex h-9 w-9 items-center justify-center rounded-full border ${
+              className={`flex h-9 w-9 items-center justify-center rounded-full border ${
                 tone === "warning"
                   ? "border-amber-400/35 bg-amber-400/10 text-amber-200"
                   : tone === "primary"
@@ -290,7 +293,9 @@ export const LifecycleVisual = () => (
             >
               <Icon className={`h-4 w-4 ${label === "rotate" ? "animate-[spin_6s_linear_infinite]" : ""}`} />
             </div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-foreground">{label}</div>
+            <div className="mt-3 text-center text-[11px] font-semibold uppercase tracking-[0.16em] text-foreground">
+              {label}
+            </div>
           </div>
         ))}
       </div>

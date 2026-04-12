@@ -1,21 +1,23 @@
 package responses
 
 type GpgKeyResponse struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	Email       string   `json:"email"`
-	Fingerprint string   `json:"fingerprint"`
-	KeyID       string   `json:"key_id"`
-	Algorithm   string   `json:"algorithm"`
-	KeySize     *int     `json:"key_size"`
-	UsageFlags  []string `json:"usage_flags"`
-	TrustLevel  string   `json:"trust_level"`
-	ExpiresAt   *string  `json:"expires_at"`
-	RevokedAt   *string  `json:"revoked_at"`
-	IsDefault   bool     `json:"is_default"`
-	PublicKey   string   `json:"public_key,omitempty"`
-	CreatedAt   string   `json:"created_at"`
-	UpdatedAt   string   `json:"updated_at"`
+	ID                 string   `json:"id"`
+	Name               string   `json:"name"`
+	Email              string   `json:"email"`
+	Fingerprint        string   `json:"fingerprint"`
+	KeyID              string   `json:"key_id"`
+	Algorithm          string   `json:"algorithm"`
+	KeySize            *int     `json:"key_size"`
+	UsageFlags         []string `json:"usage_flags"`
+	TrustLevel         string   `json:"trust_level"`
+	Status             string   `json:"status"`
+	ExpiresAt          *string  `json:"expires_at"`
+	RevokedAt          *string  `json:"revoked_at"`
+	IsDefault          bool     `json:"is_default"`
+	SupersedesGpgKeyID *string  `json:"supersedes_gpg_key_id,omitempty"`
+	PublicKey          string   `json:"public_key,omitempty"`
+	CreatedAt          string   `json:"created_at"`
+	UpdatedAt          string   `json:"updated_at"`
 }
 
 type GpgSignatureResponse struct {

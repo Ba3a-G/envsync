@@ -2,6 +2,7 @@ import { type Context } from "hono";
 
 import { TeamService } from "@/services/team.service";
 import { AuditLogService } from "@/services/audit_log.service";
+import { AuthorizationService } from "@/services/authorization.service";
 
 export class TeamController {
 	public static readonly createTeam = async (c: Context) => {
@@ -189,5 +190,66 @@ export class TeamController {
 		});
 
 		return c.json({ message: "Team member removed successfully." });
+	};
+
+	public static readonly assignRole = async (c: Context) => {
+		const org_id = c.get("org_id");
+		const id = c.req.param("id");
+		const { role_id } = await c.req.json();
+
+		const team = await TeamService.getTeam(id);
+		if (team.org_id !== org_id) {
+			return c.json({ error: "Team does not belong to your organization." }, 403);
+		}
+
+		const result = await TeamService.assignRole(id, role_id);
+
+		await AuditLogService.notifyAuditSystem({
+			action: "team_role_assigned",
+			org_id,
+			user_id: c.get("user_id"),
+			message: `Role assigned to team ${team.name}.`,
+			details: {
+				team_id: team.id,
+				role_id,
+			},
+		});
+
+		return c.json(result, 200);
+	};
+
+	public static readonly unassignRole = async (c: Context) => {
+		const org_id = c.get("org_id");
+		const id = c.req.param("id");
+		const team = await TeamService.getTeam(id);
+		if (team.org_id !== org_id) {
+			return c.json({ error: "Team does not belong to your organization." }, 403);
+		}
+
+		const result = await TeamService.unassignRole(id);
+
+		await AuditLogService.notifyAuditSystem({
+			action: "team_role_unassigned",
+			org_id,
+			user_id: c.get("user_id"),
+			message: `Role unassigned from team ${team.name}.`,
+			details: {
+				team_id: team.id,
+			},
+		});
+
+		return c.json(result, 200);
+	};
+
+	public static readonly getEffectivePermissions = async (c: Context) => {
+		const org_id = c.get("org_id");
+		const id = c.req.param("id");
+		const team = await TeamService.getTeam(id);
+		if (team.org_id !== org_id) {
+			return c.json({ error: "Team does not belong to your organization." }, 403);
+		}
+
+		const permissions = await AuthorizationService.getTeamOrgPermissions(id, org_id);
+		return c.json(permissions, 200);
 	};
 }

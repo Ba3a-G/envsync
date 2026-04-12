@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 
 	sdk "github.com/EnvSync-Cloud/envsync/sdks/envsync-go-sdk/sdk"
 	sdkclient "github.com/EnvSync-Cloud/envsync/sdks/envsync-go-sdk/sdk/client"
@@ -19,6 +20,8 @@ type GpgKeyRepository interface {
 	Export(ctx context.Context, id string) (responses.GpgExportResponse, error)
 	Sign(ctx context.Context, req requests.SignDataRequest) (responses.GpgSignatureResponse, error)
 	Verify(ctx context.Context, req requests.VerifySignatureRequest) (responses.GpgVerifyResponse, error)
+	Rotate(ctx context.Context, id string, payload map[string]any) (responses.GpgKeyResponse, error)
+	ExtendExpiry(ctx context.Context, id string, expiresInDays int) (responses.GpgKeyResponse, error)
 }
 
 type gpgKeyRepo struct {
@@ -163,6 +166,40 @@ func (r *gpgKeyRepo) Verify(ctx context.Context, req requests.VerifySignatureReq
 	}, nil
 }
 
+func (r *gpgKeyRepo) Rotate(ctx context.Context, id string, payload map[string]any) (responses.GpgKeyResponse, error) {
+	client := createHTTPClient()
+	var result responses.GpgKeyResponse
+	resp, err := client.R().
+		SetContext(ctx).
+		SetBody(payload).
+		SetResult(&result).
+		Post(fmt.Sprintf("/api/gpg_key/%s/rotate", id))
+	if err != nil {
+		return responses.GpgKeyResponse{}, err
+	}
+	if resp.IsError() {
+		return responses.GpgKeyResponse{}, fmt.Errorf("rotate gpg key failed: %s", resp.String())
+	}
+	return result, nil
+}
+
+func (r *gpgKeyRepo) ExtendExpiry(ctx context.Context, id string, expiresInDays int) (responses.GpgKeyResponse, error) {
+	client := createHTTPClient()
+	var result responses.GpgKeyResponse
+	resp, err := client.R().
+		SetContext(ctx).
+		SetBody(map[string]any{"expires_in_days": expiresInDays}).
+		SetResult(&result).
+		Post(fmt.Sprintf("/api/gpg_key/%s/extend-expiry", id))
+	if err != nil {
+		return responses.GpgKeyResponse{}, err
+	}
+	if resp.IsError() {
+		return responses.GpgKeyResponse{}, fmt.Errorf("extend gpg key expiry failed: %s", resp.String())
+	}
+	return result, nil
+}
+
 func sdkGpgKeyToResponse(k *sdk.GpgKeyResponse) responses.GpgKeyResponse {
 	var keySize *int
 	if k.KeySize != nil {
@@ -180,6 +217,7 @@ func sdkGpgKeyToResponse(k *sdk.GpgKeyResponse) responses.GpgKeyResponse {
 		KeySize:     keySize,
 		UsageFlags:  k.UsageFlags,
 		TrustLevel:  k.TrustLevel,
+		Status:      "",
 		ExpiresAt:   k.ExpiresAt,
 		RevokedAt:   k.RevokedAt,
 		IsDefault:   k.IsDefault,
@@ -205,6 +243,7 @@ func sdkGpgKeyDetailToResponse(k *sdk.GpgKeyDetailResponse) responses.GpgKeyResp
 		KeySize:     keySize,
 		UsageFlags:  k.UsageFlags,
 		TrustLevel:  k.TrustLevel,
+		Status:      "",
 		ExpiresAt:   k.ExpiresAt,
 		RevokedAt:   k.RevokedAt,
 		IsDefault:   k.IsDefault,

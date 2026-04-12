@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { MutationOptions, sdk } from "./base";
+import { apiRequest, MutationOptions, sdk } from "./base";
 import { API_KEYS } from "../constants";
 import { useInvalidateQueries } from "@/hooks/useApi";
 import type {
@@ -172,6 +172,52 @@ const useVerifySignature = ({
   });
 };
 
+const useRotateGpgKey = ({
+  onSuccess,
+  onError,
+}: MutationOptions<GpgKeyResponse, { id: string; payload: Record<string, unknown> }> = {}) => {
+  const { invalidateGpgKeys } = useInvalidateQueries();
+
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: Record<string, unknown> }) =>
+      apiRequest<GpgKeyResponse>(`/api/gpg_key/${id}/rotate`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: (data, variables) => {
+      onSuccess?.({ data, variables });
+      invalidateGpgKeys();
+    },
+    onError: (error, variables) => {
+      console.error("Failed to rotate GPG key:", error);
+      onError?.({ error: error as Error, variables });
+    },
+  });
+};
+
+const useExtendGpgKeyExpiry = ({
+  onSuccess,
+  onError,
+}: MutationOptions<GpgKeyResponse, { id: string; expires_in_days: number }> = {}) => {
+  const { invalidateGpgKeys } = useInvalidateQueries();
+
+  return useMutation({
+    mutationFn: ({ id, expires_in_days }: { id: string; expires_in_days: number }) =>
+      apiRequest<GpgKeyResponse>(`/api/gpg_key/${id}/extend-expiry`, {
+        method: "POST",
+        body: JSON.stringify({ expires_in_days }),
+      }),
+    onSuccess: (data, variables) => {
+      onSuccess?.({ data, variables });
+      invalidateGpgKeys();
+    },
+    onError: (error, variables) => {
+      console.error("Failed to extend GPG key expiry:", error);
+      onError?.({ error: error as Error, variables });
+    },
+  });
+};
+
 export const gpgKeys = {
   getGpgKeys: useGpgKeys,
   getGpgKey: useGpgKey,
@@ -182,4 +228,6 @@ export const gpgKeys = {
   exportGpgKey: useExportGpgKey,
   signData: useSignData,
   verifySignature: useVerifySignature,
+  rotateGpgKey: useRotateGpgKey,
+  extendExpiry: useExtendGpgKeyExpiry,
 };

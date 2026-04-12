@@ -10,6 +10,8 @@ import {
   XCircle,
   Copy,
   Loader2,
+  RefreshCcw,
+  Clock3,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -116,6 +118,18 @@ const GpgKeys = () => {
     onSuccess: ({ data }) => setVerifyResult(data),
     onError: ({ error }) => toast.error(error.message || "Failed to verify signature"),
   });
+  const rotateKey = api.gpgKeys.rotateGpgKey({
+    onSuccess: () => {
+      toast.success("GPG key rotated");
+    },
+    onError: ({ error }) => toast.error(error.message || "Failed to rotate key"),
+  });
+  const extendExpiry = api.gpgKeys.extendExpiry({
+    onSuccess: () => {
+      toast.success("Expiry extended");
+    },
+    onError: ({ error }) => toast.error(error.message || "Failed to extend expiry"),
+  });
 
   const handleGenerate = useCallback(() => {
     if (!genForm.name || !genForm.email) return;
@@ -157,9 +171,13 @@ const GpgKeys = () => {
   };
 
   const getStatusBadge = (key: GpgKey) => {
-    if (key.revoked_at) return <Badge variant="destructive">Revoked</Badge>;
+    const lifecycle = (key as GpgKey & { status?: string }).status;
+    if (lifecycle === "superseded") return <Badge className="bg-blue-600">Superseded</Badge>;
+    if (key.revoked_at || lifecycle === "revoked") return <Badge variant="destructive">Revoked</Badge>;
     if (key.expires_at && new Date(key.expires_at) < new Date())
       return <Badge className="bg-yellow-600">Expired</Badge>;
+    if (key.expires_at && new Date(key.expires_at).getTime() - Date.now() < 30 * 24 * 60 * 60 * 1000)
+      return <Badge className="bg-amber-600">Expiring</Badge>;
     return <Badge className="bg-violet-600">Active</Badge>;
   };
 
@@ -495,6 +513,33 @@ const GpgKeys = () => {
                           >
                             <Copy className="w-4 h-4" />
                           </Button>
+                          {!key.revoked_at && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-blue-400 hover:text-blue-300"
+                              onClick={() =>
+                                rotateKey.mutate({
+                                  id: key.id,
+                                  payload: { expires_in_days: 365, set_new_default: true },
+                                })
+                              }
+                              title="Rotate key"
+                            >
+                              <RefreshCcw className="w-4 h-4" />
+                            </Button>
+                          )}
+                          {!key.revoked_at && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-cyan-400 hover:text-cyan-300"
+                              onClick={() => extendExpiry.mutate({ id: key.id, expires_in_days: 90 })}
+                              title="Extend expiry"
+                            >
+                              <Clock3 className="w-4 h-4" />
+                            </Button>
+                          )}
                           {!key.revoked_at && (
                             <Button
                               variant="ghost"
