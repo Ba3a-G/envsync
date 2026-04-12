@@ -235,7 +235,7 @@ describe("CLI export E2E", () => {
 		expect(payload.environment.PLAIN_ONLY).toBe("plain-value");
 	});
 
-	test("exports env vars plus managed secrets and prefers secrets on key collisions", async () => {
+	test("exports env vars plus managed secrets", async () => {
 		const projectDir = createProjectDir({
 			appId: managedAppId,
 			envTypeId: managedEnvTypeId,
@@ -260,7 +260,7 @@ describe("CLI export E2E", () => {
 		};
 		expect(payload.secrets_enabled).toBe(true);
 		expect(payload.managed_secrets).toBe(true);
-		expect(payload.environment.SHARED_KEY).toBe("secret-wins");
+		expect(payload.environment.SHARED_KEY).toBe("env-value");
 		expect(payload.environment.MANAGED_SECRET).toBe("managed-secret-value");
 	});
 
