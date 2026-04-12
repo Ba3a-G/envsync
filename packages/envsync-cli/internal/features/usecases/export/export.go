@@ -71,10 +71,6 @@ func (uc *exportUseCase) Execute(ctx context.Context, opts ExportOptions) (Expor
 		managedSecrets = false
 	}
 
-	if secretsEnabled && !managedSecrets && opts.PrivateKeyFile == "" {
-		return ExportResult{}, errors.New("private-key-file is required when secrets are enabled and not managed")
-	}
-
 	syncService := services.NewSyncServiceWithConfig(domain.SyncConfig{
 		AppID:     appID,
 		EnvTypeID: envType.ID,
@@ -91,10 +87,11 @@ func (uc *exportUseCase) Execute(ctx context.Context, opts ExportOptions) (Expor
 	}
 
 	if secretsEnabled {
-		secrets, err := uc.resolveSecrets(ctx, appID, envType.ID, managedSecrets, opts.PrivateKeyFile)
+		secrets, resolvedManagedSecrets, err := uc.resolveSecretsForExport(ctx, app, envType.ID, opts)
 		if err != nil {
 			return ExportResult{}, err
 		}
+		managedSecrets = resolvedManagedSecrets
 
 		for key, value := range secrets {
 			values[key] = value
@@ -110,6 +107,61 @@ func (uc *exportUseCase) Execute(ctx context.Context, opts ExportOptions) (Expor
 		ManagedSecrets:      managedSecrets,
 		Environment:         values,
 	}, nil
+}
+
+func (uc *exportUseCase) resolveSecretsForExport(
+	ctx context.Context,
+	app domain.Application,
+	envTypeID string,
+	opts ExportOptions,
+) (map[string]string, bool, error) {
+	mode := strings.ToLower(strings.TrimSpace(firstNonEmpty(opts.IsSecretManaged, "auto")))
+
+	switch mode {
+	case "true":
+		secrets, err := uc.resolveSecrets(ctx, app.ID, envTypeID, true, "")
+		return secrets, true, err
+	case "false":
+		if opts.PrivateKeyFile == "" {
+			return nil, false, errors.New("private-key-file is required when secrets are enabled and not managed")
+		}
+		secrets, err := uc.resolveSecrets(ctx, app.ID, envTypeID, false, opts.PrivateKeyFile)
+		return secrets, false, err
+	default:
+		if app.IsManagedSecret {
+			secrets, err := uc.resolveSecrets(ctx, app.ID, envTypeID, true, "")
+			if err == nil {
+				return secrets, true, nil
+			}
+			if opts.PrivateKeyFile == "" {
+				return nil, true, err
+			}
+		}
+
+		if opts.PrivateKeyFile != "" {
+			secrets, err := uc.resolveSecrets(ctx, app.ID, envTypeID, false, opts.PrivateKeyFile)
+			if err == nil {
+				return secrets, false, nil
+			}
+			if !app.IsManagedSecret {
+				if fallbackSecrets, fallbackErr := uc.resolveSecrets(ctx, app.ID, envTypeID, true, ""); fallbackErr == nil {
+					return fallbackSecrets, true, nil
+				}
+			}
+			return nil, false, err
+		}
+
+		// Auto mode fallback: if metadata says self-managed but the app is actually
+		// server-managed, prefer a successful managed reveal over a hard failure.
+		if !app.IsManagedSecret {
+			secrets, err := uc.resolveSecrets(ctx, app.ID, envTypeID, true, "")
+			if err == nil {
+				return secrets, true, nil
+			}
+		}
+
+		return nil, false, errors.New("private-key-file is required when secrets are enabled and not managed")
+	}
 }
 
 func (uc *exportUseCase) validateOptions(opts ExportOptions) error {
