@@ -169,8 +169,9 @@ func (o *OrgResponse) String() string {
 }
 
 type UpdateOrgRequest struct {
-	LogoUrl *string `json:"logo_url,omitempty" url:"-"`
-	Website *string `json:"website,omitempty" url:"-"`
-	Name    *string `json:"name,omitempty" url:"-"`
-	Slug    *string `json:"slug,omitempty" url:"-"`
+	LogoUrl      *string `json:"logo_url,omitempty" url:"-"`
+	ContactEmail *string `json:"contact_email,omitempty" url:"-"`
+	Website      *string `json:"website,omitempty" url:"-"`
+	Name         *string `json:"name,omitempty" url:"-"`
+	Slug         *string `json:"slug,omitempty" url:"-"`
 }

@@ -2,7 +2,9 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-export type ErrorResponse = {
-    error: string;
+export type RotateCertRequest = {
+    description?: string;
+    revoke_previous?: boolean;
+    reason?: number;
 };
 

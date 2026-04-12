@@ -2,7 +2,8 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-export type ErrorResponse = {
-    error: string;
+export type LogoutUrlResponse = {
+    message: string;
+    logoutUrl: string;
 };
 

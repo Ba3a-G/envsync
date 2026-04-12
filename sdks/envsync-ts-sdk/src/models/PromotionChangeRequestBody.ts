@@ -2,10 +2,11 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-export type SecretHistoryRequest = {
+export type PromotionChangeRequestBody = {
     app_id: string;
-    env_type_id: string;
-    page?: number;
-    per_page?: number;
+    source_env_type_id: string;
+    target_env_type_id: string;
+    title: string;
+    message: string;
 };
 

@@ -8,6 +8,10 @@ import (
 	internal "github.com/EnvSync-Cloud/envsync/sdks/envsync-go-sdk/sdk/internal"
 )
 
+type ExtendGpgKeyExpiryRequest struct {
+	ExpiresInDays int `json:"expires_in_days" url:"-"`
+}
+
 type GenerateGpgKeyRequest struct {
 	Name          string                                `json:"name" url:"-"`
 	Email         string                                `json:"email" url:"-"`
@@ -27,6 +31,16 @@ type ImportGpgKeyRequest struct {
 
 type RevokeGpgKeyRequest struct {
 	Reason *string `json:"reason,omitempty" url:"-"`
+}
+
+type RotateGpgKeyRequest struct {
+	Name           *string                       `json:"name,omitempty" url:"-"`
+	Email          *string                       `json:"email,omitempty" url:"-"`
+	Algorithm      *RotateGpgKeyRequestAlgorithm `json:"algorithm,omitempty" url:"-"`
+	KeySize        *int                          `json:"key_size,omitempty" url:"-"`
+	ExpiresInDays  *int                          `json:"expires_in_days,omitempty" url:"-"`
+	RevokePrevious *bool                         `json:"revoke_previous,omitempty" url:"-"`
+	SetNewDefault  *bool                         `json:"set_new_default,omitempty" url:"-"`
 }
 
 type SignDataRequest struct {
@@ -91,24 +105,26 @@ func (e *ExportKeyResponse) String() string {
 }
 
 type GpgKeyDetailResponse struct {
-	Id               string   `json:"id" url:"id"`
-	OrgId            string   `json:"org_id" url:"org_id"`
-	UserId           string   `json:"user_id" url:"user_id"`
-	Name             string   `json:"name" url:"name"`
-	Email            string   `json:"email" url:"email"`
-	Fingerprint      string   `json:"fingerprint" url:"fingerprint"`
-	KeyId            string   `json:"key_id" url:"key_id"`
-	Algorithm        string   `json:"algorithm" url:"algorithm"`
-	KeySize          *float64 `json:"key_size,omitempty" url:"key_size,omitempty"`
-	UsageFlags       []string `json:"usage_flags" url:"usage_flags"`
-	TrustLevel       string   `json:"trust_level" url:"trust_level"`
-	ExpiresAt        *string  `json:"expires_at,omitempty" url:"expires_at,omitempty"`
-	RevokedAt        *string  `json:"revoked_at,omitempty" url:"revoked_at,omitempty"`
-	IsDefault        bool     `json:"is_default" url:"is_default"`
-	CreatedAt        string   `json:"created_at" url:"created_at"`
-	UpdatedAt        string   `json:"updated_at" url:"updated_at"`
-	PublicKey        string   `json:"public_key" url:"public_key"`
-	RevocationReason *string  `json:"revocation_reason,omitempty" url:"revocation_reason,omitempty"`
+	Id                 string   `json:"id" url:"id"`
+	OrgId              string   `json:"org_id" url:"org_id"`
+	UserId             string   `json:"user_id" url:"user_id"`
+	Name               string   `json:"name" url:"name"`
+	Email              string   `json:"email" url:"email"`
+	Fingerprint        string   `json:"fingerprint" url:"fingerprint"`
+	KeyId              string   `json:"key_id" url:"key_id"`
+	Algorithm          string   `json:"algorithm" url:"algorithm"`
+	KeySize            *float64 `json:"key_size,omitempty" url:"key_size,omitempty"`
+	UsageFlags         []string `json:"usage_flags" url:"usage_flags"`
+	TrustLevel         string   `json:"trust_level" url:"trust_level"`
+	Status             string   `json:"status" url:"status"`
+	ExpiresAt          *string  `json:"expires_at,omitempty" url:"expires_at,omitempty"`
+	RevokedAt          *string  `json:"revoked_at,omitempty" url:"revoked_at,omitempty"`
+	SupersedesGpgKeyId *string  `json:"supersedes_gpg_key_id,omitempty" url:"supersedes_gpg_key_id,omitempty"`
+	IsDefault          bool     `json:"is_default" url:"is_default"`
+	CreatedAt          string   `json:"created_at" url:"created_at"`
+	UpdatedAt          string   `json:"updated_at" url:"updated_at"`
+	PublicKey          string   `json:"public_key" url:"public_key"`
+	RevocationReason   *string  `json:"revocation_reason,omitempty" url:"revocation_reason,omitempty"`
 
 	extraProperties map[string]interface{}
 	rawJSON         json.RawMessage
@@ -191,6 +207,13 @@ func (g *GpgKeyDetailResponse) GetTrustLevel() string {
 	return g.TrustLevel
 }
 
+func (g *GpgKeyDetailResponse) GetStatus() string {
+	if g == nil {
+		return ""
+	}
+	return g.Status
+}
+
 func (g *GpgKeyDetailResponse) GetExpiresAt() *string {
 	if g == nil {
 		return nil
@@ -203,6 +226,13 @@ func (g *GpgKeyDetailResponse) GetRevokedAt() *string {
 		return nil
 	}
 	return g.RevokedAt
+}
+
+func (g *GpgKeyDetailResponse) GetSupersedesGpgKeyId() *string {
+	if g == nil {
+		return nil
+	}
+	return g.SupersedesGpgKeyId
 }
 
 func (g *GpgKeyDetailResponse) GetIsDefault() bool {
@@ -273,22 +303,24 @@ func (g *GpgKeyDetailResponse) String() string {
 }
 
 type GpgKeyResponse struct {
-	Id          string   `json:"id" url:"id"`
-	OrgId       string   `json:"org_id" url:"org_id"`
-	UserId      string   `json:"user_id" url:"user_id"`
-	Name        string   `json:"name" url:"name"`
-	Email       string   `json:"email" url:"email"`
-	Fingerprint string   `json:"fingerprint" url:"fingerprint"`
-	KeyId       string   `json:"key_id" url:"key_id"`
-	Algorithm   string   `json:"algorithm" url:"algorithm"`
-	KeySize     *float64 `json:"key_size,omitempty" url:"key_size,omitempty"`
-	UsageFlags  []string `json:"usage_flags" url:"usage_flags"`
-	TrustLevel  string   `json:"trust_level" url:"trust_level"`
-	ExpiresAt   *string  `json:"expires_at,omitempty" url:"expires_at,omitempty"`
-	RevokedAt   *string  `json:"revoked_at,omitempty" url:"revoked_at,omitempty"`
-	IsDefault   bool     `json:"is_default" url:"is_default"`
-	CreatedAt   string   `json:"created_at" url:"created_at"`
-	UpdatedAt   string   `json:"updated_at" url:"updated_at"`
+	Id                 string   `json:"id" url:"id"`
+	OrgId              string   `json:"org_id" url:"org_id"`
+	UserId             string   `json:"user_id" url:"user_id"`
+	Name               string   `json:"name" url:"name"`
+	Email              string   `json:"email" url:"email"`
+	Fingerprint        string   `json:"fingerprint" url:"fingerprint"`
+	KeyId              string   `json:"key_id" url:"key_id"`
+	Algorithm          string   `json:"algorithm" url:"algorithm"`
+	KeySize            *float64 `json:"key_size,omitempty" url:"key_size,omitempty"`
+	UsageFlags         []string `json:"usage_flags" url:"usage_flags"`
+	TrustLevel         string   `json:"trust_level" url:"trust_level"`
+	Status             string   `json:"status" url:"status"`
+	ExpiresAt          *string  `json:"expires_at,omitempty" url:"expires_at,omitempty"`
+	RevokedAt          *string  `json:"revoked_at,omitempty" url:"revoked_at,omitempty"`
+	SupersedesGpgKeyId *string  `json:"supersedes_gpg_key_id,omitempty" url:"supersedes_gpg_key_id,omitempty"`
+	IsDefault          bool     `json:"is_default" url:"is_default"`
+	CreatedAt          string   `json:"created_at" url:"created_at"`
+	UpdatedAt          string   `json:"updated_at" url:"updated_at"`
 
 	extraProperties map[string]interface{}
 	rawJSON         json.RawMessage
@@ -371,6 +403,13 @@ func (g *GpgKeyResponse) GetTrustLevel() string {
 	return g.TrustLevel
 }
 
+func (g *GpgKeyResponse) GetStatus() string {
+	if g == nil {
+		return ""
+	}
+	return g.Status
+}
+
 func (g *GpgKeyResponse) GetExpiresAt() *string {
 	if g == nil {
 		return nil
@@ -383,6 +422,13 @@ func (g *GpgKeyResponse) GetRevokedAt() *string {
 		return nil
 	}
 	return g.RevokedAt
+}
+
+func (g *GpgKeyResponse) GetSupersedesGpgKeyId() *string {
+	if g == nil {
+		return nil
+	}
+	return g.SupersedesGpgKeyId
 }
 
 func (g *GpgKeyResponse) GetIsDefault() bool {
@@ -615,6 +661,34 @@ func NewGenerateGpgKeyRequestUsageFlagsItemFromString(s string) (GenerateGpgKeyR
 
 func (g GenerateGpgKeyRequestUsageFlagsItem) Ptr() *GenerateGpgKeyRequestUsageFlagsItem {
 	return &g
+}
+
+type RotateGpgKeyRequestAlgorithm string
+
+const (
+	RotateGpgKeyRequestAlgorithmRsa           RotateGpgKeyRequestAlgorithm = "rsa"
+	RotateGpgKeyRequestAlgorithmEccCurve25519 RotateGpgKeyRequestAlgorithm = "ecc-curve25519"
+	RotateGpgKeyRequestAlgorithmEccP256       RotateGpgKeyRequestAlgorithm = "ecc-p256"
+	RotateGpgKeyRequestAlgorithmEccP384       RotateGpgKeyRequestAlgorithm = "ecc-p384"
+)
+
+func NewRotateGpgKeyRequestAlgorithmFromString(s string) (RotateGpgKeyRequestAlgorithm, error) {
+	switch s {
+	case "rsa":
+		return RotateGpgKeyRequestAlgorithmRsa, nil
+	case "ecc-curve25519":
+		return RotateGpgKeyRequestAlgorithmEccCurve25519, nil
+	case "ecc-p256":
+		return RotateGpgKeyRequestAlgorithmEccP256, nil
+	case "ecc-p384":
+		return RotateGpgKeyRequestAlgorithmEccP384, nil
+	}
+	var t RotateGpgKeyRequestAlgorithm
+	return "", fmt.Errorf("%s is not a valid %T", s, t)
+}
+
+func (r RotateGpgKeyRequestAlgorithm) Ptr() *RotateGpgKeyRequestAlgorithm {
+	return &r
 }
 
 type SignDataRequestMode string

@@ -2,7 +2,7 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-export type ErrorResponse = {
-    error: string;
+export type RejectChangeRequestBody = {
+    rejection_reason: string;
 };
 

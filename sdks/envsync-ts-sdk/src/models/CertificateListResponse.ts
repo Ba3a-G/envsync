@@ -13,8 +13,9 @@ export type CertificateListResponse = Array<{
     not_before: string | null;
     not_after: string | null;
     description: string | null;
-    metadata?: Record<string, string> | null;
+    metadata?: any | null;
     revoked_at: string | null;
+    supersedes_certificate_id?: string | null;
     created_at: string;
     updated_at: string;
 }>;

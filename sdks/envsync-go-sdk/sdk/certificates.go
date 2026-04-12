@@ -20,27 +20,39 @@ type IssueMemberCertRequest struct {
 	Metadata    map[string]string `json:"metadata,omitempty" url:"-"`
 }
 
+type RenewCertRequest struct {
+	Description    *string `json:"description,omitempty" url:"-"`
+	RevokePrevious *bool   `json:"revoke_previous,omitempty" url:"-"`
+}
+
 type RevokeCertRequest struct {
 	Reason int `json:"reason" url:"-"`
+}
+
+type RotateCertRequest struct {
+	Description    *string `json:"description,omitempty" url:"-"`
+	RevokePrevious *bool   `json:"revoke_previous,omitempty" url:"-"`
+	Reason         *int    `json:"reason,omitempty" url:"-"`
 }
 
 type CertificateListResponse = []*CertificateListResponseItem
 
 type CertificateListResponseItem struct {
-	Id           string             `json:"id" url:"id"`
-	OrgId        string             `json:"org_id" url:"org_id"`
-	SerialHex    string             `json:"serial_hex" url:"serial_hex"`
-	CertType     string             `json:"cert_type" url:"cert_type"`
-	SubjectCn    string             `json:"subject_cn" url:"subject_cn"`
-	SubjectEmail *string            `json:"subject_email,omitempty" url:"subject_email,omitempty"`
-	Status       string             `json:"status" url:"status"`
-	NotBefore    *string            `json:"not_before,omitempty" url:"not_before,omitempty"`
-	NotAfter     *string            `json:"not_after,omitempty" url:"not_after,omitempty"`
-	Description  *string            `json:"description,omitempty" url:"description,omitempty"`
-	Metadata     map[string]*string `json:"metadata,omitempty" url:"metadata,omitempty"`
-	RevokedAt    *string            `json:"revoked_at,omitempty" url:"revoked_at,omitempty"`
-	CreatedAt    string             `json:"created_at" url:"created_at"`
-	UpdatedAt    string             `json:"updated_at" url:"updated_at"`
+	Id                      string             `json:"id" url:"id"`
+	OrgId                   string             `json:"org_id" url:"org_id"`
+	SerialHex               string             `json:"serial_hex" url:"serial_hex"`
+	CertType                string             `json:"cert_type" url:"cert_type"`
+	SubjectCn               string             `json:"subject_cn" url:"subject_cn"`
+	SubjectEmail            *string            `json:"subject_email,omitempty" url:"subject_email,omitempty"`
+	Status                  string             `json:"status" url:"status"`
+	NotBefore               *string            `json:"not_before,omitempty" url:"not_before,omitempty"`
+	NotAfter                *string            `json:"not_after,omitempty" url:"not_after,omitempty"`
+	Description             *string            `json:"description,omitempty" url:"description,omitempty"`
+	Metadata                map[string]*string `json:"metadata,omitempty" url:"metadata,omitempty"`
+	RevokedAt               *string            `json:"revoked_at,omitempty" url:"revoked_at,omitempty"`
+	SupersedesCertificateId *string            `json:"supersedes_certificate_id,omitempty" url:"supersedes_certificate_id,omitempty"`
+	CreatedAt               string             `json:"created_at" url:"created_at"`
+	UpdatedAt               string             `json:"updated_at" url:"updated_at"`
 
 	extraProperties map[string]interface{}
 	rawJSON         json.RawMessage
@@ -128,6 +140,13 @@ func (c *CertificateListResponseItem) GetRevokedAt() *string {
 		return nil
 	}
 	return c.RevokedAt
+}
+
+func (c *CertificateListResponseItem) GetSupersedesCertificateId() *string {
+	if c == nil {
+		return nil
+	}
+	return c.SupersedesCertificateId
 }
 
 func (c *CertificateListResponseItem) GetCreatedAt() string {

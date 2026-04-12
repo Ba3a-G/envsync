@@ -8,143 +8,65 @@ import (
 	internal "github.com/EnvSync-Cloud/envsync/sdks/envsync-go-sdk/sdk/internal"
 )
 
-type EffectivePermissionsResponse struct {
-	CanView              bool `json:"can_view" url:"can_view"`
-	CanEdit              bool `json:"can_edit" url:"can_edit"`
-	HaveApiAccess        bool `json:"have_api_access" url:"have_api_access"`
-	HaveBillingOptions   bool `json:"have_billing_options" url:"have_billing_options"`
-	HaveWebhookAccess    bool `json:"have_webhook_access" url:"have_webhook_access"`
-	IsAdmin              bool `json:"is_admin" url:"is_admin"`
-	IsMaster             bool `json:"is_master" url:"is_master"`
-	CanManageRoles       bool `json:"can_manage_roles" url:"can_manage_roles"`
-	CanManageUsers       bool `json:"can_manage_users" url:"can_manage_users"`
-	CanManageApps        bool `json:"can_manage_apps" url:"can_manage_apps"`
-	CanManageApiKeys     bool `json:"can_manage_api_keys" url:"can_manage_api_keys"`
-	CanManageWebhooks    bool `json:"can_manage_webhooks" url:"can_manage_webhooks"`
-	CanViewAuditLogs     bool `json:"can_view_audit_logs" url:"can_view_audit_logs"`
-	CanManageOrgSettings bool `json:"can_manage_org_settings" url:"can_manage_org_settings"`
-	CanManageInvites     bool `json:"can_manage_invites" url:"can_manage_invites"`
+type EffectiveAccessResponse = []*EffectiveAccessResponseItem
+
+type EffectiveAccessResponseItem struct {
+	UserId   string   `json:"user_id" url:"user_id"`
+	Email    string   `json:"email" url:"email"`
+	Relation *string  `json:"relation,omitempty" url:"relation,omitempty"`
+	Source   *string  `json:"source,omitempty" url:"source,omitempty"`
+	Teams    []string `json:"teams" url:"teams"`
 
 	extraProperties map[string]interface{}
 	rawJSON         json.RawMessage
 }
 
-func (e *EffectivePermissionsResponse) GetCanView() bool {
+func (e *EffectiveAccessResponseItem) GetUserId() string {
 	if e == nil {
-		return false
+		return ""
 	}
-	return e.CanView
+	return e.UserId
 }
 
-func (e *EffectivePermissionsResponse) GetCanEdit() bool {
+func (e *EffectiveAccessResponseItem) GetEmail() string {
 	if e == nil {
-		return false
+		return ""
 	}
-	return e.CanEdit
+	return e.Email
 }
 
-func (e *EffectivePermissionsResponse) GetHaveApiAccess() bool {
+func (e *EffectiveAccessResponseItem) GetRelation() *string {
 	if e == nil {
-		return false
+		return nil
 	}
-	return e.HaveApiAccess
+	return e.Relation
 }
 
-func (e *EffectivePermissionsResponse) GetHaveBillingOptions() bool {
+func (e *EffectiveAccessResponseItem) GetSource() *string {
 	if e == nil {
-		return false
+		return nil
 	}
-	return e.HaveBillingOptions
+	return e.Source
 }
 
-func (e *EffectivePermissionsResponse) GetHaveWebhookAccess() bool {
+func (e *EffectiveAccessResponseItem) GetTeams() []string {
 	if e == nil {
-		return false
+		return nil
 	}
-	return e.HaveWebhookAccess
+	return e.Teams
 }
 
-func (e *EffectivePermissionsResponse) GetIsAdmin() bool {
-	if e == nil {
-		return false
-	}
-	return e.IsAdmin
-}
-
-func (e *EffectivePermissionsResponse) GetIsMaster() bool {
-	if e == nil {
-		return false
-	}
-	return e.IsMaster
-}
-
-func (e *EffectivePermissionsResponse) GetCanManageRoles() bool {
-	if e == nil {
-		return false
-	}
-	return e.CanManageRoles
-}
-
-func (e *EffectivePermissionsResponse) GetCanManageUsers() bool {
-	if e == nil {
-		return false
-	}
-	return e.CanManageUsers
-}
-
-func (e *EffectivePermissionsResponse) GetCanManageApps() bool {
-	if e == nil {
-		return false
-	}
-	return e.CanManageApps
-}
-
-func (e *EffectivePermissionsResponse) GetCanManageApiKeys() bool {
-	if e == nil {
-		return false
-	}
-	return e.CanManageApiKeys
-}
-
-func (e *EffectivePermissionsResponse) GetCanManageWebhooks() bool {
-	if e == nil {
-		return false
-	}
-	return e.CanManageWebhooks
-}
-
-func (e *EffectivePermissionsResponse) GetCanViewAuditLogs() bool {
-	if e == nil {
-		return false
-	}
-	return e.CanViewAuditLogs
-}
-
-func (e *EffectivePermissionsResponse) GetCanManageOrgSettings() bool {
-	if e == nil {
-		return false
-	}
-	return e.CanManageOrgSettings
-}
-
-func (e *EffectivePermissionsResponse) GetCanManageInvites() bool {
-	if e == nil {
-		return false
-	}
-	return e.CanManageInvites
-}
-
-func (e *EffectivePermissionsResponse) GetExtraProperties() map[string]interface{} {
+func (e *EffectiveAccessResponseItem) GetExtraProperties() map[string]interface{} {
 	return e.extraProperties
 }
 
-func (e *EffectivePermissionsResponse) UnmarshalJSON(data []byte) error {
-	type unmarshaler EffectivePermissionsResponse
+func (e *EffectiveAccessResponseItem) UnmarshalJSON(data []byte) error {
+	type unmarshaler EffectiveAccessResponseItem
 	var value unmarshaler
 	if err := json.Unmarshal(data, &value); err != nil {
 		return err
 	}
-	*e = EffectivePermissionsResponse(value)
+	*e = EffectiveAccessResponseItem(value)
 	extraProperties, err := internal.ExtractExtraProperties(data, *e)
 	if err != nil {
 		return err
@@ -154,7 +76,7 @@ func (e *EffectivePermissionsResponse) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *EffectivePermissionsResponse) String() string {
+func (e *EffectiveAccessResponseItem) String() string {
 	if len(e.rawJSON) > 0 {
 		if value, err := internal.StringifyJSON(e.rawJSON); err == nil {
 			return value
@@ -272,6 +194,117 @@ func NewGrantAccessRequestSubjectTypeFromString(s string) (GrantAccessRequestSub
 }
 
 func (g GrantAccessRequestSubjectType) Ptr() *GrantAccessRequestSubjectType {
+	return &g
+}
+
+type GrantsListResponse = []*GrantsListResponseItem
+
+type GrantsListResponseItem struct {
+	SubjectId   string                            `json:"subject_id" url:"subject_id"`
+	SubjectType GrantsListResponseItemSubjectType `json:"subject_type" url:"subject_type"`
+	Relation    GrantsListResponseItemRelation    `json:"relation" url:"relation"`
+
+	extraProperties map[string]interface{}
+	rawJSON         json.RawMessage
+}
+
+func (g *GrantsListResponseItem) GetSubjectId() string {
+	if g == nil {
+		return ""
+	}
+	return g.SubjectId
+}
+
+func (g *GrantsListResponseItem) GetSubjectType() GrantsListResponseItemSubjectType {
+	if g == nil {
+		return ""
+	}
+	return g.SubjectType
+}
+
+func (g *GrantsListResponseItem) GetRelation() GrantsListResponseItemRelation {
+	if g == nil {
+		return ""
+	}
+	return g.Relation
+}
+
+func (g *GrantsListResponseItem) GetExtraProperties() map[string]interface{} {
+	return g.extraProperties
+}
+
+func (g *GrantsListResponseItem) UnmarshalJSON(data []byte) error {
+	type unmarshaler GrantsListResponseItem
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*g = GrantsListResponseItem(value)
+	extraProperties, err := internal.ExtractExtraProperties(data, *g)
+	if err != nil {
+		return err
+	}
+	g.extraProperties = extraProperties
+	g.rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (g *GrantsListResponseItem) String() string {
+	if len(g.rawJSON) > 0 {
+		if value, err := internal.StringifyJSON(g.rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := internal.StringifyJSON(g); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", g)
+}
+
+type GrantsListResponseItemRelation string
+
+const (
+	GrantsListResponseItemRelationAdmin  GrantsListResponseItemRelation = "admin"
+	GrantsListResponseItemRelationEditor GrantsListResponseItemRelation = "editor"
+	GrantsListResponseItemRelationViewer GrantsListResponseItemRelation = "viewer"
+)
+
+func NewGrantsListResponseItemRelationFromString(s string) (GrantsListResponseItemRelation, error) {
+	switch s {
+	case "admin":
+		return GrantsListResponseItemRelationAdmin, nil
+	case "editor":
+		return GrantsListResponseItemRelationEditor, nil
+	case "viewer":
+		return GrantsListResponseItemRelationViewer, nil
+	}
+	var t GrantsListResponseItemRelation
+	return "", fmt.Errorf("%s is not a valid %T", s, t)
+}
+
+func (g GrantsListResponseItemRelation) Ptr() *GrantsListResponseItemRelation {
+	return &g
+}
+
+type GrantsListResponseItemSubjectType string
+
+const (
+	GrantsListResponseItemSubjectTypeUser GrantsListResponseItemSubjectType = "user"
+	GrantsListResponseItemSubjectTypeTeam GrantsListResponseItemSubjectType = "team"
+)
+
+func NewGrantsListResponseItemSubjectTypeFromString(s string) (GrantsListResponseItemSubjectType, error) {
+	switch s {
+	case "user":
+		return GrantsListResponseItemSubjectTypeUser, nil
+	case "team":
+		return GrantsListResponseItemSubjectTypeTeam, nil
+	}
+	var t GrantsListResponseItemSubjectType
+	return "", fmt.Errorf("%s is not a valid %T", s, t)
+}
+
+func (g GrantsListResponseItemSubjectType) Ptr() *GrantsListResponseItemSubjectType {
 	return &g
 }
 

@@ -21,6 +21,15 @@ type BatchDeleteEnvsRequest struct {
 	Keys      []string `json:"keys,omitempty" url:"-"`
 }
 
+type ExportEnvRequest struct {
+	AppId           string                           `json:"app_id" url:"-"`
+	EnvTypeId       *string                          `json:"env_type_id,omitempty" url:"-"`
+	EnvType         *string                          `json:"env_type,omitempty" url:"-"`
+	EnableSecrets   *ExportEnvRequestEnableSecrets   `json:"enable_secrets,omitempty" url:"-"`
+	IsSecretManaged *ExportEnvRequestIsSecretManaged `json:"is_secret_managed,omitempty" url:"-"`
+	PrivateKey      *string                          `json:"private_key,omitempty" url:"-"`
+}
+
 type BatchCreateEnvsRequest struct {
 	AppId     string                            `json:"app_id" url:"app_id"`
 	EnvTypeId string                            `json:"env_type_id" url:"env_type_id"`
@@ -349,6 +358,92 @@ func (e *EnvResponse) String() string {
 
 type EnvsResponse = []*EnvResponse
 
+type ExportEnvResponse struct {
+	ResolvedAppId       string            `json:"resolved_app_id" url:"resolved_app_id"`
+	ResolvedEnvTypeId   string            `json:"resolved_env_type_id" url:"resolved_env_type_id"`
+	ResolvedEnvTypeName string            `json:"resolved_env_type_name" url:"resolved_env_type_name"`
+	SecretsEnabled      bool              `json:"secrets_enabled" url:"secrets_enabled"`
+	ManagedSecrets      bool              `json:"managed_secrets" url:"managed_secrets"`
+	Environment         map[string]string `json:"environment" url:"environment"`
+
+	extraProperties map[string]interface{}
+	rawJSON         json.RawMessage
+}
+
+func (e *ExportEnvResponse) GetResolvedAppId() string {
+	if e == nil {
+		return ""
+	}
+	return e.ResolvedAppId
+}
+
+func (e *ExportEnvResponse) GetResolvedEnvTypeId() string {
+	if e == nil {
+		return ""
+	}
+	return e.ResolvedEnvTypeId
+}
+
+func (e *ExportEnvResponse) GetResolvedEnvTypeName() string {
+	if e == nil {
+		return ""
+	}
+	return e.ResolvedEnvTypeName
+}
+
+func (e *ExportEnvResponse) GetSecretsEnabled() bool {
+	if e == nil {
+		return false
+	}
+	return e.SecretsEnabled
+}
+
+func (e *ExportEnvResponse) GetManagedSecrets() bool {
+	if e == nil {
+		return false
+	}
+	return e.ManagedSecrets
+}
+
+func (e *ExportEnvResponse) GetEnvironment() map[string]string {
+	if e == nil {
+		return nil
+	}
+	return e.Environment
+}
+
+func (e *ExportEnvResponse) GetExtraProperties() map[string]interface{} {
+	return e.extraProperties
+}
+
+func (e *ExportEnvResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler ExportEnvResponse
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*e = ExportEnvResponse(value)
+	extraProperties, err := internal.ExtractExtraProperties(data, *e)
+	if err != nil {
+		return err
+	}
+	e.extraProperties = extraProperties
+	e.rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (e *ExportEnvResponse) String() string {
+	if len(e.rawJSON) > 0 {
+		if value, err := internal.StringifyJSON(e.rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := internal.StringifyJSON(e); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", e)
+}
+
 type GetEnvRequest struct {
 	AppId     string `json:"app_id" url:"app_id"`
 	EnvTypeId string `json:"env_type_id" url:"env_type_id"`
@@ -401,6 +496,56 @@ func (g *GetEnvRequest) String() string {
 		return value
 	}
 	return fmt.Sprintf("%#v", g)
+}
+
+type ExportEnvRequestEnableSecrets string
+
+const (
+	ExportEnvRequestEnableSecretsAuto  ExportEnvRequestEnableSecrets = "auto"
+	ExportEnvRequestEnableSecretsTrue  ExportEnvRequestEnableSecrets = "true"
+	ExportEnvRequestEnableSecretsFalse ExportEnvRequestEnableSecrets = "false"
+)
+
+func NewExportEnvRequestEnableSecretsFromString(s string) (ExportEnvRequestEnableSecrets, error) {
+	switch s {
+	case "auto":
+		return ExportEnvRequestEnableSecretsAuto, nil
+	case "true":
+		return ExportEnvRequestEnableSecretsTrue, nil
+	case "false":
+		return ExportEnvRequestEnableSecretsFalse, nil
+	}
+	var t ExportEnvRequestEnableSecrets
+	return "", fmt.Errorf("%s is not a valid %T", s, t)
+}
+
+func (e ExportEnvRequestEnableSecrets) Ptr() *ExportEnvRequestEnableSecrets {
+	return &e
+}
+
+type ExportEnvRequestIsSecretManaged string
+
+const (
+	ExportEnvRequestIsSecretManagedAuto  ExportEnvRequestIsSecretManaged = "auto"
+	ExportEnvRequestIsSecretManagedTrue  ExportEnvRequestIsSecretManaged = "true"
+	ExportEnvRequestIsSecretManagedFalse ExportEnvRequestIsSecretManaged = "false"
+)
+
+func NewExportEnvRequestIsSecretManagedFromString(s string) (ExportEnvRequestIsSecretManaged, error) {
+	switch s {
+	case "auto":
+		return ExportEnvRequestIsSecretManagedAuto, nil
+	case "true":
+		return ExportEnvRequestIsSecretManagedTrue, nil
+	case "false":
+		return ExportEnvRequestIsSecretManagedFalse, nil
+	}
+	var t ExportEnvRequestIsSecretManaged
+	return "", fmt.Errorf("%s is not a valid %T", s, t)
+}
+
+func (e ExportEnvRequestIsSecretManaged) Ptr() *ExportEnvRequestIsSecretManaged {
+	return &e
 }
 
 type UpdateEnvRequest struct {

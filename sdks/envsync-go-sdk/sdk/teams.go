@@ -12,6 +12,10 @@ type AddTeamMemberRequest struct {
 	UserId string `json:"user_id" url:"-"`
 }
 
+type AssignTeamRoleRequest struct {
+	RoleId string `json:"role_id" url:"-"`
+}
+
 type CreateTeamRequest struct {
 	Name        string  `json:"name" url:"-"`
 	Description *string `json:"description,omitempty" url:"-"`
@@ -24,6 +28,7 @@ type CreateTeamResponse struct {
 	OrgId       string  `json:"org_id" url:"org_id"`
 	Description *string `json:"description,omitempty" url:"description,omitempty"`
 	Color       string  `json:"color" url:"color"`
+	RoleId      *string `json:"role_id,omitempty" url:"role_id,omitempty"`
 	CreatedAt   string  `json:"created_at" url:"created_at"`
 	UpdatedAt   string  `json:"updated_at" url:"updated_at"`
 
@@ -64,6 +69,13 @@ func (c *CreateTeamResponse) GetColor() string {
 		return ""
 	}
 	return c.Color
+}
+
+func (c *CreateTeamResponse) GetRoleId() *string {
+	if c == nil {
+		return nil
+	}
+	return c.RoleId
 }
 
 func (c *CreateTeamResponse) GetCreatedAt() string {
@@ -118,6 +130,7 @@ type GetTeamResponse struct {
 	OrgId       string                        `json:"org_id" url:"org_id"`
 	Description *string                       `json:"description,omitempty" url:"description,omitempty"`
 	Color       string                        `json:"color" url:"color"`
+	RoleId      *string                       `json:"role_id,omitempty" url:"role_id,omitempty"`
 	CreatedAt   string                        `json:"created_at" url:"created_at"`
 	UpdatedAt   string                        `json:"updated_at" url:"updated_at"`
 	Members     []*GetTeamResponseMembersItem `json:"members" url:"members"`
@@ -159,6 +172,13 @@ func (g *GetTeamResponse) GetColor() string {
 		return ""
 	}
 	return g.Color
+}
+
+func (g *GetTeamResponse) GetRoleId() *string {
+	if g == nil {
+		return nil
+	}
+	return g.RoleId
 }
 
 func (g *GetTeamResponse) GetCreatedAt() string {
@@ -308,6 +328,7 @@ type GetTeamsResponseItem struct {
 	OrgId       string  `json:"org_id" url:"org_id"`
 	Description *string `json:"description,omitempty" url:"description,omitempty"`
 	Color       string  `json:"color" url:"color"`
+	RoleId      *string `json:"role_id,omitempty" url:"role_id,omitempty"`
 	CreatedAt   string  `json:"created_at" url:"created_at"`
 	UpdatedAt   string  `json:"updated_at" url:"updated_at"`
 
@@ -348,6 +369,13 @@ func (g *GetTeamsResponseItem) GetColor() string {
 		return ""
 	}
 	return g.Color
+}
+
+func (g *GetTeamsResponseItem) GetRoleId() *string {
+	if g == nil {
+		return nil
+	}
+	return g.RoleId
 }
 
 func (g *GetTeamsResponseItem) GetCreatedAt() string {

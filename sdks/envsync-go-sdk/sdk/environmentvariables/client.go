@@ -31,6 +31,53 @@ func NewClient(opts ...option.RequestOption) *Client {
 	}
 }
 
+// Export environment variables and optionally secrets for an application environment in a single payload.
+func (c *Client) ExportEnvironment(
+	ctx context.Context,
+	request *sdk.ExportEnvRequest,
+	opts ...option.RequestOption,
+) (*sdk.ExportEnvResponse, error) {
+	options := core.NewRequestOptions(opts...)
+	baseURL := internal.ResolveBaseURL(
+		options.BaseURL,
+		c.baseURL,
+		"http://localhost:4000",
+	)
+	endpointURL := baseURL + "/api/env/export"
+	headers := internal.MergeHeaders(
+		c.header.Clone(),
+		options.ToHeader(),
+	)
+	headers.Set("Content-Type", "application/json")
+	errorCodes := internal.ErrorCodes{
+		400: func(apiError *core.APIError) error {
+			return &sdk.BadRequestError{
+				APIError: apiError,
+			}
+		},
+	}
+
+	var response *sdk.ExportEnvResponse
+	if err := c.caller.Call(
+		ctx,
+		&internal.CallParams{
+			URL:             endpointURL,
+			Method:          http.MethodPost,
+			Headers:         headers,
+			MaxAttempts:     options.MaxAttempts,
+			BodyProperties:  options.BodyProperties,
+			QueryParameters: options.QueryParameters,
+			Client:          options.HTTPClient,
+			Request:         request,
+			Response:        &response,
+			ErrorDecoder:    internal.NewErrorDecoder(errorCodes),
+		},
+	); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
 // Retrieve all environment variables for an application and environment type
 func (c *Client) GetEnvs(
 	ctx context.Context,

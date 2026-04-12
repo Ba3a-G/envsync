@@ -3,12 +3,14 @@
 /* tslint:disable */
 /* eslint-disable */
 import type { ExportKeyResponse } from '../models/ExportKeyResponse';
+import type { ExtendGpgKeyExpiryRequest } from '../models/ExtendGpgKeyExpiryRequest';
 import type { GenerateGpgKeyRequest } from '../models/GenerateGpgKeyRequest';
 import type { GpgKeyDetailResponse } from '../models/GpgKeyDetailResponse';
 import type { GpgKeyResponse } from '../models/GpgKeyResponse';
 import type { GpgKeysResponse } from '../models/GpgKeysResponse';
 import type { ImportGpgKeyRequest } from '../models/ImportGpgKeyRequest';
 import type { RevokeGpgKeyRequest } from '../models/RevokeGpgKeyRequest';
+import type { RotateGpgKeyRequest } from '../models/RotateGpgKeyRequest';
 import type { SignatureResponse } from '../models/SignatureResponse';
 import type { SignDataRequest } from '../models/SignDataRequest';
 import type { UpdateTrustLevelRequest } from '../models/UpdateTrustLevelRequest';
@@ -191,6 +193,56 @@ export class GpgKeysService {
         return this.httpRequest.request({
             method: 'POST',
             url: '/api/gpg_key/{id}/revoke',
+            path: {
+                'id': id,
+            },
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                500: `Internal server error`,
+            },
+        });
+    }
+    /**
+     * Rotate GPG Key
+     * Create a replacement GPG key, optionally promote it to default, and supersede the original key.
+     * @param id
+     * @param requestBody
+     * @returns GpgKeyDetailResponse GPG key rotated successfully
+     * @throws ApiError
+     */
+    public rotateGpgKey(
+        id: string,
+        requestBody?: RotateGpgKeyRequest,
+    ): CancelablePromise<GpgKeyDetailResponse> {
+        return this.httpRequest.request({
+            method: 'POST',
+            url: '/api/gpg_key/{id}/rotate',
+            path: {
+                'id': id,
+            },
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                500: `Internal server error`,
+            },
+        });
+    }
+    /**
+     * Extend GPG Key Expiry
+     * Extend the expiry date of an active GPG key without rotating it.
+     * @param id
+     * @param requestBody
+     * @returns GpgKeyDetailResponse GPG key expiry extended successfully
+     * @throws ApiError
+     */
+    public extendGpgKeyExpiry(
+        id: string,
+        requestBody?: ExtendGpgKeyExpiryRequest,
+    ): CancelablePromise<GpgKeyDetailResponse> {
+        return this.httpRequest.request({
+            method: 'POST',
+            url: '/api/gpg_key/{id}/extend-expiry',
             path: {
                 'id': id,
             },

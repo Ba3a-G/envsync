@@ -458,6 +458,108 @@ func (c *Client) RevokeGpgKey(
 	return response, nil
 }
 
+// Create a replacement GPG key, optionally promote it to default, and supersede the original key.
+func (c *Client) RotateGpgKey(
+	ctx context.Context,
+	id string,
+	request *sdk.RotateGpgKeyRequest,
+	opts ...option.RequestOption,
+) (*sdk.GpgKeyDetailResponse, error) {
+	options := core.NewRequestOptions(opts...)
+	baseURL := internal.ResolveBaseURL(
+		options.BaseURL,
+		c.baseURL,
+		"http://localhost:4000",
+	)
+	endpointURL := internal.EncodeURL(
+		baseURL+"/api/gpg_key/%v/rotate",
+		id,
+	)
+	headers := internal.MergeHeaders(
+		c.header.Clone(),
+		options.ToHeader(),
+	)
+	headers.Set("Content-Type", "application/json")
+	errorCodes := internal.ErrorCodes{
+		500: func(apiError *core.APIError) error {
+			return &sdk.InternalServerError{
+				APIError: apiError,
+			}
+		},
+	}
+
+	var response *sdk.GpgKeyDetailResponse
+	if err := c.caller.Call(
+		ctx,
+		&internal.CallParams{
+			URL:             endpointURL,
+			Method:          http.MethodPost,
+			Headers:         headers,
+			MaxAttempts:     options.MaxAttempts,
+			BodyProperties:  options.BodyProperties,
+			QueryParameters: options.QueryParameters,
+			Client:          options.HTTPClient,
+			Request:         request,
+			Response:        &response,
+			ErrorDecoder:    internal.NewErrorDecoder(errorCodes),
+		},
+	); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+// Extend the expiry date of an active GPG key without rotating it.
+func (c *Client) ExtendGpgKeyExpiry(
+	ctx context.Context,
+	id string,
+	request *sdk.ExtendGpgKeyExpiryRequest,
+	opts ...option.RequestOption,
+) (*sdk.GpgKeyDetailResponse, error) {
+	options := core.NewRequestOptions(opts...)
+	baseURL := internal.ResolveBaseURL(
+		options.BaseURL,
+		c.baseURL,
+		"http://localhost:4000",
+	)
+	endpointURL := internal.EncodeURL(
+		baseURL+"/api/gpg_key/%v/extend-expiry",
+		id,
+	)
+	headers := internal.MergeHeaders(
+		c.header.Clone(),
+		options.ToHeader(),
+	)
+	headers.Set("Content-Type", "application/json")
+	errorCodes := internal.ErrorCodes{
+		500: func(apiError *core.APIError) error {
+			return &sdk.InternalServerError{
+				APIError: apiError,
+			}
+		},
+	}
+
+	var response *sdk.GpgKeyDetailResponse
+	if err := c.caller.Call(
+		ctx,
+		&internal.CallParams{
+			URL:             endpointURL,
+			Method:          http.MethodPost,
+			Headers:         headers,
+			MaxAttempts:     options.MaxAttempts,
+			BodyProperties:  options.BodyProperties,
+			QueryParameters: options.QueryParameters,
+			Client:          options.HTTPClient,
+			Request:         request,
+			Response:        &response,
+			ErrorDecoder:    internal.NewErrorDecoder(errorCodes),
+		},
+	); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
 // Update the trust level of a GPG key
 func (c *Client) UpdateGpgKeyTrustLevel(
 	ctx context.Context,

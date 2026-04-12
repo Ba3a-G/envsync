@@ -11,6 +11,9 @@ export type RoleResponse = {
     have_api_access: boolean;
     have_billing_options: boolean;
     have_webhook_access: boolean;
+    have_gpg_access: boolean;
+    have_cert_access: boolean;
+    have_audit_access: boolean;
     color?: string;
     is_admin: boolean;
     is_master: boolean;

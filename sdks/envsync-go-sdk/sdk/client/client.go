@@ -9,6 +9,7 @@ import (
 	auditlogs "github.com/EnvSync-Cloud/envsync/sdks/envsync-go-sdk/sdk/auditlogs"
 	authentication "github.com/EnvSync-Cloud/envsync/sdks/envsync-go-sdk/sdk/authentication"
 	certificates "github.com/EnvSync-Cloud/envsync/sdks/envsync-go-sdk/sdk/certificates"
+	changerequests "github.com/EnvSync-Cloud/envsync/sdks/envsync-go-sdk/sdk/changerequests"
 	core "github.com/EnvSync-Cloud/envsync/sdks/envsync-go-sdk/sdk/core"
 	environmenttypes "github.com/EnvSync-Cloud/envsync/sdks/envsync-go-sdk/sdk/environmenttypes"
 	environmentvariables "github.com/EnvSync-Cloud/envsync/sdks/envsync-go-sdk/sdk/environmentvariables"
@@ -58,6 +59,7 @@ type Client struct {
 	Webhooks                        *webhooks.Client
 	GpgKeys                         *gpgkeys.Client
 	Certificates                    *certificates.Client
+	ChangeRequests                  *changerequests.Client
 }
 
 func NewClient(opts ...option.RequestOption) *Client {
@@ -93,5 +95,6 @@ func NewClient(opts ...option.RequestOption) *Client {
 		Webhooks:                        webhooks.NewClient(opts...),
 		GpgKeys:                         gpgkeys.NewClient(opts...),
 		Certificates:                    certificates.NewClient(opts...),
+		ChangeRequests:                  changerequests.NewClient(opts...),
 	}
 }
