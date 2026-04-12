@@ -29,6 +29,7 @@ type CommandRegistry struct {
 	configHandler      *handlers.ConfigHandler
 	environmentHandler *handlers.EnvironmentHandler
 	syncHandler        *handlers.SyncHandler
+	exportHandler      *handlers.ExportHandler
 	initHandler        *handlers.InitHandler
 	runHandler         *handlers.RunHandler
 	genPEMKeyHandler   *handlers.GenPEMKeyHandler
@@ -42,6 +43,7 @@ func NewCommandRegistry(
 	configHandler *handlers.ConfigHandler,
 	environmentHandler *handlers.EnvironmentHandler,
 	syncHandler *handlers.SyncHandler,
+	exportHandler *handlers.ExportHandler,
 	initHandler *handlers.InitHandler,
 	runHandler *handlers.RunHandler,
 	genPEMKeyHandler *handlers.GenPEMKeyHandler,
@@ -54,6 +56,7 @@ func NewCommandRegistry(
 		configHandler:      configHandler,
 		environmentHandler: environmentHandler,
 		syncHandler:        syncHandler,
+		exportHandler:      exportHandler,
 		initHandler:        initHandler,
 		runHandler:         runHandler,
 		genPEMKeyHandler:   genPEMKeyHandler,
@@ -86,6 +89,7 @@ func (r *CommandRegistry) RegisterCLI() *cli.Command {
 			EnvironmentCommands(r.environmentHandler),
 			PullCommand(r.syncHandler),
 			PushCommand(r.syncHandler),
+			ExportCommand(r.exportHandler),
 			InitCommand(r.initHandler),
 			RunCommand(r.runHandler),
 			GenereatePrivateKeyCommand(r.genPEMKeyHandler),

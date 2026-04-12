@@ -69,12 +69,12 @@ func (i *injectSecretUseCase) getAllSecrets(ctx context.Context, appID, envTypeI
 }
 
 func (i *injectSecretUseCase) decryptSecretsLocally(secrets []domain.Secret, privateKeyPEM string) ([]domain.Secret, error) {
-	for _, secret := range secrets {
-		decryptedValue, err := utils.SmartDecrypt(secret.Value, privateKeyPEM)
+	for idx := range secrets {
+		decryptedValue, err := utils.SmartDecrypt(secrets[idx].Value, privateKeyPEM)
 		if err != nil {
 			return nil, err
 		}
-		secret.Value = decryptedValue
+		secrets[idx].Value = decryptedValue
 	}
 	return secrets, nil
 }

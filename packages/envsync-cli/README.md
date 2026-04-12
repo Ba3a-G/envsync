@@ -10,8 +10,9 @@ The command line interface for [EnvSync Cloud](https://envsync.cloud) - seamless
 EnvSync keeps your `.env` files, configuration secrets, and environment variables perfectly synchronized across development, staging, and production environments.
 
 **Key Benefits:**
+
 - 🔒 **Secure** - End-to-end encryption for sensitive data
-- ⚡ **Fast** - Real-time synchronization across environments  
+- ⚡ **Fast** - Real-time synchronization across environments
 - 🌐 **Web-first** - Built for modern web development workflows
 - 🔧 **Developer-friendly** - Simple CLI commands for terminal lovers
 
@@ -29,7 +30,7 @@ EnvSync keeps your `.env` files, configuration secrets, and environment variable
 Download the latest release binary for your platform from the [Releases page](https://github.com/EnvSync-Cloud/envsync/packages/envsync-cli/releases/) and follow these steps:
 
 1. Download the binary for your OS (Linux, macOS, Windows)
-2. Make it executable (if necessary)   
+2. Make it executable (if necessary)
    ```bash
    chmod +x envsync
    ```
@@ -38,7 +39,7 @@ Download the latest release binary for your platform from the [Releases page](ht
    sudo mv envsync /usr/local/bin/
    ```
 4. Verify the installation:
-   ```bash  
+   ```bash
    envsync --help
    ```
 
@@ -88,6 +89,9 @@ envsync push
 
 # Pull environment variables from remote
 envsync pull
+
+# Export environment variables and secrets for CI
+envsync export --app-id "app-id" --env-type "production" --format json
 ```
 
 ### Application Management
@@ -163,6 +167,7 @@ USAGE:
 COMMANDS:
    init      Generate a new configuration file
    run       Run with project command
+   export    Export environment variables and secrets for CI workflows
    app       Interact with your apps.
    env-type  Manage environment types.
    config    Manage configuration settings.
@@ -216,6 +221,7 @@ envsync run -c "npm test"
 ```
 
 This method is preferred for CI/CD because:
+
 - No interactive login required
 - More secure for automated environments
 - Easier to manage in CI/CD secret management systems
@@ -223,26 +229,31 @@ This method is preferred for CI/CD because:
 ## 🚀 Quick Start Workflow
 
 ### 1. **Login to EnvSync Cloud**
+
 ```bash
 envsync login
 ```
 
 ### 2. **Initialize Your Project**
+
 ```bash
 envsync init --app "my-project" --env-type "development"
 ```
 
 ### 3. **Push Your Local Environment**
+
 ```bash
 envsync push
 ```
 
 ### 4. **Pull Environment to Another Machine**
+
 ```bash
 envsync pull
 ```
 
 ### 5. **Run Your Application**
+
 ```bash
 envsync run --command "npm start"
 ```
@@ -274,6 +285,7 @@ envsync-cli/
 ## 🔨 Development
 
 ### Prerequisites
+
 - [Go](https://golang.org/) 1.21 or higher
 - Make (for using Makefile commands)
 
@@ -336,7 +348,7 @@ make build BACKEND_URL=https://your-custom-api.com/api
 
 ## 🤝 Contributing
 
-We're building the future of environment management! 
+We're building the future of environment management!
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)

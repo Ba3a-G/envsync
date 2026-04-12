@@ -16,6 +16,7 @@ import (
 
 type SyncService interface {
 	ReadConfigData() (domain.SyncConfig, error)
+	ReadConfigDataFromPath(string) (domain.SyncConfig, error)
 	WriteConfigData(cfg domain.SyncConfig) error
 	SyncConfigExist() error
 	ReadLocalEnv() (map[string]string, error)
@@ -34,10 +35,12 @@ func NewSyncService() SyncService {
 	var projCfg domain.SyncConfig
 	_ = readTOMLConfig(&projCfg)
 
-	r := repository.NewEnvVariableRepository(projCfg.AppID, projCfg.EnvTypeID)
+	return NewSyncServiceWithConfig(projCfg)
+}
 
+func NewSyncServiceWithConfig(projCfg domain.SyncConfig) SyncService {
 	return &sync{
-		repo:       r,
+		repo:       repository.NewEnvVariableRepository(projCfg.AppID, projCfg.EnvTypeID),
 		projectCfg: projCfg,
 	}
 }
@@ -50,9 +53,13 @@ func (s *sync) SyncConfigExist() error {
 }
 
 func (s *sync) ReadConfigData() (domain.SyncConfig, error) {
+	return s.ReadConfigDataFromPath(constants.DefaultProjectConfig)
+}
+
+func (s *sync) ReadConfigDataFromPath(configPath string) (domain.SyncConfig, error) {
 	var cfg domain.SyncConfig
 
-	if err := readTOMLConfig(&cfg); err != nil {
+	if err := readTOMLConfigFromPath(configPath, &cfg); err != nil {
 		return domain.SyncConfig{}, err
 	}
 
@@ -152,7 +159,15 @@ func (s *sync) WriteRemoteEnv(ctx context.Context, env *domain.EnvironmentSync) 
 }
 
 func readTOMLConfig(c *domain.SyncConfig) error {
-	if _, err := toml.DecodeFile(constants.DefaultProjectConfig, &c); err != nil {
+	return readTOMLConfigFromPath(constants.DefaultProjectConfig, c)
+}
+
+func readTOMLConfigFromPath(path string, c *domain.SyncConfig) error {
+	if path == "" {
+		path = constants.DefaultProjectConfig
+	}
+
+	if _, err := toml.DecodeFile(path, c); err != nil {
 		return err
 	}
 
