@@ -46,7 +46,9 @@ func New() AppConfig {
 			panic(err)
 		}
 
-		if cfg.BackendURL == "" {
+		if envBackendURL := os.Getenv("ENVSYNC_API_URL"); envBackendURL != "" {
+			cfg.BackendURL = envBackendURL
+		} else if cfg.BackendURL == "" {
 			cfg.BackendURL = backendURL
 		}
 	})
