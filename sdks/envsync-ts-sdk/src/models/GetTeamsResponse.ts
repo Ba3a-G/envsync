@@ -8,6 +8,7 @@ export type GetTeamsResponse = Array<{
     org_id: string;
     description: string | null;
     color: string;
+    role_id?: string | null;
     created_at: string;
     updated_at: string;
 }>;

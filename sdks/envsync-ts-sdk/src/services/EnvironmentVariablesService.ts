@@ -9,12 +9,34 @@ import type { CreateEnvRequest } from '../models/CreateEnvRequest';
 import type { DeleteEnvRequest } from '../models/DeleteEnvRequest';
 import type { EnvResponse } from '../models/EnvResponse';
 import type { EnvsResponse } from '../models/EnvsResponse';
+import type { ExportEnvRequest } from '../models/ExportEnvRequest';
+import type { ExportEnvResponse } from '../models/ExportEnvResponse';
 import type { GetEnvRequest } from '../models/GetEnvRequest';
 import type { UpdateEnvRequest } from '../models/UpdateEnvRequest';
 import type { CancelablePromise } from '../core/CancelablePromise';
 import type { BaseHttpRequest } from '../core/BaseHttpRequest';
 export class EnvironmentVariablesService {
     constructor(public readonly httpRequest: BaseHttpRequest) {}
+    /**
+     * Export Environment
+     * Export environment variables and optionally secrets for an application environment in a single payload.
+     * @param requestBody
+     * @returns ExportEnvResponse Environment exported successfully
+     * @throws ApiError
+     */
+    public exportEnvironment(
+        requestBody?: ExportEnvRequest,
+    ): CancelablePromise<ExportEnvResponse> {
+        return this.httpRequest.request({
+            method: 'POST',
+            url: '/api/env/export',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                400: `Invalid export request`,
+            },
+        });
+    }
     /**
      * Get Environment Variables
      * Retrieve all environment variables for an application and environment type

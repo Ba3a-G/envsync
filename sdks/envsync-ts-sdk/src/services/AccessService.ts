@@ -4,6 +4,7 @@
 /* eslint-disable */
 import type { CallbackResponse } from '../models/CallbackResponse';
 import type { LoginUrlResponse } from '../models/LoginUrlResponse';
+import type { LogoutUrlResponse } from '../models/LogoutUrlResponse';
 import type { CancelablePromise } from '../core/CancelablePromise';
 import type { BaseHttpRequest } from '../core/BaseHttpRequest';
 export class AccessService {
@@ -40,7 +41,7 @@ export class AccessService {
     }
     /**
      * Web Login Callback
-     * Handle web login callback from Zitadel
+     * Handle web login callback from Keycloak
      * @param code
      * @returns void
      * @throws ApiError
@@ -55,7 +56,22 @@ export class AccessService {
                 'code': code,
             },
             errors: {
-                302: `Redirect with authentication token`,
+                302: `Redirect after establishing the browser session`,
+                500: `Internal server error`,
+            },
+        });
+    }
+    /**
+     * Logout Web Session
+     * Clear API-managed web session cookies and return the Keycloak logout URL
+     * @returns LogoutUrlResponse Web logout prepared successfully
+     * @throws ApiError
+     */
+    public logoutWebLogin(): CancelablePromise<LogoutUrlResponse> {
+        return this.httpRequest.request({
+            method: 'POST',
+            url: '/api/access/web/logout',
+            errors: {
                 500: `Internal server error`,
             },
         });
@@ -77,7 +93,7 @@ export class AccessService {
     }
     /**
      * API Login Callback
-     * Handle API login callback from Zitadel
+     * Handle API login callback from Keycloak
      * @param code
      * @returns CallbackResponse API login callback successful
      * @throws ApiError

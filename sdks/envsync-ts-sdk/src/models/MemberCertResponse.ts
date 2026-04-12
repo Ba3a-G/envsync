@@ -10,7 +10,7 @@ export type MemberCertResponse = {
     subject_cn: string;
     subject_email: string | null;
     status: string;
-    metadata?: Record<string, string> | null;
+    metadata?: any | null;
     cert_pem: string;
     key_pem: string;
     created_at: string;

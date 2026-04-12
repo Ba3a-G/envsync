@@ -3,8 +3,10 @@
 /* tslint:disable */
 /* eslint-disable */
 import type { AddTeamMemberRequest } from '../models/AddTeamMemberRequest';
+import type { AssignTeamRoleRequest } from '../models/AssignTeamRoleRequest';
 import type { CreateTeamRequest } from '../models/CreateTeamRequest';
 import type { CreateTeamResponse } from '../models/CreateTeamResponse';
+import type { EffectivePermissionsResponse } from '../models/EffectivePermissionsResponse';
 import type { GetTeamResponse } from '../models/GetTeamResponse';
 import type { GetTeamsResponse } from '../models/GetTeamsResponse';
 import type { TeamMessageResponse } from '../models/TeamMessageResponse';
@@ -161,6 +163,70 @@ export class TeamsService {
             },
             errors: {
                 500: `Internal server error`,
+            },
+        });
+    }
+    /**
+     * Assign Team Role
+     * Assign an organization role to a team so members inherit its permissions.
+     * @param id
+     * @param requestBody
+     * @returns TeamMessageResponse Team role assigned successfully
+     * @throws ApiError
+     */
+    public assignTeamRole(
+        id: string,
+        requestBody?: AssignTeamRoleRequest,
+    ): CancelablePromise<TeamMessageResponse> {
+        return this.httpRequest.request({
+            method: 'POST',
+            url: '/api/team/{id}/assign-role',
+            path: {
+                'id': id,
+            },
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                500: `Internal server error`,
+            },
+        });
+    }
+    /**
+     * Unassign Team Role
+     * Remove the inherited organization role from a team.
+     * @param id
+     * @returns TeamMessageResponse Team role removed successfully
+     * @throws ApiError
+     */
+    public unassignTeamRole(
+        id: string,
+    ): CancelablePromise<TeamMessageResponse> {
+        return this.httpRequest.request({
+            method: 'POST',
+            url: '/api/team/{id}/unassign-role',
+            path: {
+                'id': id,
+            },
+            errors: {
+                500: `Internal server error`,
+            },
+        });
+    }
+    /**
+     * Get Team Effective Permissions
+     * Get the org-level permissions inherited by team members through the team role
+     * @param id
+     * @returns EffectivePermissionsResponse Team effective permissions returned successfully
+     * @throws ApiError
+     */
+    public getTeamEffectivePermissions(
+        id: string,
+    ): CancelablePromise<EffectivePermissionsResponse> {
+        return this.httpRequest.request({
+            method: 'GET',
+            url: '/api/team/{id}/effective-permissions',
+            path: {
+                'id': id,
             },
         });
     }

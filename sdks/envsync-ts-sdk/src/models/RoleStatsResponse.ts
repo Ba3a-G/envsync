@@ -7,6 +7,9 @@ export type RoleStatsResponse = {
     billing_access_count: number;
     api_access_count: number;
     webhook_access_count: number;
+    gpg_access_count: number;
+    cert_access_count: number;
+    audit_access_count: number;
     view_access_count: number;
     edit_access_count: number;
     total_roles: number;

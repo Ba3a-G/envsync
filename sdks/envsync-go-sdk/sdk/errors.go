@@ -7,6 +7,30 @@ import (
 	core "github.com/EnvSync-Cloud/envsync/sdks/envsync-go-sdk/sdk/core"
 )
 
+// Invalid export request
+type BadRequestError struct {
+	*core.APIError
+	Body *ErrorResponse
+}
+
+func (b *BadRequestError) UnmarshalJSON(data []byte) error {
+	var body *ErrorResponse
+	if err := json.Unmarshal(data, &body); err != nil {
+		return err
+	}
+	b.StatusCode = 400
+	b.Body = body
+	return nil
+}
+
+func (b *BadRequestError) MarshalJSON() ([]byte, error) {
+	return json.Marshal(b.Body)
+}
+
+func (b *BadRequestError) Unwrap() error {
+	return b.APIError
+}
+
 // Internal server error
 type InternalServerError struct {
 	*core.APIError
@@ -53,4 +77,28 @@ func (n *NotFoundError) MarshalJSON() ([]byte, error) {
 
 func (n *NotFoundError) Unwrap() error {
 	return n.APIError
+}
+
+// Validation error
+type UnprocessableEntityError struct {
+	*core.APIError
+	Body *ErrorResponse
+}
+
+func (u *UnprocessableEntityError) UnmarshalJSON(data []byte) error {
+	var body *ErrorResponse
+	if err := json.Unmarshal(data, &body); err != nil {
+		return err
+	}
+	u.StatusCode = 422
+	u.Body = body
+	return nil
+}
+
+func (u *UnprocessableEntityError) MarshalJSON() ([]byte, error) {
+	return json.Marshal(u.Body)
+}
+
+func (u *UnprocessableEntityError) Unwrap() error {
+	return u.APIError
 }

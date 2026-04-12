@@ -14,8 +14,10 @@ export type GpgKeyResponse = {
     key_size: number | null;
     usage_flags: Array<string>;
     trust_level: string;
+    status: string;
     expires_at: string | null;
     revoked_at: string | null;
+    supersedes_gpg_key_id?: string | null;
     is_default: boolean;
     created_at: string;
     updated_at: string;

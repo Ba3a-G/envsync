@@ -9,9 +9,11 @@ import type { IssueMemberCertRequest } from '../models/IssueMemberCertRequest';
 import type { MemberCertResponse } from '../models/MemberCertResponse';
 import type { OCSPResponse } from '../models/OCSPResponse';
 import type { OrgCAResponse } from '../models/OrgCAResponse';
+import type { RenewCertRequest } from '../models/RenewCertRequest';
 import type { RevokeCertRequest } from '../models/RevokeCertRequest';
 import type { RevokeCertResponse } from '../models/RevokeCertResponse';
 import type { RootCAResponse } from '../models/RootCAResponse';
+import type { RotateCertRequest } from '../models/RotateCertRequest';
 import type { CancelablePromise } from '../core/CancelablePromise';
 import type { BaseHttpRequest } from '../core/BaseHttpRequest';
 export class CertificatesService {
@@ -154,6 +156,56 @@ export class CertificatesService {
             url: '/api/certificate/{serial_hex}/revoke',
             path: {
                 'serial_hex': serialHex,
+            },
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                500: `Internal server error`,
+            },
+        });
+    }
+    /**
+     * Renew Certificate
+     * Issue a renewed replacement certificate linked to the existing certificate lineage.
+     * @param id
+     * @param requestBody
+     * @returns MemberCertResponse Certificate renewed successfully
+     * @throws ApiError
+     */
+    public renewCertificate(
+        id: string,
+        requestBody?: RenewCertRequest,
+    ): CancelablePromise<MemberCertResponse> {
+        return this.httpRequest.request({
+            method: 'POST',
+            url: '/api/certificate/{id}/renew',
+            path: {
+                'id': id,
+            },
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                500: `Internal server error`,
+            },
+        });
+    }
+    /**
+     * Rotate Certificate
+     * Rotate a certificate by issuing a replacement and optionally revoking the previous certificate.
+     * @param id
+     * @param requestBody
+     * @returns MemberCertResponse Certificate rotated successfully
+     * @throws ApiError
+     */
+    public rotateCertificate(
+        id: string,
+        requestBody?: RotateCertRequest,
+    ): CancelablePromise<MemberCertResponse> {
+        return this.httpRequest.request({
+            method: 'POST',
+            url: '/api/certificate/{id}/rotate',
+            path: {
+                'id': id,
             },
             body: requestBody,
             mediaType: 'application/json',

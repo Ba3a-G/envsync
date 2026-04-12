@@ -201,3 +201,57 @@ func (l *LoginUrlResponse) String() string {
 	}
 	return fmt.Sprintf("%#v", l)
 }
+
+type LogoutUrlResponse struct {
+	Message   string `json:"message" url:"message"`
+	LogoutUrl string `json:"logoutUrl" url:"logoutUrl"`
+
+	extraProperties map[string]interface{}
+	rawJSON         json.RawMessage
+}
+
+func (l *LogoutUrlResponse) GetMessage() string {
+	if l == nil {
+		return ""
+	}
+	return l.Message
+}
+
+func (l *LogoutUrlResponse) GetLogoutUrl() string {
+	if l == nil {
+		return ""
+	}
+	return l.LogoutUrl
+}
+
+func (l *LogoutUrlResponse) GetExtraProperties() map[string]interface{} {
+	return l.extraProperties
+}
+
+func (l *LogoutUrlResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler LogoutUrlResponse
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*l = LogoutUrlResponse(value)
+	extraProperties, err := internal.ExtractExtraProperties(data, *l)
+	if err != nil {
+		return err
+	}
+	l.extraProperties = extraProperties
+	l.rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (l *LogoutUrlResponse) String() string {
+	if len(l.rawJSON) > 0 {
+		if value, err := internal.StringifyJSON(l.rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := internal.StringifyJSON(l); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", l)
+}

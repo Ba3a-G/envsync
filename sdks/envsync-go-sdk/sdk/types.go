@@ -8,6 +8,164 @@ import (
 	internal "github.com/EnvSync-Cloud/envsync/sdks/envsync-go-sdk/sdk/internal"
 )
 
+type EffectivePermissionsResponse struct {
+	CanView              bool `json:"can_view" url:"can_view"`
+	CanEdit              bool `json:"can_edit" url:"can_edit"`
+	HaveApiAccess        bool `json:"have_api_access" url:"have_api_access"`
+	HaveBillingOptions   bool `json:"have_billing_options" url:"have_billing_options"`
+	HaveWebhookAccess    bool `json:"have_webhook_access" url:"have_webhook_access"`
+	IsAdmin              bool `json:"is_admin" url:"is_admin"`
+	IsMaster             bool `json:"is_master" url:"is_master"`
+	CanManageRoles       bool `json:"can_manage_roles" url:"can_manage_roles"`
+	CanManageUsers       bool `json:"can_manage_users" url:"can_manage_users"`
+	CanManageApps        bool `json:"can_manage_apps" url:"can_manage_apps"`
+	CanManageApiKeys     bool `json:"can_manage_api_keys" url:"can_manage_api_keys"`
+	CanManageWebhooks    bool `json:"can_manage_webhooks" url:"can_manage_webhooks"`
+	CanViewAuditLogs     bool `json:"can_view_audit_logs" url:"can_view_audit_logs"`
+	CanManageOrgSettings bool `json:"can_manage_org_settings" url:"can_manage_org_settings"`
+	CanManageInvites     bool `json:"can_manage_invites" url:"can_manage_invites"`
+
+	extraProperties map[string]interface{}
+	rawJSON         json.RawMessage
+}
+
+func (e *EffectivePermissionsResponse) GetCanView() bool {
+	if e == nil {
+		return false
+	}
+	return e.CanView
+}
+
+func (e *EffectivePermissionsResponse) GetCanEdit() bool {
+	if e == nil {
+		return false
+	}
+	return e.CanEdit
+}
+
+func (e *EffectivePermissionsResponse) GetHaveApiAccess() bool {
+	if e == nil {
+		return false
+	}
+	return e.HaveApiAccess
+}
+
+func (e *EffectivePermissionsResponse) GetHaveBillingOptions() bool {
+	if e == nil {
+		return false
+	}
+	return e.HaveBillingOptions
+}
+
+func (e *EffectivePermissionsResponse) GetHaveWebhookAccess() bool {
+	if e == nil {
+		return false
+	}
+	return e.HaveWebhookAccess
+}
+
+func (e *EffectivePermissionsResponse) GetIsAdmin() bool {
+	if e == nil {
+		return false
+	}
+	return e.IsAdmin
+}
+
+func (e *EffectivePermissionsResponse) GetIsMaster() bool {
+	if e == nil {
+		return false
+	}
+	return e.IsMaster
+}
+
+func (e *EffectivePermissionsResponse) GetCanManageRoles() bool {
+	if e == nil {
+		return false
+	}
+	return e.CanManageRoles
+}
+
+func (e *EffectivePermissionsResponse) GetCanManageUsers() bool {
+	if e == nil {
+		return false
+	}
+	return e.CanManageUsers
+}
+
+func (e *EffectivePermissionsResponse) GetCanManageApps() bool {
+	if e == nil {
+		return false
+	}
+	return e.CanManageApps
+}
+
+func (e *EffectivePermissionsResponse) GetCanManageApiKeys() bool {
+	if e == nil {
+		return false
+	}
+	return e.CanManageApiKeys
+}
+
+func (e *EffectivePermissionsResponse) GetCanManageWebhooks() bool {
+	if e == nil {
+		return false
+	}
+	return e.CanManageWebhooks
+}
+
+func (e *EffectivePermissionsResponse) GetCanViewAuditLogs() bool {
+	if e == nil {
+		return false
+	}
+	return e.CanViewAuditLogs
+}
+
+func (e *EffectivePermissionsResponse) GetCanManageOrgSettings() bool {
+	if e == nil {
+		return false
+	}
+	return e.CanManageOrgSettings
+}
+
+func (e *EffectivePermissionsResponse) GetCanManageInvites() bool {
+	if e == nil {
+		return false
+	}
+	return e.CanManageInvites
+}
+
+func (e *EffectivePermissionsResponse) GetExtraProperties() map[string]interface{} {
+	return e.extraProperties
+}
+
+func (e *EffectivePermissionsResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler EffectivePermissionsResponse
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*e = EffectivePermissionsResponse(value)
+	extraProperties, err := internal.ExtractExtraProperties(data, *e)
+	if err != nil {
+		return err
+	}
+	e.extraProperties = extraProperties
+	e.rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (e *EffectivePermissionsResponse) String() string {
+	if len(e.rawJSON) > 0 {
+		if value, err := internal.StringifyJSON(e.rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := internal.StringifyJSON(e); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", e)
+}
+
 type ErrorResponse struct {
 	Error string `json:"error" url:"error"`
 

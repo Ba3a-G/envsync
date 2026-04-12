@@ -26,7 +26,6 @@ import (
     client "github.com/EnvSync-Cloud/envsync/sdks/envsync-go-sdk/sdk/client"
     option "github.com/EnvSync-Cloud/envsync/sdks/envsync-go-sdk/sdk/option"
     context "context"
-    sdk "github.com/EnvSync-Cloud/envsync/sdks/envsync-go-sdk/sdk"
 )
 
 func do() () {
@@ -35,12 +34,8 @@ func do() () {
             "<token>",
         ),
     )
-    client.Applications.CreateApp(
+    client.Access.LogoutWebLogin(
         context.TODO(),
-        &sdk.CreateAppRequest{
-            Name: "name",
-            Description: "description",
-        },
     )
 }
 ```
@@ -62,7 +57,7 @@ Structured error types are returned from API calls that return non-success statu
 with the `errors.Is` and `errors.As` APIs, so you can access the error like so:
 
 ```go
-response, err := client.Applications.CreateApp(...)
+response, err := client.Access.LogoutWebLogin(...)
 if err != nil {
     var apiError *core.APIError
     if errors.As(err, apiError) {
@@ -96,7 +91,7 @@ client := client.NewClient(
 )
 
 // Specify options for an individual request.
-response, err := client.Applications.CreateApp(
+response, err := client.Access.LogoutWebLogin(
     ...,
     option.WithToken("<YOUR_API_KEY>"),
 )
@@ -123,7 +118,7 @@ client := client.NewClient(
     option.WithMaxAttempts(1),
 )
 
-response, err := client.Applications.CreateApp(
+response, err := client.Access.LogoutWebLogin(
     ...,
     option.WithMaxAttempts(1),
 )
@@ -137,7 +132,7 @@ Setting a timeout for each individual request is as simple as using the standard
 ctx, cancel := context.WithTimeout(ctx, time.Second)
 defer cancel()
 
-response, err := client.Applications.CreateApp(ctx, ...)
+response, err := client.Access.LogoutWebLogin(ctx, ...)
 ```
 
 ## Contributing
