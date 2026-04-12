@@ -11,7 +11,7 @@
     },
     "apps/envsync-landing": {
       "name": "envsync-landing",
-      "version": "0.6.21",
+      "version": "0.7.4",
       "dependencies": {
         "@envsync-cloud/envsync-ts-sdk": "workspace:*",
         "@hookform/resolvers": "^3.9.0",
@@ -111,7 +111,7 @@
     },
     "apps/envsync-web": {
       "name": "envsync-web",
-      "version": "0.6.21",
+      "version": "0.7.4",
       "dependencies": {
         "@envsync-cloud/envsync-ts-sdk": "workspace:*",
         "@hookform/resolvers": "^3.10.0",
@@ -206,12 +206,13 @@
     },
     "packages/deploy-cli": {
       "name": "@envsync-cloud/deploy-cli",
-      "version": "0.6.21",
+      "version": "0.7.4",
       "bin": {
         "envsync-deploy": "./dist/index.js",
       },
       "dependencies": {
         "chalk": "^5.6.2",
+        "yaml": "^1.10.2",
       },
       "devDependencies": {
         "tsup": "^8.5.0",
@@ -220,7 +221,7 @@
     },
     "packages/envsync-api": {
       "name": "envsync-api",
-      "version": "0.6.21",
+      "version": "0.7.4",
       "dependencies": {
         "@aws-sdk/client-s3": "^3.821.0",
         "@aws-sdk/lib-storage": "^3.821.0",
@@ -280,11 +281,11 @@
     },
     "packages/envsync-keycloak-theme": {
       "name": "@envsync-cloud/envsync-keycloak-theme",
-      "version": "0.1.0",
+      "version": "0.1.1",
     },
     "sdks/envsync-ts-sdk": {
       "name": "@envsync-cloud/envsync-ts-sdk",
-      "version": "0.6.21",
+      "version": "0.7.4",
       "devDependencies": {
         "@types/bun": "latest",
         "openapi-typescript-codegen": "^0.29.0",

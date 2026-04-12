@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
 import chalk from "chalk";
+import YAML from "yaml";
 
 interface DeployConfig {
 	source: {
@@ -356,76 +357,20 @@ function otherApiSlot(slot: ApiSlot): ApiSlot {
 	return slot === "blue" ? "green" : "blue";
 }
 
-function yamlScalar(value: string | number | boolean): string {
-	if (typeof value === "boolean") return value ? "true" : "false";
-	if (typeof value === "number") return `${value}`;
-	if (/^[A-Za-z0-9._/@:-]+$/.test(value)) return value;
-	return JSON.stringify(value);
-}
-
 function toYaml(value: unknown, indent = 0): string {
-	const pad = " ".repeat(indent);
-	if (Array.isArray(value)) {
-		return value
-			.map(item => {
-				if (typeof item === "object" && item !== null) {
-					const child = toYaml(item, indent + 2);
-					return `${pad}- ${child.trimStart()}`.includes("\n")
-						? `${pad}-\n${child}`
-						: `${pad}- ${child.trimStart()}`;
-				}
-				return `${pad}- ${yamlScalar(item as string | number | boolean)}`;
-			})
-			.join("\n");
-	}
-	if (typeof value === "object" && value !== null) {
-		return Object.entries(value)
-			.map(([key, item]) => {
-				if (Array.isArray(item) || (typeof item === "object" && item !== null)) {
-					return `${pad}${key}:\n${toYaml(item, indent + 2)}`;
-				}
-				return `${pad}${key}: ${yamlScalar(item as string | number | boolean)}`;
-			})
-			.join("\n");
-	}
-	return `${pad}${yamlScalar(value as string | number | boolean)}`;
-}
-
-function parseYamlScalar(value: string): string | number | boolean {
-	const trimmed = value.trim();
-	if (trimmed === "true") return true;
-	if (trimmed === "false") return false;
-	if (/^-?\d+$/.test(trimmed)) return Number(trimmed);
-	if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
-		return trimmed.slice(1, -1);
-	}
-	return trimmed;
+	return YAML.stringify(value, {
+		indent: Math.max(2, indent || 2),
+		lineWidth: 0,
+		minContentWidth: 0,
+	});
 }
 
 function parseSimpleYamlObject(input: string): Record<string, unknown> {
-	const root: Record<string, unknown> = {};
-	const stack: Array<{ indent: number; value: Record<string, unknown> }> = [{ indent: -1, value: root }];
-	for (const rawLine of input.split(/\r?\n/)) {
-		const trimmed = rawLine.trim();
-		if (!trimmed || trimmed.startsWith("#")) continue;
-		const indent = rawLine.length - rawLine.trimStart().length;
-		const separator = trimmed.indexOf(":");
-		if (separator === -1) continue;
-		const key = trimmed.slice(0, separator).trim();
-		const rest = trimmed.slice(separator + 1).trim();
-		while (stack.length > 1 && indent <= stack[stack.length - 1]!.indent) {
-			stack.pop();
-		}
-		const parent = stack[stack.length - 1]!.value;
-		if (!rest) {
-			const child: Record<string, unknown> = {};
-			parent[key] = child;
-			stack.push({ indent, value: child });
-			continue;
-		}
-		parent[key] = parseYamlScalar(rest);
+	const parsed = YAML.parse(input);
+	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+		throw new Error(`Invalid deploy config in ${DEPLOY_YAML}. Expected a YAML object at the document root.`);
 	}
-	return root;
+	return parsed as Record<string, unknown>;
 }
 
 function parseEnvFile(content: string): RuntimeEnv {
@@ -492,6 +437,10 @@ function publicHttpsOrigin(config: DeployConfig, host: string) {
 
 function publicHttpsUrl(config: DeployConfig, host: string, path = "") {
 	return `${publicHttpsOrigin(config, host)}${path}`;
+}
+
+function publicBucketUrl(config: DeployConfig, host: string, bucket: string) {
+	return publicHttpsUrl(config, host, `/${bucket}`);
 }
 
 function publicHttpsOriginVariants(config: DeployConfig, host: string) {
@@ -1151,6 +1100,7 @@ function touchApiSlotDeployment(deployment: DeployGeneratedState["deployment"], 
 
 function buildRuntimeEnv(config: DeployConfig, generated: DeployGeneratedState): RuntimeEnv {
 	const hosts = domainMap(config.domain.root_domain);
+	const bucketName = "envsync-bucket";
 	return {
 		NODE_ENV: "production",
 		DB_AUTO_MIGRATE: "false",
@@ -1163,11 +1113,11 @@ function buildRuntimeEnv(config: DeployConfig, generated: DeployGeneratedState):
 		POSTGRES_USER: "postgres",
 		POSTGRES_PASSWORD: "envsync-postgres",
 		POSTGRES_DB: "envsync",
-		S3_BUCKET: "envsync-bucket",
+		S3_BUCKET: bucketName,
 		S3_REGION: "us-east-1",
 		S3_ACCESS_KEY: "envsync-rustfs",
 		S3_SECRET_KEY: generated.secrets.s3_secret_key,
-		S3_BUCKET_URL: publicHttpsUrl(config, hosts.s3),
+		S3_BUCKET_URL: publicBucketUrl(config, hosts.s3, bucketName),
 		S3_ENDPOINT: "http://rustfs:9000",
 		REDIS_URL: "redis://redis:6379",
 		SMTP_HOST: config.smtp.host,
@@ -1537,7 +1487,7 @@ function renderStack(config: DeployConfig, runtimeEnv: RuntimeEnv, generated: De
 		OPENFGA_API_URL: "http://openfga:8090",
 		MINIKMS_GRPC_ADDR: "minikms:50051",
 		S3_ENDPOINT: "http://rustfs:9000",
-		S3_BUCKET_URL: publicHttpsUrl(config, hosts.s3),
+		S3_BUCKET_URL: publicBucketUrl(config, hosts.s3, runtimeEnv.S3_BUCKET),
 	};
 
 	return `
@@ -1912,6 +1862,10 @@ function stageFrontendRelease(kind: "web" | "landing", image: string, version: s
 	extractStaticBundle(kind, image, targetDir);
 }
 
+function writeFrontendRuntimeConfig(targetDir: string, runtimeConfig: string) {
+	writeFile(path.join(targetDir, "runtime-config.js"), runtimeConfig);
+}
+
 function activateFrontendRelease(kind: "web" | "landing", version: string, runtimeConfig: string) {
 	const stagedDir = releaseAssetDir(kind, version);
 	const currentDir = currentReleaseDir(kind);
@@ -1924,10 +1878,11 @@ function activateFrontendRelease(kind: "web" | "landing", version: string, runti
 		throw new Error(`Missing staged ${kind} release at ${stagedDir}`);
 	}
 	validateStaticBundle(kind, stagedDir);
+	writeFrontendRuntimeConfig(stagedDir, runtimeConfig);
 	fs.rmSync(currentDir, { recursive: true, force: true });
 	ensureDir(currentDir);
 	fs.cpSync(stagedDir, currentDir, { recursive: true });
-	writeFile(path.join(currentDir, "runtime-config.js"), runtimeConfig);
+	writeFrontendRuntimeConfig(currentDir, runtimeConfig);
 	validateStaticBundle(kind, currentDir);
 }
 

@@ -70,7 +70,7 @@ Self-hosted frontend runtime values are injected at deploy time through `runtime
 
 Important behavior:
 
-- `runtime-config.js` is written into the active `web/current` and `landing/current` release directories during deploy.
+- `runtime-config.js` is written into both the staged release directory and the active `web/current` and `landing/current` directories during deploy.
 - `runtime-config.js` is intentionally served with `Cache-Control: no-store` so frontend URLs and telemetry settings do not stay stale after upgrade.
 - `index.html` is also served with `no-store` to avoid pinning old runtime references.
 

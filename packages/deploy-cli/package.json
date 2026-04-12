@@ -40,7 +40,8 @@
     "secrets"
   ],
   "dependencies": {
-    "chalk": "^5.6.2"
+    "chalk": "^5.6.2",
+    "yaml": "^1.10.2"
   },
   "devDependencies": {
     "tsup": "^8.5.0",
