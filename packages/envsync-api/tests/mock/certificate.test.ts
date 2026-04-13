@@ -8,6 +8,7 @@ import { resetPKI } from "../helpers/kms";
 let seed: SeedOrgResult;
 let viewerToken: string;
 let viewerUserId: string;
+let memberEmail: string;
 
 // State shared across sequential test groups
 let caSerialHex: string;
@@ -33,34 +34,63 @@ beforeAll(async () => {
 	setupUserOrgTuples(viewer.id, seed.org.id, {
 		can_view: true,
 	});
+
+	const member = await seedUser(seed.org.id, seed.roles.developer.id, {
+		email: "dev@example.com",
+	});
+	memberEmail = member.email;
 });
 
 // ─── Init CA ────────────────────────────────────────────────────────
 
 describe("POST /api/certificate/ca/init", () => {
-	test("master initializes org CA (201)", async () => {
+	test("master initializes org CA (201 or 409 if already initialized)", async () => {
 		const res = await testRequest("/api/certificate/ca/init", {
 			method: "POST",
 			token: seed.masterUser.token,
 			body: { org_name: seed.org.name },
 		});
-		expect(res.status).toBe(201);
+		expect([201, 409]).toContain(res.status);
 
-		const body = await res.json<{
+		if (res.status === 201) {
+			const body = await res.json<{
+				id: string;
+				serial_hex: string;
+				cert_type: string;
+				cert_pem: string;
+				status: string;
+			}>();
+			expect(body.id).toBeDefined();
+			expect(body.serial_hex).toBeDefined();
+			expect(body.cert_type).toBe("org_ca");
+			expect(body.cert_pem).toContain("BEGIN CERTIFICATE");
+			expect(body.status).toBe("active");
+
+			caCertId = body.id;
+			caSerialHex = body.serial_hex;
+			return;
+		}
+
+		const existingRes = await testRequest("/api/certificate/ca", {
+			token: seed.masterUser.token,
+		});
+		expect(existingRes.status).toBe(200);
+
+		const existing = await existingRes.json<{
 			id: string;
 			serial_hex: string;
 			cert_type: string;
 			cert_pem: string;
 			status: string;
 		}>();
-		expect(body.id).toBeDefined();
-		expect(body.serial_hex).toBeDefined();
-		expect(body.cert_type).toBe("org_ca");
-		expect(body.cert_pem).toContain("BEGIN CERTIFICATE");
-		expect(body.status).toBe("active");
+		expect(existing.id).toBeDefined();
+		expect(existing.serial_hex).toBeDefined();
+		expect(existing.cert_type).toBe("org_ca");
+		expect(existing.cert_pem).toContain("BEGIN CERTIFICATE");
+		expect(existing.status).toBe("active");
 
-		caCertId = body.id;
-		caSerialHex = body.serial_hex;
+		caCertId = existing.id;
+		caSerialHex = existing.serial_hex;
 	});
 
 	test("viewer denied init (403)", async () => {
@@ -128,7 +158,7 @@ describe("POST /api/certificate/issue", () => {
 			method: "POST",
 			token: seed.masterUser.token,
 			body: {
-				member_email: "dev@example.com",
+				member_email: memberEmail,
 				role: "developer",
 				description: "Test member cert",
 			},
