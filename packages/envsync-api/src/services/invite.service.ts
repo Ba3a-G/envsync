@@ -2,10 +2,34 @@ import { v4 as uuidv4 } from "uuid";
 import { SecretKeyGenerator } from "sk-keygen";
 
 import { DB } from "@/libs/db";
+import { ConflictError } from "@/libs/errors";
 
 export class InviteService {
 	public static createOrgInvite = async (email: string) => {
 		const db = await DB.getInstance();
+		const [existingInvite, existingUser] = await Promise.all([
+			db
+				.selectFrom("invite_org")
+				.select(["id", "is_accepted"])
+				.where("email", "=", email)
+				.executeTakeFirst(),
+			db
+				.selectFrom("users")
+				.select("id")
+				.where("email", "=", email)
+				.executeTakeFirst(),
+		]);
+
+		if (existingInvite && !existingInvite.is_accepted) {
+			throw new ConflictError("An organization invite is already pending for this email.", "INVITE_ALREADY_SENT");
+		}
+		if (existingInvite?.is_accepted) {
+			throw new ConflictError("This email has already completed organization onboarding.", "ORG_ALREADY_ONBOARDED");
+		}
+		if (existingUser) {
+			throw new ConflictError("An account already exists for this email.", "ACCOUNT_ALREADY_EXISTS");
+		}
+
 		const { invite_token } = await db
 			.insertInto("invite_org")
 			.values({

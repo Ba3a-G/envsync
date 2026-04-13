@@ -62,7 +62,9 @@ type OnboardingAuditActions =
 	| "user_invite_deleted"
 	| "user_invites_retrieved";
 
-type OrgAuditActions = "org_updated";
+type OrgAuditActions =
+	| "org_updated"
+	| "org_deleted";
 
 type RoleAuditActions =
 	| "roles_viewed"
@@ -139,6 +141,7 @@ type CertificateAuditActions =
 	| "cert_member_issued"
 	| "certs_viewed"
 	| "cert_viewed"
+	| "cert_bundle_retrieved"
 	| "cert_revoked"
 	| "certificate_renewed"
 	| "certificate_rotated";

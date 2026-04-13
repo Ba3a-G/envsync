@@ -68,7 +68,7 @@ export function RecentActivity({ auditLogs, isLoading }: RecentActivityProps) {
                     {formatAction(log.action ?? "unknown")}
                   </Badge>
                 </div>
-                <p className="text-[11px] text-gray-500 mt-0.5 truncate">
+                <p className="hdx-mask text-[11px] text-gray-500 mt-0.5 truncate">
                   {log.user_email}
                   {log.created_at && (
                     <span className="ml-1">

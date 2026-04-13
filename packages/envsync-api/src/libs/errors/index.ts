@@ -12,30 +12,30 @@ export class AppError extends Error {
 }
 
 export class NotFoundError extends AppError {
-	constructor(resource: string, id?: string) {
+	constructor(resource: string, id?: string, code = "NOT_FOUND") {
 		super(
 			id ? `${resource} not found: ${id}` : `${resource} not found`,
 			404,
-			"NOT_FOUND",
+			code,
 		);
 	}
 }
 
 export class ConflictError extends AppError {
-	constructor(msg: string) {
-		super(msg, 409, "CONFLICT");
+	constructor(msg: string, code = "CONFLICT") {
+		super(msg, 409, code);
 	}
 }
 
 export class ValidationError extends AppError {
-	constructor(msg: string) {
-		super(msg, 422, "VALIDATION_ERROR");
+	constructor(msg: string, code = "VALIDATION_ERROR") {
+		super(msg, 422, code);
 	}
 }
 
 export class BusinessRuleError extends AppError {
-	constructor(msg: string, status = 422) {
-		super(msg, status, "BUSINESS_RULE_VIOLATION");
+	constructor(msg: string, status = 422, code = "BUSINESS_RULE_VIOLATION") {
+		super(msg, status, code);
 	}
 }
 

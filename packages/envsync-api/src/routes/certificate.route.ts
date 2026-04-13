@@ -17,6 +17,7 @@ import {
 	crlResponseSchema,
 	ocspResponseSchema,
 	rootCAResponseSchema,
+	myCertificateBundleResponseSchema,
 } from "@/validators/certificate.validator";
 import { errorResponseSchema } from "@/validators/common";
 import { authMiddleware } from "@/middlewares/auth.middleware";
@@ -143,6 +144,27 @@ app.get(
 		},
 	}),
 	CertificateController.getCRL,
+);
+
+app.get(
+	"/me",
+	describeRoute({
+		operationId: "getMyCertificateBundle",
+		summary: "Get Current User Certificate Bundle",
+		description: "Retrieve the current user's active system-generated certificate bundle",
+		tags: ["Certificates"],
+		responses: {
+			200: {
+				description: "Certificate bundle retrieved successfully",
+				content: { "application/json": { schema: resolver(myCertificateBundleResponseSchema) } },
+			},
+			404: {
+				description: "Certificate bundle not found",
+				content: { "application/json": { schema: resolver(errorResponseSchema) } },
+			},
+		},
+	}),
+	CertificateController.getMyCertificateBundle,
 );
 
 // List all certificates

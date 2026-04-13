@@ -1,19 +1,23 @@
 import z from "zod";
 import "zod-openapi/extend";
 
+const subjectTypeSchema = z.enum(["user", "team"]).openapi({ example: "user" });
+const accessRelationSchema = z.enum(["admin", "editor", "viewer"]).openapi({ example: "editor" });
+const accessSourceSchema = z.enum(["org", "direct", "team"]).openapi({ example: "org" });
+
 export const grantAccessRequestBodySchema = z
 	.object({
 		subject_id: z.string().openapi({ example: "user_123" }),
-		subject_type: z.enum(["user", "team"]).openapi({ example: "user" }),
-		relation: z.enum(["admin", "editor", "viewer"]).openapi({ example: "editor" }),
+		subject_type: subjectTypeSchema,
+		relation: accessRelationSchema,
 	})
 	.openapi({ ref: "GrantAccessRequest" });
 
 export const revokeAccessRequestBodySchema = z
 	.object({
 		subject_id: z.string().openapi({ example: "user_123" }),
-		subject_type: z.enum(["user", "team"]).openapi({ example: "user" }),
-		relation: z.enum(["admin", "editor", "viewer"]).openapi({ example: "editor" }),
+		subject_type: subjectTypeSchema,
+		relation: accessRelationSchema,
 	})
 	.openapi({ ref: "RevokeAccessRequest" });
 
@@ -23,26 +27,33 @@ export const permissionMessageResponseSchema = z
 	})
 	.openapi({ ref: "PermissionMessageResponse" });
 
-export const grantEntrySchema = z.object({
-	subject_id: z.string(),
-	subject_type: z.enum(["user", "team"]),
-	relation: z.enum(["admin", "editor", "viewer"]),
-});
+export const grantEntrySchema = z
+	.object({
+		subject_id: z.string().openapi({ example: "user_123" }),
+		subject_type: subjectTypeSchema,
+		relation: accessRelationSchema,
+	})
+	.openapi({ ref: "GrantEntry" });
 
 export const grantsListResponseSchema = z
 	.array(grantEntrySchema)
 	.openapi({ ref: "GrantsListResponse" });
 
+export const effectiveAccessEntrySchema = z
+	.object({
+		user_id: z.string().openapi({ example: "user_123" }),
+		email: z.string().email().openapi({ example: "member@example.com" }),
+		relation: accessRelationSchema.nullable().openapi({ example: "admin" }),
+		org_relation: accessRelationSchema.nullable().openapi({ example: "admin" }),
+		direct_relation: accessRelationSchema.nullable().openapi({ example: "editor" }),
+		team_relation: accessRelationSchema.nullable().openapi({ example: "viewer" }),
+		sources: z.array(accessSourceSchema).openapi({ example: ["org", "team"] }),
+		teams: z.array(z.string().openapi({ example: "Platform Team" })).openapi({ example: ["Platform Team"] }),
+	})
+	.openapi({ ref: "EffectiveAccessEntry" });
+
 export const effectiveAccessResponseSchema = z
-	.array(
-		z.object({
-			user_id: z.string(),
-			email: z.string(),
-			relation: z.enum(["admin", "editor", "viewer"]).nullable(),
-			source: z.enum(["direct", "team", "both"]).nullable(),
-			teams: z.array(z.string()),
-		}),
-	)
+	.array(effectiveAccessEntrySchema)
 	.openapi({ ref: "EffectiveAccessResponse" });
 
 export const effectivePermissionsResponseSchema = z

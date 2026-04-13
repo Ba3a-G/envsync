@@ -206,6 +206,7 @@ export interface OrgCertificate extends BaseTable {
 	subject_cn: ColumnType<string>;
 	subject_email?: ColumnType<string | null>;
 	status: ColumnType<string>;
+	cert_pem?: ColumnType<string | null>;
 	not_before?: ColumnType<Date | null>;
 	not_after?: ColumnType<Date | null>;
 	description?: ColumnType<string | null>;
@@ -213,6 +214,8 @@ export interface OrgCertificate extends BaseTable {
 	revoked_at?: ColumnType<Date | null>;
 	revocation_reason?: ColumnType<number | null>;
 	supersedes_certificate_id?: ColumnType<string | null>;
+	is_system_generated: ColumnType<boolean>;
+	encrypted_key_pem?: ColumnType<string | null>;
 }
 
 export interface ChangeRequest extends BaseTable {

@@ -61,13 +61,8 @@ export class ChangeRequestService {
 			throw new BusinessRuleError("Direct change requests are only required for protected environments.");
 		}
 
-		const canEdit = await AuthorizationService.check(
-			requested_by_user_id,
-			"can_edit",
-			"env_type",
-			target_env_type_id,
-		);
-		if (!canEdit) {
+		const orgPermissions = await AuthorizationService.getUserOrgPermissions(requested_by_user_id, org_id);
+		if (!(orgPermissions.can_edit || orgPermissions.is_admin || orgPermissions.is_master)) {
 			throw new BusinessRuleError("You do not have permission to create a change request.", 403);
 		}
 
@@ -198,13 +193,8 @@ export class ChangeRequestService {
 			throw new BusinessRuleError("Promotion requests in this pass target protected environments only.");
 		}
 
-		const canEdit = await AuthorizationService.check(
-			requested_by_user_id,
-			"can_edit",
-			"env_type",
-			source_env_type_id,
-		);
-		if (!canEdit) {
+		const orgPermissions = await AuthorizationService.getUserOrgPermissions(requested_by_user_id, org_id);
+		if (!(orgPermissions.can_edit || orgPermissions.is_admin || orgPermissions.is_master)) {
 			throw new BusinessRuleError("You do not have permission to create a promotion request.", 403);
 		}
 
@@ -560,7 +550,7 @@ export class ChangeRequestService {
 		item: {
 			key: string;
 			operation: string;
-			proposed_value: string | null;
+			proposed_value: string | null | undefined;
 		},
 		user_id: string,
 	) {
@@ -620,7 +610,7 @@ export class ChangeRequestService {
 		item: {
 			key: string;
 			operation: string;
-			proposed_value: string | null;
+			proposed_value: string | null | undefined;
 		},
 		user_id: string,
 	) {

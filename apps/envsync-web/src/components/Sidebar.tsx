@@ -176,7 +176,7 @@ export const Sidebar = ({ expanded, onToggle }: SidebarProps) => {
                 <p className="text-sm font-medium text-gray-200 truncate">
                   {user.user.full_name ?? ""}
                 </p>
-                <p className="text-[11px] text-gray-500 truncate">
+                <p className="hdx-mask text-[11px] text-gray-500 truncate">
                   {user.user.email ?? ""}
                 </p>
                 {runtimeConfig.releaseVersion && (

@@ -32,6 +32,16 @@ export type {
 /** @deprecated Use CertificateListResponse[number] instead */
 export type OrgCertificate = CertificateListResponse[number];
 
+export interface MyCertificateBundleResponse {
+  root_ca_pem: string;
+  member_certificate: OrgCertificate & {
+    cert_pem?: string | null;
+    key_pem: string;
+    is_system_generated: boolean;
+    metadata?: Record<string, string> | null;
+  };
+}
+
 // ─── Hooks ──────────────────────────────────────────────────────────
 
 const useCertificates = () => {
@@ -55,6 +65,14 @@ const useRootCA = () => {
   return useQuery({
     queryKey: [API_KEYS.ALL_CERTIFICATES, "root-ca"],
     queryFn: () => sdk.certificates.getRootCa(),
+  });
+};
+
+const useMyCertificateBundle = () => {
+  return useQuery({
+    queryKey: [API_KEYS.ALL_CERTIFICATES, "me"],
+    queryFn: () => apiRequest<MyCertificateBundleResponse>("/api/certificate/me"),
+    retry: false,
   });
 };
 
@@ -184,6 +202,7 @@ export const certificates = {
   getCertificates: useCertificates,
   getOrgCA: useOrgCA,
   getRootCA: useRootCA,
+  getMyCertificateBundle: useMyCertificateBundle,
   initOrgCA: useInitOrgCA,
   issueMemberCert: useIssueMemberCert,
   revokeCert: useRevokeCert,

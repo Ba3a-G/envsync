@@ -320,7 +320,9 @@ const Teams = () => {
                       {selectedTeam.members.map((member) => (
                         <TableRow key={member.id} className="border-gray-800">
                           <TableCell className="text-white">{member.full_name || "Unnamed user"}</TableCell>
-                          <TableCell className="text-gray-300">{member.email}</TableCell>
+                          <TableCell className="text-gray-300">
+                            <span className="hdx-mask">{member.email}</span>
+                          </TableCell>
                           <TableCell className="text-gray-400">
                             {new Date(member.created_at).toLocaleDateString()}
                           </TableCell>

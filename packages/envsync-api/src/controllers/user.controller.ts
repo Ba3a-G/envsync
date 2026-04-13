@@ -7,6 +7,7 @@ import {
 } from "@/helpers/keycloak";
 import { UserService } from "@/services/user.service";
 import { AuditLogService } from "@/services/audit_log.service";
+import { OrgAdminGuardService } from "@/services/org-admin-guard.service";
 
 export class UserController {
 	public static readonly getUsers = async (c: Context) => {
@@ -121,10 +122,18 @@ export class UserController {
 			return c.json({ error: "You do not have permission to delete this user." }, 403);
 		}
 
-		if (user.auth_service_id) {
-			await deleteKeycloakUser(user.auth_service_id);
-		}
+		await OrgAdminGuardService.ensureOrgHasAdminAfterUserDeletion(org_id, id);
+		const deleteIdentity = user.auth_service_id
+			? !(await UserService.hasOtherMembershipsForAuthService(user.auth_service_id, id))
+			: false;
 		await UserService.deleteUser(id);
+		if (deleteIdentity && user.auth_service_id) {
+			try {
+				await deleteKeycloakUser(user.auth_service_id);
+			} catch (error) {
+				console.error("Failed to delete Keycloak user after org membership deletion:", error);
+			}
+		}
 
 		await AuditLogService.notifyAuditSystem({
 			action: "user_deleted",

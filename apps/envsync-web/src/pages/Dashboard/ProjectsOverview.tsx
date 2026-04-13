@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { formatLastUsed } from "@/lib/utils";
+import { appDetailPath } from "@/lib/app-routes";
 import type { App } from "@/constants";
 
 interface ProjectsOverviewProps {
@@ -26,7 +27,7 @@ export function ProjectsOverview({ projects }: ProjectsOverviewProps) {
       {projects.map((project) => (
         <Link
           key={project.id}
-          to={`/applications/${project.id}`}
+          to={appDetailPath(project.id)}
           className="flex items-center justify-between p-3 rounded-lg hover:bg-violet-500/5 hover:translate-x-0.5 transition-all group"
         >
           <div className="flex items-center space-x-3">

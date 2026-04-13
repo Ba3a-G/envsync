@@ -13,11 +13,36 @@ export const initOrgCARequestSchema = z
 export const issueMemberCertRequestSchema = z
 	.object({
 		member_email: z.string().email().openapi({ example: "user@example.com" }),
-		role: z.string().min(1).openapi({ example: "developer" }),
+		role: z.string().min(1).optional().openapi({ example: "developer" }),
 		description: z.string().optional().openapi({ example: "Developer certificate" }),
 		metadata: z.record(z.string(), z.string()).optional().openapi({ example: { service: "api-gateway", env: "prod" } }),
 	})
 	.openapi({ ref: "IssueMemberCertRequest" });
+
+const certificateMetadataSchema = z.record(z.string(), z.string()).nullable().optional();
+const baseCertificateFields = {
+	id: z.string().openapi({ example: "uuid" }),
+	org_id: z.string().openapi({ example: "org_123" }),
+	serial_hex: z.string().openapi({ example: "02CD" }),
+	cert_type: z.string().openapi({ example: "member" }),
+	subject_cn: z.string().openapi({ example: "user@example.com" }),
+	subject_email: z.string().nullable().openapi({ example: "user@example.com" }),
+	status: z.string().openapi({ example: "active" }),
+	description: z.string().nullable().optional().openapi({ example: "Developer certificate" }),
+	metadata: certificateMetadataSchema.openapi({ example: { service: "api-gateway" } }),
+	cert_pem: z.string().nullable().optional().openapi({ example: "-----BEGIN CERTIFICATE-----..." }),
+	is_system_generated: z.boolean().openapi({ example: false }),
+	not_before: z.string().nullable().optional().openapi({ example: null }),
+	not_after: z.string().nullable().optional().openapi({ example: null }),
+	revoked_at: z.string().nullable().optional().openapi({ example: null }),
+	supersedes_certificate_id: z.string().nullable().optional().openapi({ example: null }),
+	created_at: z.string().openapi({ example: "2024-01-01T00:00:00Z" }),
+	updated_at: z.string().openapi({ example: "2024-01-01T00:00:00Z" }),
+} satisfies z.ZodRawShape;
+
+const baseCertificateSchema = z
+	.object(baseCertificateFields)
+	.openapi({ ref: "BaseCertificateResponse" });
 
 export const revokeCertRequestSchema = z
 	.object({
@@ -50,54 +75,33 @@ export const getCRLQuerySchema = z
 
 export const orgCAResponseSchema = z
 	.object({
-		id: z.string().openapi({ example: "uuid" }),
-		org_id: z.string().openapi({ example: "org_123" }),
-		serial_hex: z.string().openapi({ example: "01AB" }),
+		...baseCertificateFields,
 		cert_type: z.string().openapi({ example: "org_ca" }),
 		subject_cn: z.string().openapi({ example: "My Organization CA" }),
-		status: z.string().openapi({ example: "active" }),
-		cert_pem: z.string().optional().openapi({ example: "-----BEGIN CERTIFICATE-----..." }),
-		created_at: z.string().openapi({ example: "2024-01-01T00:00:00Z" }),
 	})
 	.openapi({ ref: "OrgCAResponse" });
 
 export const memberCertResponseSchema = z
 	.object({
-		id: z.string().openapi({ example: "uuid" }),
-		org_id: z.string().openapi({ example: "org_123" }),
-		serial_hex: z.string().openapi({ example: "02CD" }),
+		...baseCertificateFields,
 		cert_type: z.string().openapi({ example: "member" }),
-		subject_cn: z.string().openapi({ example: "user@example.com" }),
-		subject_email: z.string().nullable().openapi({ example: "user@example.com" }),
-		status: z.string().openapi({ example: "active" }),
-		metadata: z.record(z.string(), z.string()).nullable().optional().openapi({ example: { service: "api-gateway" } }),
-		cert_pem: z.string().openapi({ example: "-----BEGIN CERTIFICATE-----..." }),
 		key_pem: z.string().openapi({ example: "-----BEGIN PRIVATE KEY-----..." }),
-		created_at: z.string().openapi({ example: "2024-01-01T00:00:00Z" }),
 	})
 	.openapi({ ref: "MemberCertResponse" });
 
 export const certificateListResponseSchema = z
-	.array(
-		z.object({
-			id: z.string().openapi({ example: "uuid" }),
-			org_id: z.string().openapi({ example: "org_123" }),
-			serial_hex: z.string().openapi({ example: "01AB" }),
-			cert_type: z.string().openapi({ example: "org_ca" }),
-			subject_cn: z.string().openapi({ example: "My Organization" }),
-			subject_email: z.string().nullable().openapi({ example: null }),
-			status: z.string().openapi({ example: "active" }),
-			not_before: z.string().nullable().openapi({ example: null }),
-			not_after: z.string().nullable().openapi({ example: null }),
-			description: z.string().nullable().openapi({ example: null }),
-			metadata: z.record(z.string(), z.string()).nullable().optional().openapi({ example: null }),
-			revoked_at: z.string().nullable().openapi({ example: null }),
-			supersedes_certificate_id: z.string().nullable().optional().openapi({ example: null }),
-			created_at: z.string().openapi({ example: "2024-01-01T00:00:00Z" }),
-			updated_at: z.string().openapi({ example: "2024-01-01T00:00:00Z" }),
-		}),
-	)
+	.array(baseCertificateSchema)
 	.openapi({ ref: "CertificateListResponse" });
+
+export const myCertificateBundleResponseSchema = z
+	.object({
+		root_ca_pem: z.string().openapi({ example: "-----BEGIN CERTIFICATE-----..." }),
+		member_certificate: z.object({
+			...baseCertificateFields,
+			key_pem: z.string().openapi({ example: "-----BEGIN PRIVATE KEY-----..." }),
+		}),
+	})
+	.openapi({ ref: "MyCertificateBundleResponse" });
 
 export const revokeCertResponseSchema = z
 	.object({

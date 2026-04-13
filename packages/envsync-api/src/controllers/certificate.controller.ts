@@ -2,6 +2,10 @@ import { type Context } from "hono";
 
 import { CertificateService } from "@/services/certificate.service";
 import { AuditLogService } from "@/services/audit_log.service";
+import { CertificateRoleMapper } from "@/services/certificate-role.mapper";
+import { RoleService } from "@/services/role.service";
+import { UserService } from "@/services/user.service";
+import { BusinessRuleError } from "@/libs/errors";
 
 export class CertificateController {
 	public static readonly initOrgCA = async (c: Context) => {
@@ -44,16 +48,30 @@ export class CertificateController {
 	public static readonly issueMemberCert = async (c: Context) => {
 		const org_id = c.get("org_id");
 		const user_id = c.get("user_id");
-		const { member_email, role, description, metadata } = await c.req.json();
+		const { member_email, description, metadata } = await c.req.json();
 
-		const cert = await CertificateService.issueMemberCert(
+		const member = await UserService.getOrgUserByEmail(org_id, member_email);
+		if (!member) {
+			throw new BusinessRuleError(
+				`Member not found for email ${member_email}.`,
+				404,
+				"MEMBER_NOT_FOUND",
+			);
+		}
+
+		const role = await RoleService.getRole(member.role_id);
+
+		const cert = await CertificateService.issueMemberCert({
 			org_id,
-			user_id,
-			member_email,
-			role,
+			target_user_id: member.id,
+			target_email: member_email,
+			issued_by_user_id: user_id,
+			envsync_pki_role: CertificateRoleMapper.toPkiRole(role),
+			is_system_generated: false,
+			persist_private_key: false,
 			description,
 			metadata,
-		);
+		});
 
 		await AuditLogService.notifyAuditSystem({
 			action: "cert_member_issued",
@@ -64,7 +82,10 @@ export class CertificateController {
 				certificate_id: cert.id,
 				serial_hex: cert.serial_hex,
 				member_email,
-				role,
+				role_id: role.id,
+				role_name: role.name,
+				envsync_pki_role: CertificateRoleMapper.toPkiRole(role),
+				is_system_generated: false,
 			},
 		});
 
@@ -77,15 +98,21 @@ export class CertificateController {
 
 		const page = Math.max(1, Number(c.req.query("page")) || 1);
 		const per_page = Math.min(100, Math.max(1, Number(c.req.query("per_page")) || 50));
+		const include_system_generated = c.req.query("include_system_generated") === "true";
 
-		const certs = await CertificateService.listCertificates(org_id, page, per_page);
+		const certs = await CertificateService.listCertificates(
+			org_id,
+			page,
+			per_page,
+			include_system_generated,
+		);
 
 		await AuditLogService.notifyAuditSystem({
 			action: "certs_viewed",
 			org_id,
 			user_id,
 			message: "Certificates list viewed",
-			details: { count: certs.length },
+			details: { count: certs.length, include_system_generated },
 		});
 
 		return c.json(certs, 200);
@@ -111,6 +138,26 @@ export class CertificateController {
 		});
 
 		return c.json(cert, 200);
+	};
+
+	public static readonly getMyCertificateBundle = async (c: Context) => {
+		const org_id = c.get("org_id");
+		const user_id = c.get("user_id");
+
+		const bundle = await CertificateService.getMyCertificateBundle(org_id, user_id);
+
+		await AuditLogService.notifyAuditSystem({
+			action: "cert_bundle_retrieved",
+			org_id,
+			user_id,
+			message: "System certificate bundle retrieved.",
+			details: {
+				member_certificate_id: bundle.member_certificate.id,
+				serial_hex: bundle.member_certificate.serial_hex,
+			},
+		});
+
+		return c.json(bundle, 200);
 	};
 
 	public static readonly revokeCert = async (c: Context) => {

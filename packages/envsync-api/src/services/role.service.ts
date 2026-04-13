@@ -4,6 +4,7 @@ import { cacheAside, invalidateCache } from "@/helpers/cache";
 import { CacheKeys, CacheTTL } from "@/helpers/cache-keys";
 import { DB } from "@/libs/db";
 import { orNotFound, BusinessRuleError, ValidationError } from "@/libs/errors";
+import { invalidateSessionToken } from "@/libs/kms/session-manager";
 import { AuthorizationService } from "@/services/authorization.service";
 
 export class RoleService {
@@ -251,6 +252,25 @@ export class RoleService {
 
 		// Re-sync FGA tuples for all users with this role
 		await AuthorizationService.resyncAllUsersWithRole(id, org_id);
+
+		const [usersWithRole, usersInTeamsWithRole] = await Promise.all([
+			db
+				.selectFrom("users")
+				.select("id")
+				.where("org_id", "=", org_id)
+				.where("role_id", "=", id)
+				.execute(),
+			db
+				.selectFrom("team_members")
+				.innerJoin("teams", "teams.id", "team_members.team_id")
+				.select("team_members.user_id")
+				.where("teams.org_id", "=", org_id)
+				.where("teams.role_id", "=", id)
+				.execute(),
+		]);
+		for (const user of [...usersWithRole, ...usersInTeamsWithRole]) {
+			invalidateSessionToken("id" in user ? user.id : user.user_id, org_id);
+		}
 
 		await invalidateCache(CacheKeys.role(id), CacheKeys.rolesByOrg(org_id));
 	};

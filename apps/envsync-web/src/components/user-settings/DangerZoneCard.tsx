@@ -22,9 +22,9 @@ export const DangerZoneCard = ({
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h4 className="font-medium text-white">Delete Account</h4>
+            <h4 className="font-medium text-white">Leave Organization</h4>
             <p className="text-sm text-gray-400">
-              Permanently delete your account and all associated data. This action cannot be undone.
+              Remove your membership from the current organization. This ends your access to this workspace immediately.
             </p>
           </div>
           <Button
@@ -34,7 +34,7 @@ export const DangerZoneCard = ({
             disabled={isDeleteLoading}
           >
             <Trash2 className="w-4 h-4 mr-2" />
-            Delete Account
+            Leave Organization
           </Button>
         </div>
       </CardContent>

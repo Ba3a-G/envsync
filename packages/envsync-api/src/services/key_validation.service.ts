@@ -1,9 +1,11 @@
-import * as grpc from "@grpc/grpc-js";
-
 import { KMSClient } from "@/libs/kms/client";
 import { getVaultSessionToken } from "@/libs/kms/session-manager";
 
 export class KeyValidationService {
+	private static isNotFound(err: unknown) {
+		return err instanceof Error && "code" in err && Number((err as { code?: number }).code) === 5;
+	}
+
 	/**
 	 * Check if a key already exists in either env or secret Vault paths.
 	 */
@@ -38,11 +40,7 @@ export class KeyValidationService {
 					message: `Key "${key}" already exists as an environment variable`,
 				};
 			} catch (err) {
-				const isNotFound = err instanceof Error && "code" in err && (
-					(err as grpc.ServiceError).code === grpc.status.NOT_FOUND ||
-					((err as grpc.ServiceError).code === grpc.status.INTERNAL && err.message.includes("vault entry not found"))
-				);
-				if (!isNotFound) {
+				if (!this.isNotFound(err)) {
 					throw err;
 				}
 			}
@@ -61,11 +59,7 @@ export class KeyValidationService {
 					message: `Key "${key}" already exists as a secret`,
 				};
 			} catch (err) {
-				const isNotFound = err instanceof Error && "code" in err && (
-					(err as grpc.ServiceError).code === grpc.status.NOT_FOUND ||
-					((err as grpc.ServiceError).code === grpc.status.INTERNAL && err.message.includes("vault entry not found"))
-				);
-				if (!isNotFound) {
+				if (!this.isNotFound(err)) {
 					throw err;
 				}
 			}

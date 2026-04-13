@@ -23,7 +23,7 @@ function getApiErrorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
-export const useProjectEnvironments = (projectNameId: string) => {
+export const useProjectEnvironments = (appId?: string) => {
   const { api } = useAuth();
   const queryClient = useQueryClient();
 
@@ -33,15 +33,15 @@ export const useProjectEnvironments = (projectNameId: string) => {
     error,
     refetch,
   } = useQuery({
-    queryKey: ["project-environments", projectNameId],
+    queryKey: ["project-environments", appId],
     queryFn: async () => {
-      const projectResponse = await api.applications.getApp(projectNameId);
+      const projectResponse = await api.applications.getApp(appId);
       const usersList = await api.users.getUsers();
 
       const envVarsResponse = await Promise.all(
         projectResponse.env_types.map(async (envType) => {
           const envVars = await api.environmentVariables.getEnvs({
-            app_id: projectNameId,
+            app_id: appId,
             env_type_id: envType.id,
           });
 
@@ -53,7 +53,7 @@ export const useProjectEnvironments = (projectNameId: string) => {
       const secretsResponse = await Promise.all(
         projectResponse.env_types.map(async (envType) => {
           const envVars = await api.secrets.getSecrets({
-            app_id: projectNameId,
+            app_id: appId,
             env_type_id: envType.id,
           });
 
@@ -121,16 +121,17 @@ export const useProjectEnvironments = (projectNameId: string) => {
   // Create environment variable
   const createVariable = useMutation({
     mutationFn: async (data: EnvVarFormData) => {
+      if (!appId) throw new Error("Project ID not found");
       return await api.environmentVariables.createEnv({
         key: data.key,
         value: data.value,
         env_type_id: data.env_type_id,
-        app_id: projectNameId,
+        app_id: appId,
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["project-environments", projectNameId],
+        queryKey: ["project-environments", appId],
       });
       toast.success("Variable created successfully");
     },
@@ -149,15 +150,16 @@ export const useProjectEnvironments = (projectNameId: string) => {
       data: Partial<EnvVarFormData>;
       originalKey: string;
     }) => {
+      if (!appId) throw new Error("Project ID not found");
       return await api.environmentVariables.updateEnv(originalKey, {
         value: data.value!,
         env_type_id: data.env_type_id!,
-        app_id: projectNameId,
+        app_id: appId,
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["project-environments", projectNameId],
+        queryKey: ["project-environments", appId],
       });
       toast.success("Variable updated successfully");
     },
@@ -171,22 +173,22 @@ export const useProjectEnvironments = (projectNameId: string) => {
   const deleteVariable = useMutation({
     mutationFn: async ({
       env_type_id,
-      projectNameId,
+      appId,
       key,
     }: {
       env_type_id: string;
-      projectNameId: string;
-      key;
+      appId: string;
+      key: string;
     }) => {
       return await api.environmentVariables.deleteEnv({
-        app_id: projectNameId,
+        app_id: appId,
         env_type_id: env_type_id,
         key,
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["project-environments", projectNameId],
+        queryKey: ["project-environments", appId],
       });
       toast.success("Variable deleted successfully");
     },
@@ -199,20 +201,19 @@ export const useProjectEnvironments = (projectNameId: string) => {
   // Bulk import environment variables
   const bulkImportVariables = useMutation({
     mutationFn: async (data: BulkEnvVarData) => {
-      const promises = data.variables.map((variable) =>
-        api.environmentVariables.createEnv({
+      if (!appId) throw new Error("Project ID not found");
+      return await api.environmentVariables.batchCreateEnvs({
+        app_id: appId,
+        env_type_id: data.env_type_id,
+        envs: data.variables.map((variable) => ({
           key: variable.key,
           value: variable.value,
-          env_type_id: data.env_type_id,
-          app_id: projectNameId,
-        })
-      );
-
-      return await Promise.all(promises);
+        })),
+      });
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: ["project-environments", projectNameId],
+        queryKey: ["project-environments", appId],
       });
       toast.success(
         `Successfully imported ${variables.variables.length} variables`
@@ -227,16 +228,17 @@ export const useProjectEnvironments = (projectNameId: string) => {
   // Create secret
   const createSecret = useMutation({
     mutationFn: async (data: EnvVarFormData) => {
+      if (!appId) throw new Error("Project ID not found");
       return await api.secrets.createSecret({
         key: data.key,
         value: data.value,
         env_type_id: data.env_type_id,
-        app_id: projectNameId,
+        app_id: appId,
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["project-environments", projectNameId],
+        queryKey: ["project-environments", appId],
       });
       toast.success("Secret created successfully");
     },
@@ -255,15 +257,16 @@ export const useProjectEnvironments = (projectNameId: string) => {
       data: Partial<EnvVarFormData>;
       originalKey: string;
     }) => {
+      if (!appId) throw new Error("Project ID not found");
       return await api.secrets.updateSecret(originalKey, {
         value: data.value!,
         env_type_id: data.env_type_id!,
-        app_id: projectNameId,
+        app_id: appId,
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["project-environments", projectNameId],
+        queryKey: ["project-environments", appId],
       });
       toast.success("Secret updated successfully");
     },
@@ -277,22 +280,22 @@ export const useProjectEnvironments = (projectNameId: string) => {
   const deleteSecret = useMutation({
     mutationFn: async ({
       env_type_id,
-      projectNameId,
+      appId,
       key,
     }: {
       env_type_id: string;
-      projectNameId: string;
-      key;
+      appId: string;
+      key: string;
     }) => {
       return await api.secrets.deleteSecret({
-        app_id: projectNameId,
+        app_id: appId,
         env_type_id: env_type_id,
         key,
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["project-environments", projectNameId],
+        queryKey: ["project-environments", appId],
       });
       toast.success("Secret deleted successfully");
     },
@@ -305,20 +308,19 @@ export const useProjectEnvironments = (projectNameId: string) => {
   // Bulk import secrets
   const bulkImportSecrets = useMutation({
     mutationFn: async (data: BulkEnvVarData) => {
-      const promises = data.variables.map((variable) =>
-        api.secrets.createSecret({
+      if (!appId) throw new Error("Project ID not found");
+      return await api.secrets.batchCreateSecrets({
+        app_id: appId,
+        env_type_id: data.env_type_id,
+        envs: data.variables.map((variable) => ({
           key: variable.key,
           value: variable.value,
-          env_type_id: data.env_type_id,
-          app_id: projectNameId,
-        })
-      );
-
-      return await Promise.all(promises);
+        })),
+      });
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: ["project-environments", projectNameId],
+        queryKey: ["project-environments", appId],
       });
       toast.success(
         `Successfully imported ${variables.variables.length} secrets`

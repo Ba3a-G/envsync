@@ -15,8 +15,29 @@ export interface EffectiveAccessEntry {
   user_id: string;
   email: string;
   relation: "admin" | "editor" | "viewer" | null;
-  source: "direct" | "team" | "both" | null;
+  org_relation: "admin" | "editor" | "viewer" | null;
+  direct_relation: "admin" | "editor" | "viewer" | null;
+  team_relation: "admin" | "editor" | "viewer" | null;
+  sources: Array<"org" | "direct" | "team">;
   teams: string[];
+}
+
+export interface EffectivePermissions {
+  can_view: boolean;
+  can_edit: boolean;
+  have_api_access: boolean;
+  have_billing_options: boolean;
+  have_webhook_access: boolean;
+  is_admin: boolean;
+  is_master: boolean;
+  can_manage_roles: boolean;
+  can_manage_users: boolean;
+  can_manage_apps: boolean;
+  can_manage_api_keys: boolean;
+  can_manage_webhooks: boolean;
+  can_view_audit_logs: boolean;
+  can_manage_org_settings: boolean;
+  can_manage_invites: boolean;
 }
 
 const useAppGrants = (appId?: string) =>
@@ -31,6 +52,12 @@ const useAppEffectiveAccess = (appId?: string) =>
     queryKey: [API_KEYS.APP_EFFECTIVE_ACCESS, appId],
     queryFn: () => apiRequest<EffectiveAccessEntry[]>(`/api/permission/app/${appId}/effective-access`),
     enabled: Boolean(appId),
+  });
+
+const useMyPermissions = () =>
+  useQuery({
+    queryKey: [API_KEYS.APP_EFFECTIVE_ACCESS, "me"],
+    queryFn: () => apiRequest<EffectivePermissions>("/api/permission/me"),
   });
 
 const useGrantAppAccess = ({
@@ -74,6 +101,7 @@ const useRevokeAppAccess = ({
 };
 
 export const permissions = {
+  getMyPermissions: useMyPermissions,
   getAppGrants: useAppGrants,
   getAppEffectiveAccess: useAppEffectiveAccess,
   grantAppAccess: useGrantAppAccess,

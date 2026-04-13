@@ -69,4 +69,29 @@ export class OrgController {
 
 		return c.json({ message: "Organization updated successfully." });
 	};
+
+	public static readonly deleteOrg = async (c: Context) => {
+		const org_id = c.get("org_id");
+		const user_id = c.get("user_id");
+		const { confirm_name } = await c.req.json();
+		const org = await OrgService.getOrg(org_id);
+
+		if (confirm_name !== org.name) {
+			return c.json({ error: "Organization name confirmation does not match." }, 400);
+		}
+
+		await AuditLogService.notifyAuditSystem({
+			action: "org_deleted",
+			org_id,
+			user_id,
+			message: `Organization ${org.name} deleted.`,
+			details: {
+				org_name: org.name,
+			},
+		});
+
+		await OrgService.deleteOrg(org_id);
+
+		return c.json({ message: "Organization deleted successfully." });
+	};
 }

@@ -5,13 +5,16 @@ import {
 	checkServiceHealth,
 	type E2ESeed,
 	seedE2EOrg,
+	seedE2EUser,
 } from "../helpers/real-auth";
 
 let seed: E2ESeed;
+let memberUser: { id: string; token: string; email: string };
 
 beforeAll(async () => {
 	await checkServiceHealth();
 	seed = await seedE2EOrg();
+	memberUser = await seedE2EUser(seed.org.id, seed.roles.developer.id);
 });
 
 describe("Certificate Lifecycle E2E", () => {
@@ -23,7 +26,7 @@ describe("Certificate Lifecycle E2E", () => {
 			method: "POST",
 			token: seed.masterUser.token,
 			body: {
-				member_email: "certificate-renew@test.local",
+				member_email: memberUser.email,
 				role: "developer",
 				description: "Lifecycle original cert",
 			},
@@ -31,7 +34,7 @@ describe("Certificate Lifecycle E2E", () => {
 		expect(issueRes.status).toBe(201);
 		const issued = await issueRes.json<{ id: string; subject_email: string | null }>();
 		originalId = issued.id;
-		expect(issued.subject_email).toBe("certificate-renew@test.local");
+		expect(issued.subject_email).toBe(memberUser.email);
 
 		const renewRes = await testRequest(`/api/certificate/${originalId}/renew`, {
 			method: "POST",
@@ -45,7 +48,7 @@ describe("Certificate Lifecycle E2E", () => {
 		const renewed = await renewRes.json<{ id: string; subject_email: string | null }>();
 		renewedId = renewed.id;
 		expect(renewed.id).not.toBe(originalId);
-		expect(renewed.subject_email).toBe("certificate-renew@test.local");
+		expect(renewed.subject_email).toBe(memberUser.email);
 
 		const listRes = await testRequest("/api/certificate", {
 			token: seed.masterUser.token,

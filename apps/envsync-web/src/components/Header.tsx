@@ -124,7 +124,7 @@ export const Header = () => {
                 <p className="text-sm font-medium text-gray-200 truncate">
                   {user?.user?.full_name ?? "User"}
                 </p>
-                <p className="text-xs text-gray-500 truncate">
+                <p className="hdx-mask text-xs text-gray-500 truncate">
                   {user?.user?.email ?? ""}
                 </p>
                 {runtimeConfig.releaseVersion && (

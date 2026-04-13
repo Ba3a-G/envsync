@@ -5,6 +5,7 @@ import { CacheKeys, CacheTTL } from "@/helpers/cache-keys";
 import { DB } from "@/libs/db";
 import { orNotFound } from "@/libs/errors";
 import { runSaga } from "@/helpers/saga";
+import { invalidateSessionToken } from "@/libs/kms/session-manager";
 import { AuthorizationService } from "@/services/authorization.service";
 
 export class TeamService {
@@ -213,6 +214,7 @@ export class TeamService {
 	};
 
 	public static addTeamMember = async (team_id: string, user_id: string) => {
+		const team = await this.getTeam(team_id);
 		let memberRow: Record<string, unknown> | undefined;
 		await runSaga("addTeamMember", {}, [
 			{
@@ -251,6 +253,7 @@ export class TeamService {
 				name: "cache-invalidate",
 				execute: async () => {
 					await invalidateCache(CacheKeys.teamMembers(team_id));
+					invalidateSessionToken(user_id, team.org_id);
 				},
 			},
 		]);
@@ -259,6 +262,7 @@ export class TeamService {
 	};
 
 	public static removeTeamMember = async (team_id: string, user_id: string) => {
+		const team = await this.getTeam(team_id);
 		await runSaga("removeTeamMember", {}, [
 			{
 				name: "db-delete",
@@ -281,6 +285,7 @@ export class TeamService {
 				name: "cache-invalidate",
 				execute: async () => {
 					await invalidateCache(CacheKeys.teamMembers(team_id));
+					invalidateSessionToken(user_id, team.org_id);
 				},
 			},
 		]);
@@ -311,6 +316,15 @@ export class TeamService {
 			.where("id", "=", team_id)
 			.execute();
 
+		const members = await db
+			.selectFrom("team_members")
+			.select("user_id")
+			.where("team_id", "=", team_id)
+			.execute();
+		for (const member of members) {
+			invalidateSessionToken(member.user_id, team.org_id);
+		}
+
 		await invalidateCache(CacheKeys.team(team_id), CacheKeys.teamsByOrg(team.org_id));
 		return { team_id, role_id, role_name: role.name };
 	};
@@ -328,6 +342,15 @@ export class TeamService {
 			})
 			.where("id", "=", team_id)
 			.execute();
+
+		const members = await db
+			.selectFrom("team_members")
+			.select("user_id")
+			.where("team_id", "=", team_id)
+			.execute();
+		for (const member of members) {
+			invalidateSessionToken(member.user_id, team.org_id);
+		}
 
 		await invalidateCache(CacheKeys.team(team_id), CacheKeys.teamsByOrg(team.org_id));
 		return { team_id };

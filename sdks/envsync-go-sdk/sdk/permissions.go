@@ -8,65 +8,87 @@ import (
 	internal "github.com/EnvSync-Cloud/envsync/sdks/envsync-go-sdk/sdk/internal"
 )
 
-type EffectiveAccessResponse = []*EffectiveAccessResponseItem
-
-type EffectiveAccessResponseItem struct {
-	UserId   string   `json:"user_id" url:"user_id"`
-	Email    string   `json:"email" url:"email"`
-	Relation *string  `json:"relation,omitempty" url:"relation,omitempty"`
-	Source   *string  `json:"source,omitempty" url:"source,omitempty"`
-	Teams    []string `json:"teams" url:"teams"`
+type EffectiveAccessEntry struct {
+	UserId         string                            `json:"user_id" url:"user_id"`
+	Email          string                            `json:"email" url:"email"`
+	Relation       *string                           `json:"relation,omitempty" url:"relation,omitempty"`
+	OrgRelation    *string                           `json:"org_relation,omitempty" url:"org_relation,omitempty"`
+	DirectRelation *string                           `json:"direct_relation,omitempty" url:"direct_relation,omitempty"`
+	TeamRelation   *string                           `json:"team_relation,omitempty" url:"team_relation,omitempty"`
+	Sources        []EffectiveAccessEntrySourcesItem `json:"sources" url:"sources"`
+	Teams          []string                          `json:"teams" url:"teams"`
 
 	extraProperties map[string]interface{}
 	rawJSON         json.RawMessage
 }
 
-func (e *EffectiveAccessResponseItem) GetUserId() string {
+func (e *EffectiveAccessEntry) GetUserId() string {
 	if e == nil {
 		return ""
 	}
 	return e.UserId
 }
 
-func (e *EffectiveAccessResponseItem) GetEmail() string {
+func (e *EffectiveAccessEntry) GetEmail() string {
 	if e == nil {
 		return ""
 	}
 	return e.Email
 }
 
-func (e *EffectiveAccessResponseItem) GetRelation() *string {
+func (e *EffectiveAccessEntry) GetRelation() *string {
 	if e == nil {
 		return nil
 	}
 	return e.Relation
 }
 
-func (e *EffectiveAccessResponseItem) GetSource() *string {
+func (e *EffectiveAccessEntry) GetOrgRelation() *string {
 	if e == nil {
 		return nil
 	}
-	return e.Source
+	return e.OrgRelation
 }
 
-func (e *EffectiveAccessResponseItem) GetTeams() []string {
+func (e *EffectiveAccessEntry) GetDirectRelation() *string {
+	if e == nil {
+		return nil
+	}
+	return e.DirectRelation
+}
+
+func (e *EffectiveAccessEntry) GetTeamRelation() *string {
+	if e == nil {
+		return nil
+	}
+	return e.TeamRelation
+}
+
+func (e *EffectiveAccessEntry) GetSources() []EffectiveAccessEntrySourcesItem {
+	if e == nil {
+		return nil
+	}
+	return e.Sources
+}
+
+func (e *EffectiveAccessEntry) GetTeams() []string {
 	if e == nil {
 		return nil
 	}
 	return e.Teams
 }
 
-func (e *EffectiveAccessResponseItem) GetExtraProperties() map[string]interface{} {
+func (e *EffectiveAccessEntry) GetExtraProperties() map[string]interface{} {
 	return e.extraProperties
 }
 
-func (e *EffectiveAccessResponseItem) UnmarshalJSON(data []byte) error {
-	type unmarshaler EffectiveAccessResponseItem
+func (e *EffectiveAccessEntry) UnmarshalJSON(data []byte) error {
+	type unmarshaler EffectiveAccessEntry
 	var value unmarshaler
 	if err := json.Unmarshal(data, &value); err != nil {
 		return err
 	}
-	*e = EffectiveAccessResponseItem(value)
+	*e = EffectiveAccessEntry(value)
 	extraProperties, err := internal.ExtractExtraProperties(data, *e)
 	if err != nil {
 		return err
@@ -76,7 +98,7 @@ func (e *EffectiveAccessResponseItem) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *EffectiveAccessResponseItem) String() string {
+func (e *EffectiveAccessEntry) String() string {
 	if len(e.rawJSON) > 0 {
 		if value, err := internal.StringifyJSON(e.rawJSON); err == nil {
 			return value
@@ -87,6 +109,33 @@ func (e *EffectiveAccessResponseItem) String() string {
 	}
 	return fmt.Sprintf("%#v", e)
 }
+
+type EffectiveAccessEntrySourcesItem string
+
+const (
+	EffectiveAccessEntrySourcesItemOrg    EffectiveAccessEntrySourcesItem = "org"
+	EffectiveAccessEntrySourcesItemDirect EffectiveAccessEntrySourcesItem = "direct"
+	EffectiveAccessEntrySourcesItemTeam   EffectiveAccessEntrySourcesItem = "team"
+)
+
+func NewEffectiveAccessEntrySourcesItemFromString(s string) (EffectiveAccessEntrySourcesItem, error) {
+	switch s {
+	case "org":
+		return EffectiveAccessEntrySourcesItemOrg, nil
+	case "direct":
+		return EffectiveAccessEntrySourcesItemDirect, nil
+	case "team":
+		return EffectiveAccessEntrySourcesItemTeam, nil
+	}
+	var t EffectiveAccessEntrySourcesItem
+	return "", fmt.Errorf("%s is not a valid %T", s, t)
+}
+
+func (e EffectiveAccessEntrySourcesItem) Ptr() *EffectiveAccessEntrySourcesItem {
+	return &e
+}
+
+type EffectiveAccessResponse = []*EffectiveAccessEntry
 
 type GrantAccessRequest struct {
 	SubjectId   string                        `json:"subject_id" url:"subject_id"`
@@ -197,49 +246,47 @@ func (g GrantAccessRequestSubjectType) Ptr() *GrantAccessRequestSubjectType {
 	return &g
 }
 
-type GrantsListResponse = []*GrantsListResponseItem
-
-type GrantsListResponseItem struct {
-	SubjectId   string                            `json:"subject_id" url:"subject_id"`
-	SubjectType GrantsListResponseItemSubjectType `json:"subject_type" url:"subject_type"`
-	Relation    GrantsListResponseItemRelation    `json:"relation" url:"relation"`
+type GrantEntry struct {
+	SubjectId   string                `json:"subject_id" url:"subject_id"`
+	SubjectType GrantEntrySubjectType `json:"subject_type" url:"subject_type"`
+	Relation    GrantEntryRelation    `json:"relation" url:"relation"`
 
 	extraProperties map[string]interface{}
 	rawJSON         json.RawMessage
 }
 
-func (g *GrantsListResponseItem) GetSubjectId() string {
+func (g *GrantEntry) GetSubjectId() string {
 	if g == nil {
 		return ""
 	}
 	return g.SubjectId
 }
 
-func (g *GrantsListResponseItem) GetSubjectType() GrantsListResponseItemSubjectType {
+func (g *GrantEntry) GetSubjectType() GrantEntrySubjectType {
 	if g == nil {
 		return ""
 	}
 	return g.SubjectType
 }
 
-func (g *GrantsListResponseItem) GetRelation() GrantsListResponseItemRelation {
+func (g *GrantEntry) GetRelation() GrantEntryRelation {
 	if g == nil {
 		return ""
 	}
 	return g.Relation
 }
 
-func (g *GrantsListResponseItem) GetExtraProperties() map[string]interface{} {
+func (g *GrantEntry) GetExtraProperties() map[string]interface{} {
 	return g.extraProperties
 }
 
-func (g *GrantsListResponseItem) UnmarshalJSON(data []byte) error {
-	type unmarshaler GrantsListResponseItem
+func (g *GrantEntry) UnmarshalJSON(data []byte) error {
+	type unmarshaler GrantEntry
 	var value unmarshaler
 	if err := json.Unmarshal(data, &value); err != nil {
 		return err
 	}
-	*g = GrantsListResponseItem(value)
+	*g = GrantEntry(value)
 	extraProperties, err := internal.ExtractExtraProperties(data, *g)
 	if err != nil {
 		return err
@@ -249,7 +296,7 @@ func (g *GrantsListResponseItem) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (g *GrantsListResponseItem) String() string {
+func (g *GrantEntry) String() string {
 	if len(g.rawJSON) > 0 {
 		if value, err := internal.StringifyJSON(g.rawJSON); err == nil {
 			return value
@@ -261,52 +308,54 @@ func (g *GrantsListResponseItem) String() string {
 	return fmt.Sprintf("%#v", g)
 }
 
-type GrantsListResponseItemRelation string
+type GrantEntryRelation string
 
 const (
-	GrantsListResponseItemRelationAdmin  GrantsListResponseItemRelation = "admin"
-	GrantsListResponseItemRelationEditor GrantsListResponseItemRelation = "editor"
-	GrantsListResponseItemRelationViewer GrantsListResponseItemRelation = "viewer"
+	GrantEntryRelationAdmin  GrantEntryRelation = "admin"
+	GrantEntryRelationEditor GrantEntryRelation = "editor"
+	GrantEntryRelationViewer GrantEntryRelation = "viewer"
 )
 
-func NewGrantsListResponseItemRelationFromString(s string) (GrantsListResponseItemRelation, error) {
+func NewGrantEntryRelationFromString(s string) (GrantEntryRelation, error) {
 	switch s {
 	case "admin":
-		return GrantsListResponseItemRelationAdmin, nil
+		return GrantEntryRelationAdmin, nil
 	case "editor":
-		return GrantsListResponseItemRelationEditor, nil
+		return GrantEntryRelationEditor, nil
 	case "viewer":
-		return GrantsListResponseItemRelationViewer, nil
+		return GrantEntryRelationViewer, nil
 	}
-	var t GrantsListResponseItemRelation
+	var t GrantEntryRelation
 	return "", fmt.Errorf("%s is not a valid %T", s, t)
 }
 
-func (g GrantsListResponseItemRelation) Ptr() *GrantsListResponseItemRelation {
+func (g GrantEntryRelation) Ptr() *GrantEntryRelation {
 	return &g
 }
 
-type GrantsListResponseItemSubjectType string
+type GrantEntrySubjectType string
 
 const (
-	GrantsListResponseItemSubjectTypeUser GrantsListResponseItemSubjectType = "user"
-	GrantsListResponseItemSubjectTypeTeam GrantsListResponseItemSubjectType = "team"
+	GrantEntrySubjectTypeUser GrantEntrySubjectType = "user"
+	GrantEntrySubjectTypeTeam GrantEntrySubjectType = "team"
 )
 
-func NewGrantsListResponseItemSubjectTypeFromString(s string) (GrantsListResponseItemSubjectType, error) {
+func NewGrantEntrySubjectTypeFromString(s string) (GrantEntrySubjectType, error) {
 	switch s {
 	case "user":
-		return GrantsListResponseItemSubjectTypeUser, nil
+		return GrantEntrySubjectTypeUser, nil
 	case "team":
-		return GrantsListResponseItemSubjectTypeTeam, nil
+		return GrantEntrySubjectTypeTeam, nil
 	}
-	var t GrantsListResponseItemSubjectType
+	var t GrantEntrySubjectType
 	return "", fmt.Errorf("%s is not a valid %T", s, t)
 }
 
-func (g GrantsListResponseItemSubjectType) Ptr() *GrantsListResponseItemSubjectType {
+func (g GrantEntrySubjectType) Ptr() *GrantEntrySubjectType {
 	return &g
 }
+
+type GrantsListResponse = []*GrantEntry
 
 type PermissionMessageResponse struct {
 	Message string `json:"message" url:"message"`

@@ -18,6 +18,7 @@ import {
 	seedE2EOrg,
 	checkServiceHealth,
 	type E2ESeed,
+	seedE2EUser,
 } from "../helpers/real-auth";
 import { startTestServer } from "../helpers/http-server";
 import { buildCLI, createProjectDir, execCLI } from "../helpers/cli-runner";
@@ -32,10 +33,13 @@ let stopServer: () => void;
 let cliBinary: string;
 let projectDir: ReturnType<typeof createProjectDir>;
 let realProjectDir: ReturnType<typeof createProjectDir>;
+let certUserEmail: string;
 
 beforeAll(async () => {
 	await checkServiceHealth();
 	seed = await seedE2EOrg();
+	const certUser = await seedE2EUser(seed.org.id, seed.roles.developer.id);
+	certUserEmail = certUser.email;
 
 	// Create an app and capture its ID
 	const appRes = await testRequest("/api/app", {
@@ -463,7 +467,7 @@ describe("CLI Commands E2E", () => {
 					"cert",
 					"issue",
 					"--email",
-					"dev@e2e.local",
+					certUserEmail,
 					"--role",
 					"developer",
 					"--json",

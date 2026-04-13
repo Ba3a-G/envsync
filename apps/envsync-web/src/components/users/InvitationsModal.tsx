@@ -209,7 +209,9 @@ export const InvitationsModal: React.FC<InvitationsModalProps> = ({
                   <TableBody>
                     {invitations.map((invitation) => (
                       <TableRow key={invitation.id} className="border-gray-700 hover:bg-gray-800/50">
-                        <TableCell className="text-white">{invitation.email}</TableCell>
+                        <TableCell className="text-white">
+                          <span className="hdx-mask">{invitation.email}</span>
+                        </TableCell>
                         <TableCell className="text-gray-300">{invitation.roleName}</TableCell>
                         <TableCell>{getStatusBadge(invitation)}</TableCell>
                         <TableCell className="text-gray-400">{invitation.createdAt}</TableCell>
@@ -256,7 +258,7 @@ export const InvitationsModal: React.FC<InvitationsModalProps> = ({
             <AlertDialogTitle className="text-white">Delete Invitation</AlertDialogTitle>
             <AlertDialogDescription className="text-gray-300">
               Are you sure you want to delete the invitation for{" "}
-              <span className="font-semibold text-white">{selectedInviteEmail}</span>?
+              <span className="hdx-mask font-semibold text-white">{selectedInviteEmail}</span>?
               This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -288,7 +290,7 @@ export const InvitationsModal: React.FC<InvitationsModalProps> = ({
             <div>
               <p className="text-gray-300 mb-4">
                 Change role for{" "}
-                <span className="font-semibold text-white">{selectedInviteEmail}</span>
+                <span className="hdx-mask font-semibold text-white">{selectedInviteEmail}</span>
               </p>
               <Select value={selectedRoleId} onValueChange={setSelectedRoleId}>
                 <SelectTrigger className="bg-gray-800 border-gray-600 text-white">

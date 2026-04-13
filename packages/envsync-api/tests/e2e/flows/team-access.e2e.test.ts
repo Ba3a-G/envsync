@@ -135,25 +135,34 @@ describe("Team Access E2E", () => {
 			user_id: string;
 			email: string;
 			relation: "admin" | "editor" | "viewer" | null;
-			source: "direct" | "team" | "both" | null;
+			org_relation: "admin" | "editor" | "viewer" | null;
+			direct_relation: "admin" | "editor" | "viewer" | null;
+			team_relation: "admin" | "editor" | "viewer" | null;
+			sources: Array<"org" | "direct" | "team">;
 			teams: string[];
 		}>>();
 
 		const bothEntry = effective.find((entry) => entry.user_id === bothUser.id);
 		expect(bothEntry).toBeDefined();
 		expect(bothEntry?.relation).toBe("admin");
-		expect(bothEntry?.source).toBe("both");
+		expect(bothEntry?.direct_relation).toBe("admin");
+		expect(bothEntry?.team_relation).toBe("viewer");
+		expect(bothEntry?.sources).toEqual(expect.arrayContaining(["direct", "team"]));
 		expect(bothEntry?.teams).toContain("E2E Platform Team");
 
 		const teamOnlyEntry = effective.find((entry) => entry.user_id === teamOnlyUser.id);
 		expect(teamOnlyEntry).toBeDefined();
-		expect(teamOnlyEntry?.relation).toBe("viewer");
-		expect(teamOnlyEntry?.source).toBe("team");
+		expect(teamOnlyEntry?.relation).toBe("editor");
+		expect(teamOnlyEntry?.org_relation).toBe("editor");
+		expect(teamOnlyEntry?.team_relation).toBe("viewer");
+		expect(teamOnlyEntry?.sources).toEqual(expect.arrayContaining(["org", "team"]));
 		expect(teamOnlyEntry?.teams).toContain("E2E Platform Team");
 
 		const directOnlyEntry = effective.find((entry) => entry.user_id === directOnlyUser.id);
 		expect(directOnlyEntry).toBeDefined();
 		expect(directOnlyEntry?.relation).toBe("editor");
-		expect(directOnlyEntry?.source).toBe("direct");
+		expect(directOnlyEntry?.org_relation).toBe("viewer");
+		expect(directOnlyEntry?.direct_relation).toBe("editor");
+		expect(directOnlyEntry?.sources).toEqual(expect.arrayContaining(["org", "direct"]));
 	});
 });

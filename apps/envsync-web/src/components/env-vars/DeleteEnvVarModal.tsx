@@ -18,7 +18,7 @@ interface DeleteEnvVarModalProps {
   onOpenChange: (open: boolean) => void;
   variable: EnvironmentVariable | null;
   environmentTypes: EnvironmentType[];
-  onDelete: (env_type_id: string, key: string, projectNameId: string) => void;
+  onDelete: (env_type_id: string, key: string, appId: string) => void;
   isDeleting: boolean;
 }
 
