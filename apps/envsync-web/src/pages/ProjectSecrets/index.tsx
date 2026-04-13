@@ -21,11 +21,12 @@ import { useAuth } from "@/hooks/useAuth";
 import { useNavigate, useParams } from "react-router-dom";
 import { parseAsString, useQueryState } from "nuqs";
 import { getDefaultEnvironmentType } from "@/lib/utils";
+import { appManageEnvironmentsPath } from "@/lib/app-routes";
 
 export const ProjectEnvironments = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { projectNameId } = useParams();
+  const { appId } = useParams();
 
   const onBack = () => navigate("/");
 
@@ -46,7 +47,7 @@ export const ProjectEnvironments = () => {
 
     // Utility functions
     refetch,
-  } = useProjectEnvironments(projectNameId);
+  } = useProjectEnvironments(appId);
 
   const [selectedEnvironment, setSelectedEnvironment] = useQueryState(
     "selected",
@@ -92,12 +93,12 @@ export const ProjectEnvironments = () => {
   };
 
   const handledeleteSecret = useCallback(
-    (env_type_id: string, key: string, projectNameId: string) => {
+    (env_type_id: string, key: string, appId: string) => {
       deleteSecret.mutate(
         {
           env_type_id,
           key,
-          projectNameId,
+          appId,
         },
         {
           onSuccess: () => {
@@ -227,7 +228,7 @@ export const ProjectEnvironments = () => {
         onExport={handleExport}
         onRefresh={handleRetry}
         onManageEnvironments={() => {
-          navigate(`/applications/${projectNameId}/manage-environments`);
+          navigate(appManageEnvironmentsPath(appId ?? ""));
         }}
       />
 

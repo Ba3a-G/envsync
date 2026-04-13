@@ -3,6 +3,15 @@ import z from "zod";
 // For extending the Zod schema with OpenAPI properties
 import "zod-openapi/extend";
 
+const generatedCertificateBundleSchema = z.object({
+	root_ca_pem: z.string().openapi({ example: "-----BEGIN CERTIFICATE-----..." }),
+	member_cert_pem: z.string().openapi({ example: "-----BEGIN CERTIFICATE-----..." }),
+	member_key_pem: z.string().openapi({ example: "-----BEGIN PRIVATE KEY-----..." }),
+	member_certificate_id: z.string().openapi({ example: "CERT_ID" }),
+	member_serial_hex: z.string().openapi({ example: "01AB" }),
+	is_system_generated: z.boolean().openapi({ example: true }),
+});
+
 export const createOrgInviteRequestBodySchema = z
 	.object({
 		email: z.string().openapi({ example: "user@example.com" }),
@@ -32,6 +41,7 @@ export const acceptOrgInviteRequestBodySchema = z
 export const acceptOrgInviteResponseSchema = z
 	.object({
 		message: z.string().openapi({ example: "Organization created successfully." }),
+		generated_certificate_bundle: generatedCertificateBundleSchema,
 	})
 	.openapi({ ref: "AcceptOrgInviteResponse" });
 
@@ -71,6 +81,7 @@ export const acceptUserInviteRequestBodySchema = z
 export const acceptUserInviteResponseSchema = z
 	.object({
 		message: z.string().openapi({ example: "User invite accepted successfully." }),
+		generated_certificate_bundle: generatedCertificateBundleSchema,
 	})
 	.openapi({ ref: "AcceptUserInviteResponse" });
 

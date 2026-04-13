@@ -23,6 +23,7 @@ import {
   GitPullRequest,
   LockKeyhole,
 } from "lucide-react";
+import { appAccessPath, appDetailPath, appPointInTimePath, appSecretsPath } from "@/lib/app-routes";
 
 interface ProjectEnvironmentsHeaderProps {
   projectName: string;
@@ -60,7 +61,7 @@ export const ProjectEnvironmentsHeader = ({
   onManageEnvironments,
 }: ProjectEnvironmentsHeaderProps) => {
   const navigate = useNavigate();
-  const { projectNameId } = useParams();
+  const { appId } = useParams();
   const location = useLocation();
 
   // Determine current section based on route
@@ -68,15 +69,16 @@ export const ProjectEnvironmentsHeader = ({
   const currentSection = isSecretsPage ? "Secrets" : "Variables";
 
   const handleSectionChange = (section: "environments" | "secrets") => {
-    if (!projectNameId) return;
+    if (!appId) return;
 
-    let targetPath = `/applications/${projectNameId}`;
-    if (section === "secrets") targetPath += "/secrets";
+    let targetPath = appDetailPath(appId);
+    if (section === "secrets") targetPath = appSecretsPath(appId);
     navigate(targetPath);
   };
 
   const onRollback = () => {
-    let targetUrl = `/applications/pit/${projectNameId}`;
+    if (!appId) return;
+    let targetUrl = appPointInTimePath(appId);
     if (currentSection === "Secrets") targetUrl += "/secrets";
     const envParam = environmentName?.toLowerCase() || environmentId;
     targetUrl += `?env=${encodeURIComponent(envParam)}`;
@@ -232,7 +234,7 @@ export const ProjectEnvironmentsHeader = ({
           <Button
             variant="outline"
             className="text-white border-gray-700 hover:bg-gray-800"
-            onClick={() => navigate(`/applications/${projectNameId}/access`)}
+            onClick={() => navigate(appAccessPath(appId ?? ""))}
           >
             <LockKeyhole className="w-4 h-4 mr-2" />
             Access

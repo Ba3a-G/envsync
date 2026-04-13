@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { apiRequest } from "@/api";
 import {
   FormData,
   FormErrors,
@@ -191,6 +192,10 @@ export const useOrgSettings = () => {
   const deleteOrgMutation = useMutation({
     mutationFn: async () => {
       if (!orgData?.id) throw new Error("Organization ID not found");
+      return await apiRequest("/api/org", {
+        method: "DELETE",
+        body: JSON.stringify({ confirm_name: deleteConfirmText }),
+      });
     },
     onSuccess: () => {
       toast.success("Organization deleted successfully");
@@ -199,7 +204,7 @@ export const useOrgSettings = () => {
     },
     onError: (error) => {
       console.error("Failed to delete organization:", error);
-      toast.error("Failed to delete organization");
+      toast.error(error instanceof Error ? error.message : "Failed to delete organization");
     },
   });
 

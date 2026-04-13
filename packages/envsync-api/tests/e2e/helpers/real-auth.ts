@@ -170,6 +170,7 @@ export async function seedE2EOrg(): Promise<E2ESeed> {
 	const { DB } = await import("@/libs/db");
 	const { FGAClient } = await import("@/libs/openfga/index");
 	const { CertificateService } = await import("@/services/certificate.service");
+	const { CertificateRoleMapper } = await import("@/services/certificate-role.mapper");
 	const db = await DB.getInstance();
 	const orgId = uuidv4();
 	const slug = `e2e-${orgId.slice(0, 8)}`;
@@ -273,7 +274,21 @@ export async function seedE2EOrg(): Promise<E2ESeed> {
 
 	// Initialize org CA and issue member cert for master user
 	await CertificateService.initOrgCA(orgId, `E2E Test Org ${slug}`, masterUser.id);
-	await CertificateService.issueMemberCert(orgId, masterUser.id, masterUser.email, "master");
+	await CertificateService.issueMemberCert({
+		org_id: orgId,
+		target_user_id: masterUser.id,
+		target_email: masterUser.email,
+		issued_by_user_id: masterUser.id,
+		envsync_pki_role: "master",
+		is_system_generated: true,
+		persist_private_key: true,
+		description: "E2E seeded master certificate",
+		metadata: {
+			role_id: roles.master.id,
+			role_name: roles.master.name,
+			issued_source: "e2e_seed",
+		},
+	});
 
 	// Write FGA tuples for master user with full permissions
 	const fga = await FGAClient.getInstance();
@@ -306,6 +321,8 @@ export async function seedE2EUser(
 ): Promise<E2EUser> {
 	let creds = await ensureKeycloakCredentials();
 	const { CertificateService } = await import("@/services/certificate.service");
+	const { CertificateRoleMapper } = await import("@/services/certificate-role.mapper");
+	const { RoleService } = await import("@/services/role.service");
 	const { DB } = await import("@/libs/db");
 	const db = await DB.getInstance();
 	const id = uuidv4();
@@ -366,7 +383,22 @@ export async function seedE2EUser(
 	//     is issued explicitly after org CA init)
 	const orgCA = await CertificateService.getOrgCA(orgId);
 	if (orgCA) {
-		await CertificateService.issueMemberCert(orgId, id, email, "member");
+		const role = await RoleService.getRole(roleId);
+		await CertificateService.issueMemberCert({
+			org_id: orgId,
+			target_user_id: id,
+			target_email: email,
+			issued_by_user_id: id,
+			envsync_pki_role: CertificateRoleMapper.toPkiRole(role),
+			is_system_generated: true,
+			persist_private_key: true,
+			description: "E2E seeded member certificate",
+			metadata: {
+				role_id: role.id,
+				role_name: role.name,
+				issued_source: "e2e_seed",
+			},
+		});
 	}
 
 	return {

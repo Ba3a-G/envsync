@@ -1,22 +1,21 @@
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Database, LockKeyhole, Users, ShieldAlert } from "lucide-react";
+import { LockKeyhole, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { api } from "@/api";
-import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { appDetailPath } from "@/lib/app-routes";
 
 const relationPriority = { viewer: 1, editor: 2, admin: 3 } as const;
+const sourceOrder = ["org", "direct", "team"] as const;
 
 const ProjectAccess = () => {
-  const { projectNameId } = useParams();
-  const { api: sdkApi, user } = useAuth();
-  const canManage = Boolean(user?.role?.is_admin || user?.role?.is_master);
+  const { appId } = useParams();
 
   const [subjectType, setSubjectType] = useState<"user" | "team">("user");
   const [subjectId, setSubjectId] = useState("");
@@ -24,12 +23,14 @@ const ProjectAccess = () => {
 
   const appQuery = api.applications.allApplications();
   const project = useMemo(
-    () => appQuery.data.find((entry) => entry.id === projectNameId),
-    [appQuery.data, projectNameId],
+    () => appQuery.data.find((entry) => entry.id === appId),
+    [appQuery.data, appId],
   );
 
-  const { data: grants = [] } = api.permissions.getAppGrants(projectNameId);
-  const { data: effectiveAccess = [] } = api.permissions.getAppEffectiveAccess(projectNameId);
+  const { data: permissions } = api.permissions.getMyPermissions();
+  const canManage = Boolean(permissions?.can_manage_apps);
+  const { data: grants = [] } = api.permissions.getAppGrants(appId);
+  const { data: effectiveAccess = [] } = api.permissions.getAppEffectiveAccess(appId);
   const { data: teams = [] } = api.teams.getTeams();
   const { data: users = [] } = api.users.getAllUsers();
 
@@ -55,9 +56,9 @@ const ProjectAccess = () => {
       }));
 
   const handleGrant = () => {
-    if (!projectNameId || !subjectId) return;
+    if (!appId || !subjectId) return;
     grantAccess.mutate({
-      appId: projectNameId,
+      appId,
       payload: { subject_id: subjectId, subject_type: subjectType, relation },
     });
   };
@@ -65,11 +66,11 @@ const ProjectAccess = () => {
   const grantSummary = useMemo(() => {
     const directUsers = grants.filter((grant) => grant.subject_type === "user").length;
     const directTeams = grants.filter((grant) => grant.subject_type === "team").length;
-    const inherited = effectiveAccess.filter((entry) => entry.source === "team" || entry.source === "both").length;
+    const inherited = effectiveAccess.filter((entry) => entry.sources.includes("team")).length;
     return { directUsers, directTeams, inherited };
   }, [effectiveAccess, grants]);
 
-  if (!projectNameId || !project) {
+  if (!appId || !project) {
     return (
       <div className="animate-page-enter rounded-lg border border-dashed border-gray-800 bg-gray-950/60 p-8 text-center text-gray-400">
         Project not found.
@@ -92,7 +93,7 @@ const ProjectAccess = () => {
           </div>
         </div>
         <Button asChild variant="outline" className="border-gray-700 text-gray-200">
-          <Link to={`/applications/${projectNameId}`}>Back to project</Link>
+          <Link to={appDetailPath(appId)}>Back to project</Link>
         </Button>
       </div>
 
@@ -198,7 +199,9 @@ const ProjectAccess = () => {
 
                   return (
                     <TableRow key={`${grant.subject_type}-${grant.subject_id}-${grant.relation}`} className="border-gray-800">
-                      <TableCell className="text-white">{label}</TableCell>
+                      <TableCell className="text-white">
+                        <span className={grant.subject_type === "user" ? "hdx-mask" : undefined}>{label}</span>
+                      </TableCell>
                       <TableCell className="text-gray-300 capitalize">{grant.subject_type}</TableCell>
                       <TableCell>
                         <Badge variant="secondary" className="bg-violet-500/10 text-violet-300">
@@ -212,7 +215,7 @@ const ProjectAccess = () => {
                             className="text-red-300 hover:bg-red-950 hover:text-red-200"
                             onClick={() =>
                               revokeAccess.mutate({
-                                appId: projectNameId,
+                                appId,
                                 payload: grant,
                               })
                             }
@@ -253,7 +256,9 @@ const ProjectAccess = () => {
                 .sort((a, b) => (relationPriority[b.relation || "viewer"] || 0) - (relationPriority[a.relation || "viewer"] || 0))
                 .map((entry) => (
                   <TableRow key={entry.user_id} className="border-gray-800">
-                    <TableCell className="text-white">{entry.email}</TableCell>
+                    <TableCell className="text-white">
+                      <span className="hdx-mask">{entry.email}</span>
+                    </TableCell>
                     <TableCell>
                       {entry.relation ? (
                         <Badge variant="secondary" className="bg-violet-500/10 text-violet-300">
@@ -264,10 +269,16 @@ const ProjectAccess = () => {
                       )}
                     </TableCell>
                     <TableCell>
-                      {entry.source ? (
-                        <Badge variant="secondary" className="bg-blue-500/10 text-blue-300">
-                          {entry.source}
-                        </Badge>
+                      {entry.sources.length ? (
+                        <div className="flex flex-wrap gap-2">
+                          {sourceOrder
+                            .filter((source) => entry.sources.includes(source))
+                            .map((source) => (
+                              <Badge key={source} variant="secondary" className="bg-blue-500/10 text-blue-300">
+                                {source}
+                              </Badge>
+                            ))}
+                        </div>
                       ) : (
                         <span className="text-gray-500">-</span>
                       )}

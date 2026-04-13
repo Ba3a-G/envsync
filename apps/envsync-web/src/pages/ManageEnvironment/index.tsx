@@ -25,6 +25,7 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { appDetailPath } from "@/lib/app-routes";
 
 interface EnvironmentType {
   id: string;
@@ -72,8 +73,8 @@ const PRESET_COLORS = [
 ];
 
 export const ManageEnvironment = () => {
-  const { projectNameId } = useParams<{
-    projectNameId: string;
+  const { appId } = useParams<{
+    appId: string;
   }>();
   const navigate = useNavigate();
   const { api } = useAuth();
@@ -95,16 +96,16 @@ export const ManageEnvironment = () => {
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["project-environments/manage", projectNameId],
+    queryKey: ["project-environments/manage", appId],
     queryFn: async () => {
-      const projectResponse = await api.applications.getApp(projectNameId);
+      const projectResponse = await api.applications.getApp(appId!);
       const envTypesResponse = projectResponse.env_types || [];
 
       // Map environment types to the expected format
       const envTypesWithCount = await Promise.all(
         envTypesResponse.map(async (envType) => {
           const variables = await api.environmentVariables.getEnvs({
-            app_id: projectNameId,
+            app_id: appId!,
             env_type_id: envType.id,
           });
           // Ensure variables is an array
@@ -127,7 +128,7 @@ export const ManageEnvironment = () => {
         environmentTypes: envTypesResponse,
       };
     },
-    enabled: !!projectNameId,
+    enabled: !!appId,
     staleTime: 30 * 1000,
   });
 
@@ -175,15 +176,15 @@ export const ManageEnvironment = () => {
         color: data.color,
         is_default: data.is_default,
         is_protected: data.is_protected,
-        app_id: projectNameId!,
+        app_id: appId!,
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["project-environments", projectNameId],
+        queryKey: ["project-environments", appId],
       });
       queryClient.invalidateQueries({
-        queryKey: ["project-environments/manage", projectNameId],
+        queryKey: ["project-environments/manage", appId],
       });
       setShowCreateDialog(false);
       resetForm();
@@ -209,10 +210,10 @@ export const ManageEnvironment = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["project-environments", projectNameId],
+        queryKey: ["project-environments", appId],
       });
       queryClient.invalidateQueries({
-        queryKey: ["project-environments/manage", projectNameId],
+        queryKey: ["project-environments/manage", appId],
       });
       setShowEditDialog(false);
       setSelectedEnvironment(null);
@@ -233,10 +234,10 @@ export const ManageEnvironment = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["project-environments", projectNameId],
+        queryKey: ["project-environments", appId],
       });
       queryClient.invalidateQueries({
-        queryKey: ["project-environments/manage", projectNameId],
+        queryKey: ["project-environments/manage", appId],
       });
       setShowDeleteDialog(false);
       setSelectedEnvironment(null);
@@ -305,8 +306,8 @@ export const ManageEnvironment = () => {
 
   // Handle back navigation
   const handleBack = useCallback(() => {
-    navigate(`/applications/${projectNameId}`);
-  }, [navigate, projectNameId]);
+    navigate(appDetailPath(appId ?? ""));
+  }, [navigate, appId]);
 
   // Loading state
   if (isLoading) {
@@ -430,7 +431,7 @@ export const ManageEnvironment = () => {
                   <Button
                     onClick={() =>
                       navigate(
-                        `/applications/${projectNameId}?env=${envType.id}&selected=${envType.id}`
+                        `${appDetailPath(appId ?? "")}?env=${envType.id}&selected=${envType.id}`
                       )
                     }
                     variant="ghost"

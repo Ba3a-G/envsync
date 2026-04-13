@@ -3,6 +3,7 @@ import { type Context } from "hono";
 import { TeamService } from "@/services/team.service";
 import { AuditLogService } from "@/services/audit_log.service";
 import { AuthorizationService } from "@/services/authorization.service";
+import { OrgAdminGuardService } from "@/services/org-admin-guard.service";
 
 export class TeamController {
 	public static readonly createTeam = async (c: Context) => {
@@ -176,6 +177,7 @@ export class TeamController {
 			return c.json({ error: "Team does not belong to your organization." }, 403);
 		}
 
+		await OrgAdminGuardService.ensureOrgHasAdminAfterTeamMemberRemoval(org_id, id, user_id);
 		await TeamService.removeTeamMember(id, user_id);
 
 		await AuditLogService.notifyAuditSystem({

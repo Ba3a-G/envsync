@@ -32,6 +32,7 @@ import { Badge } from "@/components/ui/badge";
 const Certificates = () => {
   const { data: certificates, isLoading } = api.certificates.getCertificates();
   const { data: orgCA } = api.certificates.getOrgCA();
+  const { data: users = [] } = api.users.getAllUsers();
 
   // Init CA dialog
   const [isInitCAOpen, setIsInitCAOpen] = useState(false);
@@ -41,7 +42,6 @@ const Certificates = () => {
   // Issue cert dialog
   const [isIssueOpen, setIsIssueOpen] = useState(false);
   const [issueEmail, setIssueEmail] = useState("");
-  const [issueRole, setIssueRole] = useState("");
   const [issueDescription, setIssueDescription] = useState("");
   const [issueMetadata, setIssueMetadata] = useState<{key: string, value: string}[]>([]);
   const [issuedCert, setIssuedCert] = useState<{ cert_pem: string; key_pem: string } | null>(null);
@@ -101,18 +101,18 @@ const Certificates = () => {
   }, [caOrgName, caDescription, initCA]);
 
   const handleIssue = useCallback(() => {
-    if (!issueEmail || !issueRole) return;
+    if (!issueEmail) return;
     const metadataObj = issueMetadata.reduce((acc, { key, value }) => {
       if (key.trim()) acc[key.trim()] = value;
       return acc;
     }, {} as Record<string, string>);
     issueCert.mutate({
       member_email: issueEmail,
-      role: issueRole,
+      role: "member",
       description: issueDescription || undefined,
       metadata: Object.keys(metadataObj).length > 0 ? metadataObj : undefined,
     });
-  }, [issueEmail, issueRole, issueDescription, issueMetadata, issueCert]);
+  }, [issueEmail, issueDescription, issueMetadata, issueCert]);
 
   const handleRevoke = useCallback(() => {
     if (!revokeSerial) return;
@@ -182,11 +182,25 @@ const Certificates = () => {
                   <div className="space-y-4">
                     <div>
                       <Label className="text-gray-300">Member Email</Label>
-                      <Input value={issueEmail} onChange={(e) => setIssueEmail(e.target.value)} className="bg-gray-700 border-gray-600 text-white" placeholder="user@example.com" />
+                      <Input
+                        list="certificate-user-emails"
+                        value={issueEmail}
+                        onChange={(e) => setIssueEmail(e.target.value)}
+                        className="bg-gray-700 border-gray-600 text-white"
+                        placeholder="user@example.com"
+                      />
+                      <datalist id="certificate-user-emails">
+                        {users.map((user) => (
+                          <option key={user.id} value={user.email}>
+                            {user.full_name || user.email}
+                          </option>
+                        ))}
+                      </datalist>
                     </div>
                     <div>
-                      <Label className="text-gray-300">Role</Label>
-                      <Input value={issueRole} onChange={(e) => setIssueRole(e.target.value)} className="bg-gray-700 border-gray-600 text-white" placeholder="developer" />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Certificates can only be issued to existing organization users. Their current org role is resolved automatically by the backend.
+                      </p>
                     </div>
                     <div>
                       <Label className="text-gray-300">Description</Label>
@@ -273,7 +287,7 @@ const Certificates = () => {
                       Issue
                     </Button>
                   ) : (
-                    <Button onClick={() => { setIsIssueOpen(false); setIssuedCert(null); setIssueEmail(""); setIssueRole(""); setIssueDescription(""); setIssueMetadata([]); }} variant="outline" className="border-gray-600 text-gray-300">
+                    <Button onClick={() => { setIsIssueOpen(false); setIssuedCert(null); setIssueEmail(""); setIssueDescription(""); setIssueMetadata([]); }} variant="outline" className="border-gray-600 text-gray-300">
                       Done
                     </Button>
                   )}
@@ -355,6 +369,9 @@ const Certificates = () => {
               <Badge variant="secondary" className="ml-2">{certificates.length}</Badge>
             )}
           </CardTitle>
+          <p className="text-sm text-gray-400">
+            System-generated EnvSync certificates are not listed here. Use Account Settings → My Certificates to view your managed bundle.
+          </p>
         </CardHeader>
         <CardContent>
           {!certificates || certificates.length === 0 ? (

@@ -66,7 +66,7 @@ export interface PitWithChanges extends PitHistoryItem {
 
 const PointInTime = () => {
   const navigate = useNavigate();
-  const { projectNameId, environmentNameId } = useParams();
+  const { appId, environmentNameId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Get selected environment from URL params or default to first environment
@@ -89,7 +89,7 @@ const PointInTime = () => {
     isLoading: isProjectLoading,
     error: projectError,
     refetch: refetchProject,
-  } = useProjectEnvironments(projectNameId);
+  } = useProjectEnvironments(appId);
 
   // Find the selected environment
   const selectedEnvironment = useMemo(() => {
@@ -113,13 +113,13 @@ const PointInTime = () => {
     isRefetching,
   } = usePointInTimeHistory(
     {
-      app_id: projectNameId || "",
+      app_id: appId || "",
       env_type_id: selectedEnvironment?.id || "",
       page: currentPage,
       per_page: pageSize,
     },
     {
-      enabled: !!projectNameId && !!selectedEnvironment?.id,
+      enabled: !!appId && !!selectedEnvironment?.id,
       staleTime: 30000, // 30 seconds
     }
   );
@@ -161,20 +161,20 @@ const PointInTime = () => {
 
   const handleRollback = useCallback(
     (pitData: PitHistoryItem) => {
-      if (!projectNameId || !selectedEnvironment?.id) return;
+      if (!appId || !selectedEnvironment?.id) return;
 
       const confirmMessage = `Are you sure you want to rollback to PIT ${pitData.id}?\n\nThis will restore all variables to their state at that point in time.\n\nMessage: ${pitData.change_request_message}`;
 
       if (window.confirm(confirmMessage)) {
         rollbackToPit.mutate({
-          app_id: projectNameId,
+          app_id: appId,
           env_type_id: selectedEnvironment.id,
           pit_id: pitData.id,
           rollback_message: `Rollback to PIT ${pitData.id} via dashboard`,
         });
       }
     },
-    [projectNameId, selectedEnvironment?.id, rollbackToPit]
+    [appId, selectedEnvironment?.id, rollbackToPit]
   );
 
   const handleViewChanges = useCallback((pitData: PitHistoryItem) => {
@@ -280,7 +280,7 @@ const PointInTime = () => {
   return (
     <div className="flex flex-col gap-6 p-6">
       <PointInTimeHeader
-        projectName={project?.name || projectNameId || ""}
+        projectName={project?.name || appId || ""}
         environmentName={selectedEnvironment.name}
         environmentTypes={environmentTypes || []}
         selectedEnvironmentId={selectedEnvironment.id}
@@ -626,7 +626,7 @@ const PointInTime = () => {
         onOpenChange={setIsCheckDiffModalOpen}
         pitData={selectedPitData}
         pitIdList={pitHistory.map((pit) => pit.id)}
-        projectId={projectNameId || ""}
+        projectId={appId || ""}
         environmentId={selectedEnvironment.id}
       />
 
@@ -634,7 +634,7 @@ const PointInTime = () => {
         isOpen={isViewPitChangesModalOpen}
         onOpenChange={setIsViewPitChangesModalOpen}
         pitData={selectedPitData}
-        projectId={projectNameId || ""}
+        projectId={appId || ""}
         environmentId={selectedEnvironment.id}
       />
     </div>

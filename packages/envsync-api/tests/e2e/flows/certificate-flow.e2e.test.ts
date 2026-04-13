@@ -16,6 +16,7 @@ import {
 
 let seed: E2ESeed;
 let viewerUser: { id: string; token: string };
+let memberUser: { id: string; token: string; email: string };
 
 // State shared across sequential tests
 let memberSerialHex: string;
@@ -25,6 +26,7 @@ beforeAll(async () => {
 	seed = await seedE2EOrg();
 
 	viewerUser = await seedE2EUser(seed.org.id, seed.roles.viewer.id);
+	memberUser = await seedE2EUser(seed.org.id, seed.roles.developer.id);
 	await setupE2EUserPermissions(viewerUser.id, seed.org.id, { can_view: true });
 });
 
@@ -81,7 +83,7 @@ describe("Certificate Flow E2E", () => {
 			method: "POST",
 			token: seed.masterUser.token,
 			body: {
-				member_email: "e2e-dev@example.com",
+				member_email: memberUser.email,
 				role: "developer",
 				description: "E2E member cert",
 			},

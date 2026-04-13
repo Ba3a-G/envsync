@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import { EnvironmentType } from "@/constants";
 import { Card, CardContent } from "@/components/ui/card";
+import { appPointInTimePath } from "@/lib/app-routes";
 
 interface PointInTimeHeaderProps {
   projectName: string;
@@ -70,7 +71,7 @@ export const PointInTimeHeader = ({
   onEnvironmentChange,
 }: PointInTimeHeaderProps) => {
   const navigate = useNavigate();
-  const { projectNameId, environmentNameId } = useParams();
+  const { appId, environmentNameId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
 
@@ -85,9 +86,9 @@ export const PointInTimeHeader = ({
   const currentSection = isSecretsPage ? "Secrets" : "Variables";
 
   const handleSectionChange = (section: "environments" | "secrets") => {
-    if (!projectNameId) return;
+    if (!appId) return;
 
-    let targetUrl = `/applications/pit/${projectNameId}`;
+    let targetUrl = appPointInTimePath(appId);
     if (section === "secrets") targetUrl += "/secrets";
     const envName = currentEnv?.name?.toLowerCase() || selectedEnvId;
     targetUrl += `?env=${encodeURIComponent(envName)}`;

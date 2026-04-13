@@ -5,6 +5,7 @@ import { AccountSettingsCard } from "@/components/user-settings/AccountSettingsC
 import { DangerZoneCard } from "@/components/user-settings/DangerZoneCard";
 import { PasswordResetModal } from "@/components/user-settings/PasswordResetModal";
 import { DeleteAccountModal } from "@/components/user-settings/DeleteAccountModal";
+import { MyCertificatesCard } from "@/components/user-settings/MyCertificatesCard";
 import { BentoGrid, BentoGridItem } from "@/components/ui/bento-grid";
 import { useUserSettings } from "@/hooks/useUserSettings";
 import { Settings } from "lucide-react";
@@ -102,6 +103,10 @@ export const UserSettings = () => {
         </BentoGridItem>
 
         <BentoGridItem className="md:col-span-3 p-0">
+          <MyCertificatesCard />
+        </BentoGridItem>
+
+        <BentoGridItem className="md:col-span-3 p-0">
           <DangerZoneCard
             onDeleteAccount={() => setIsDeleteAccountDialogOpen(true)}
             isDeleteLoading={deleteUserMutation.isPending}
@@ -118,7 +123,7 @@ export const UserSettings = () => {
         userEmail={userData?.email}
       />
 
-      {/* Delete Account Modal */}
+      {/* Leave Organization Modal */}
       <DeleteAccountModal
         open={isDeleteAccountDialogOpen}
         onOpenChange={setIsDeleteAccountDialogOpen}

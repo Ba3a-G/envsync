@@ -7,6 +7,13 @@ import { AuditLogService } from "@/services/audit_log.service";
 import { DB } from "@/libs/db";
 
 export class PermissionController {
+	private static resolveOrgRelation(permissions: Awaited<ReturnType<typeof AuthorizationService.getUserOrgPermissions>>) {
+		if (permissions.is_master || permissions.is_admin || permissions.can_manage_apps) return "admin" as const;
+		if (permissions.can_edit) return "editor" as const;
+		if (permissions.can_view) return "viewer" as const;
+		return null;
+	}
+
 	public static readonly grantAppAccess = async (c: Context) => {
 		const org_id = c.get("org_id");
 		const app_id = c.req.param("app_id");
@@ -165,6 +172,15 @@ export class PermissionController {
 				.where("teams.org_id", "=", org_id)
 				.execute(),
 		]);
+		const orgPermissions = await Promise.all(
+			users.map(async (user) => ({
+				user_id: user.id,
+				org_relation: this.resolveOrgRelation(
+					await AuthorizationService.getUserOrgPermissions(user.id, org_id),
+				),
+			})),
+		);
+		const orgByUser = new Map(orgPermissions.map((entry) => [entry.user_id, entry.org_relation]));
 
 		const directByUser = new Map<string, "admin" | "editor" | "viewer">();
 		const teamByUser = new Map<string, "admin" | "editor" | "viewer">();
@@ -200,25 +216,30 @@ export class PermissionController {
 		}
 
 		const result = users.map((user) => {
-			const direct = directByUser.get(user.id);
-			const team = teamByUser.get(user.id);
-			let relation: "admin" | "editor" | "viewer" | null = null;
-			if (direct && team) {
-				relation = priority[direct] >= priority[team] ? direct : team;
-			} else {
-				relation = direct ?? team ?? null;
-			}
+			const orgRelation = orgByUser.get(user.id) ?? null;
+			const directRelation = directByUser.get(user.id) ?? null;
+			const teamRelation = teamByUser.get(user.id) ?? null;
+			const relations = [orgRelation, directRelation, teamRelation].filter(
+				(value): value is "admin" | "editor" | "viewer" => Boolean(value),
+			);
+			const relation = relations.reduce<"admin" | "editor" | "viewer" | null>((current, next) => {
+				if (!current) return next;
+				return priority[next] > priority[current] ? next : current;
+			}, null);
 
-			let source: "direct" | "team" | "both" | null = null;
-			if (direct && team) source = "both";
-			else if (direct) source = "direct";
-			else if (team) source = "team";
+			const sources: Array<"org" | "direct" | "team"> = [];
+			if (orgRelation) sources.push("org");
+			if (directRelation) sources.push("direct");
+			if (teamRelation) sources.push("team");
 
 			return {
 				user_id: user.id,
 				email: user.email,
 				relation,
-				source,
+				org_relation: orgRelation,
+				direct_relation: directRelation,
+				team_relation: teamRelation,
+				sources,
 				teams: userTeams.get(user.id) ?? [],
 			};
 		});

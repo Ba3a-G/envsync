@@ -41,11 +41,10 @@ export const DeleteAccountModal = ({
         <DialogHeader>
           <DialogTitle className="text-white flex items-center">
             <AlertTriangle className="w-5 h-5 text-red-500 mr-2" />
-            Delete Account
+            Leave Organization
           </DialogTitle>
           <DialogDescription className="text-gray-400">
-            This action cannot be undone. This will permanently delete your account
-            and remove all your data from our servers.
+            This action cannot be undone for this workspace. It removes your membership from the current organization and ends your access immediately.
           </DialogDescription>
         </DialogHeader>
         
@@ -56,11 +55,9 @@ export const DeleteAccountModal = ({
               <div className="text-sm text-red-200">
                 <p className="font-medium mb-1">This will permanently delete:</p>
                 <ul className="list-disc list-inside space-y-1 text-red-300">
-                  <li>Your user profile and settings</li>
-                  <li>All your personal data</li>
-                  <li>Access to all organizations you're a member of</li>
-                  <li>All your API keys and tokens</li>
-                  <li>Your account history and activity logs</li>
+                  <li>Your membership in this organization</li>
+                  <li>Your access to this organization's projects and secrets</li>
+                  <li>Your team memberships and org-level permissions in this workspace</li>
                 </ul>
               </div>
             </div>
@@ -104,7 +101,7 @@ export const DeleteAccountModal = ({
             ) : (
               <>
                 <Trash2 className="w-4 h-4 mr-2" />
-                Delete My Account
+                Leave Organization
               </>
             )}
           </Button>

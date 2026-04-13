@@ -212,7 +212,7 @@ export const useUserSettings = () => {
       return await api.users.deleteUser(userData.id);
     },
     onSuccess: () => {
-      console.log("User account deleted successfully");
+      console.log("Organization membership deleted successfully");
       window.location.href = "/login";
     },
     onError: (error) => {

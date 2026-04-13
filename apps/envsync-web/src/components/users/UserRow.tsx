@@ -137,7 +137,7 @@ export const UserRow = ({
             <h3 className="font-medium text-white">{user.name}</h3>
             <div className="flex items-center space-x-1 text-sm text-gray-400">
               <Mail className="w-3 h-3" />
-              <span>{user.email}</span>
+              <span className="hdx-mask">{user.email}</span>
             </div>
           </div>
         </div>

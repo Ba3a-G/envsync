@@ -289,8 +289,10 @@ async function ensureOrgResourceAccess(orgId: string) {
 
 async function ensureOrgCertificates(orgId: string, orgName: string, userId: string, email: string) {
 	const { CertificateService } = await import("../src/services/certificate.service");
+	const { CertificateRoleMapper } = await import("../src/services/certificate-role.mapper");
 	const { KMSClient } = await import("../src/libs/kms/client");
 	const { getVaultSessionToken, invalidateSessionToken } = await import("../src/libs/kms/session-manager");
+	const { RoleService } = await import("../src/services/role.service");
 	const db = await DB.getInstance();
 
 	const orgCA = await CertificateService.getOrgCA(orgId);
@@ -311,8 +313,23 @@ async function ensureOrgCertificates(orgId: string, orgName: string, userId: str
 		.executeTakeFirst();
 
 	if (!memberCert) {
-		await CertificateService.issueMemberCert(orgId, userId, email, "master", "Seeded local member certificate", {
-			seeded_by: "cli",
+		const user = await db.selectFrom("users").select(["role_id"]).where("id", "=", userId).executeTakeFirstOrThrow();
+		const role = await RoleService.getRole(user.role_id);
+		await CertificateService.issueMemberCert({
+			org_id: orgId,
+			target_user_id: userId,
+			target_email: email,
+			issued_by_user_id: userId,
+			envsync_pki_role: CertificateRoleMapper.toPkiRole(role),
+			is_system_generated: true,
+			persist_private_key: true,
+			description: "Seeded local member certificate",
+			metadata: {
+				role_id: role.id,
+				role_name: role.name,
+				issued_source: "cli_seed",
+				seeded_by: "cli",
+			},
 		});
 		console.log("Seeded member certificate");
 		return;
@@ -327,8 +344,23 @@ async function ensureOrgCertificates(orgId: string, orgName: string, userId: str
 		}
 	} catch {
 		invalidateSessionToken(userId, orgId);
-		await CertificateService.issueMemberCert(orgId, userId, email, "master", "Refreshed seeded local member certificate", {
-			seeded_by: "cli",
+		const user = await db.selectFrom("users").select(["role_id"]).where("id", "=", userId).executeTakeFirstOrThrow();
+		const role = await RoleService.getRole(user.role_id);
+		await CertificateService.issueMemberCert({
+			org_id: orgId,
+			target_user_id: userId,
+			target_email: email,
+			issued_by_user_id: userId,
+			envsync_pki_role: CertificateRoleMapper.toPkiRole(role),
+			is_system_generated: true,
+			persist_private_key: true,
+			description: "Refreshed seeded local member certificate",
+			metadata: {
+				role_id: role.id,
+				role_name: role.name,
+				issued_source: "cli_seed",
+				seeded_by: "cli",
+			},
 		});
 		console.log("Refreshed member certificate");
 	}

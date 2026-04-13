@@ -50,9 +50,7 @@ export function identifyUser(
   if (!hdxActive) return;
   HyperDX.setGlobalAttributes({
     userId,
-    userEmail: metadata?.email,
     userName: metadata?.name,
-    teamName: metadata?.org,
     "envsync.user_id": userId,
     "envsync.org_id": metadata?.orgId,
     "envsync.role_name": metadata?.roleName,

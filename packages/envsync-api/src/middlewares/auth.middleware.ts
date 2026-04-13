@@ -2,10 +2,12 @@ import type { Context, MiddlewareHandler, Next } from "hono";
 import { getCookie } from "hono/cookie";
 
 import { clearWebAuthCookies, setWebAuthCookies } from "@/helpers/web-auth";
+import { AppError } from "@/libs/errors";
 import { config } from "@/utils/env";
 import { getActiveSpan } from "@/libs/telemetry";
 import { OrgService } from "@/services/org.service";
 import { RoleService } from "@/services/role.service";
+import { SystemCertificateProvisioningService } from "@/services/system-certificate-provisioning.service";
 import { UserService } from "@/services/user.service";
 import { validateAccess } from "@/helpers/access";
 import { keycloakRefreshToken } from "@/helpers/keycloak";
@@ -91,6 +93,12 @@ export const authMiddleware = (): MiddlewareHandler => {
 			ctx.set("org_name", org.name);
 			ctx.set("role_name", role.name);
 
+			await SystemCertificateProvisioningService.ensureProvisionedForAuthenticatedUser(
+				user.id,
+				user.org_id,
+				user.role_id,
+			);
+
 			// Enrich active OTEL span with user context
 			const span = getActiveSpan();
 			if (span) {
@@ -105,6 +113,9 @@ export const authMiddleware = (): MiddlewareHandler => {
 
 			await next();
 		} catch (err) {
+			if (err instanceof AppError && err.statusCode !== 404) {
+				throw err;
+			}
 			if (err instanceof Error) {
 				if (usesCookieSession) {
 					clearWebAuthCookies(ctx);

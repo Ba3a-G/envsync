@@ -1,5 +1,3 @@
-import * as grpc from "@grpc/grpc-js";
-
 import { DB } from "@/libs/db";
 import { ConflictError, NotFoundError } from "@/libs/errors";
 import { KMSClient } from "@/libs/kms/client";
@@ -123,10 +121,7 @@ export class SecretService {
 				result.createdAt,
 			);
 		} catch (err) {
-			const isNotFound = err instanceof Error && "code" in err && (
-				(err as grpc.ServiceError).code === grpc.status.NOT_FOUND ||
-				((err as grpc.ServiceError).code === grpc.status.INTERNAL && err.message.includes("vault entry not found"))
-			);
+			const isNotFound = err instanceof Error && "code" in err && (err as { code?: number }).code === 5;
 			if (isNotFound) {
 				return undefined;
 			}
@@ -159,10 +154,7 @@ export class SecretService {
 				sessionToken,
 			);
 		} catch (err) {
-			const isNotFound = err instanceof Error && "code" in err && (
-				(err as grpc.ServiceError).code === grpc.status.NOT_FOUND ||
-				((err as grpc.ServiceError).code === grpc.status.INTERNAL && err.message.includes("vault entry not found"))
-			);
+			const isNotFound = err instanceof Error && "code" in err && (err as { code?: number }).code === 5;
 			if (isNotFound) {
 				throw new NotFoundError("Secret", key);
 			}
@@ -207,17 +199,14 @@ export class SecretService {
 				sessionToken,
 			);
 		} catch (err) {
-			const isNotFound = err instanceof Error && "code" in err && (
-				(err as grpc.ServiceError).code === grpc.status.NOT_FOUND ||
-				((err as grpc.ServiceError).code === grpc.status.INTERNAL && err.message.includes("vault entry not found"))
-			);
+			const isNotFound = err instanceof Error && "code" in err && (err as { code?: number }).code === 5;
 			if (isNotFound) {
 				throw new NotFoundError("Secret", key);
 			}
 			throw err;
 		}
 
-		await kms.vaultDestroy(org_id, app_id, "secret", key, env_type_id, 0, sessionToken);
+		await kms.vaultDelete(org_id, app_id, "secret", key, env_type_id, sessionToken);
 	};
 
 	public static getAllSecret = async ({
@@ -351,7 +340,7 @@ export class SecretService {
 
 		await Promise.all(
 			keys.map(key => limit(() =>
-				kms.vaultDestroy(org_id, app_id, "secret", key, env_type_id, 0, sessionToken),
+				kms.vaultDelete(org_id, app_id, "secret", key, env_type_id, sessionToken),
 			)),
 		);
 	};

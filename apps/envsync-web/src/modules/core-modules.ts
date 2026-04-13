@@ -51,31 +51,31 @@ export const coreWebModules: WebModule[] = [
       {
         id: "applications-detail",
         layout: "root",
-        path: "applications/:projectNameId",
+        path: "applications/:appId",
         loadComponent: () => import("@/pages/ProjectVariables"),
       },
       {
         id: "applications-secrets",
         layout: "root",
-        path: "applications/:projectNameId/secrets",
+        path: "applications/:appId/secrets",
         loadComponent: () => import("@/pages/ProjectSecrets"),
       },
       {
         id: "applications-manage-environments",
         layout: "root",
-        path: "applications/:projectNameId/manage-environments",
+        path: "applications/:appId/manage-environments",
         loadComponent: () => import("@/pages/ManageEnvironment"),
       },
       {
         id: "applications-access",
         layout: "root",
-        path: "applications/:projectNameId/access",
+        path: "applications/:appId/access",
         loadComponent: () => import("@/pages/ProjectAccess"),
       },
       {
         id: "applications-pit",
         layout: "root",
-        path: "applications/pit/:projectNameId",
+        path: "applications/pit/:appId",
         loadComponent: () => import("@/pages/PointInTimeVariables"),
       },
       {

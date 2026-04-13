@@ -45,9 +45,9 @@ export const useInvalidateQueries = () => {
       ]),
     invalidateChangeRequests: () =>
       queryClient.invalidateQueries({ queryKey: [API_KEYS.CHANGE_REQUESTS] }),
-    invalidateProjectData: (projectNameId?: string) =>
+    invalidateProjectData: (appId?: string) =>
       queryClient.invalidateQueries({
-        queryKey: ["project-environments", projectNameId],
+        queryKey: ["project-environments", appId],
       }),
   };
 };

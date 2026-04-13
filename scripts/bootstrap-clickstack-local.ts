@@ -551,6 +551,135 @@ function getDashboardDefinitions(sourceIds: Record<string, string>): DashboardDe
 	];
 }
 
+function getSavedSearchDefinitions(sourceIds: Record<string, string>) {
+	const logs = sourceIds.Logs;
+	const traces = sourceIds.Traces;
+	const sessions = sourceIds.Sessions;
+	if (!logs || !traces || !sessions) {
+		throw new Error(`Missing required ClickStack sources for saved searches: ${JSON.stringify(sourceIds)}`);
+	}
+
+	return [
+		{
+			name: "Frontend Errors - Web",
+			source: logs,
+			select: "TimestampTime, ServiceName, SeverityText, Body",
+			where: "ServiceName:envsync-web AND (LogAttributes.error.type:* OR \"App error\" OR LogAttributes.log.source:console.error)",
+			whereLanguage: "lucene",
+			tags: ["envsync", "frontend", "errors", "alerts"],
+		},
+		{
+			name: "Frontend Errors - Landing",
+			source: logs,
+			select: "TimestampTime, ServiceName, SeverityText, Body",
+			where: "ServiceName:envsync-landing AND (LogAttributes.error.type:* OR LogAttributes.log.source:console.error)",
+			whereLanguage: "lucene",
+			tags: ["envsync", "frontend", "errors", "alerts"],
+		},
+		{
+			name: "API Errors",
+			source: traces,
+			select: "Timestamp, ServiceName, SpanName, Duration, StatusCode",
+			where: "ServiceName = 'envsync-api' AND (toInt64OrZero(SpanAttributes['http.status_code']) >= 500 OR StatusCode = 'STATUS_CODE_ERROR')",
+			whereLanguage: "sql",
+			tags: ["envsync", "backend", "errors", "alerts"],
+		},
+		{
+			name: "Org Onboarding Completed",
+			source: sessions,
+			select: "TimestampTime, ServiceName, Body",
+			where: "LogAttributes.envsync.event_name:org_onboarding_completed",
+			whereLanguage: "lucene",
+			tags: ["envsync", "onboarding", "alerts"],
+		},
+		{
+			name: "Apps Created",
+			source: sessions,
+			select: "TimestampTime, ServiceName, Body",
+			where: "LogAttributes.envsync.event_name:app_created",
+			whereLanguage: "lucene",
+			tags: ["envsync", "applications", "alerts"],
+		},
+		{
+			name: "Users Invited",
+			source: sessions,
+			select: "TimestampTime, ServiceName, Body",
+			where: "LogAttributes.envsync.event_name:user_invited",
+			whereLanguage: "lucene",
+			tags: ["envsync", "alerts"],
+		},
+		{
+			name: "Webhooks Created",
+			source: sessions,
+			select: "TimestampTime, ServiceName, Body",
+			where: "LogAttributes.envsync.event_name:webhook_created",
+			whereLanguage: "lucene",
+			tags: ["envsync", "webhooks", "alerts"],
+		},
+		{
+			name: "Slow API Traces",
+			source: traces,
+			select: "Timestamp, ServiceName, SpanName, Duration, StatusCode",
+			where: "ServiceName = 'envsync-api' AND Duration > 1000000000",
+			whereLanguage: "sql",
+			tags: ["envsync", "backend", "performance", "alerts"],
+		},
+		{
+			name: "Frontend API Calls",
+			source: traces,
+			select: "Timestamp, ServiceName, SpanName, Duration, StatusCode",
+			where: "(ServiceName:envsync-web OR ServiceName:envsync-landing) AND SpanAttributes.http.route:*",
+			whereLanguage: "lucene",
+			tags: ["envsync", "frontend", "performance"],
+		},
+	];
+}
+
+function ensureLocalSavedSearches(sourceIds: Record<string, string>) {
+	const definitions = getSavedSearchDefinitions(sourceIds);
+	const output = runClickstackMongoScript(`
+var now = new Date();
+var teamName = "EnvSync Local Team";
+var definitions = ${JSON.stringify(definitions)};
+var team = db.teams.findOne({ name: teamName });
+if (!team) {
+  throw new Error("Local ClickStack team was not created before saved search bootstrap");
+}
+
+definitions.forEach(function(definition) {
+  var existing = db.savedsearches.findOne({ team: team._id, name: definition.name });
+  var doc = {
+    team: team._id,
+    name: definition.name,
+    select: definition.select,
+    where: definition.where,
+    whereLanguage: definition.whereLanguage,
+    orderBy: definition.orderBy || undefined,
+    source: ObjectId(definition.source),
+    tags: Array.isArray(definition.tags) ? definition.tags : [],
+    filters: Array.isArray(definition.filters) ? definition.filters : [],
+    updatedAt: now
+  };
+  if (!existing) {
+    doc.createdAt = now;
+    db.savedsearches.insertOne(doc);
+  } else {
+    db.savedsearches.updateOne({ _id: existing._id }, { $set: doc });
+  }
+});
+
+print(JSON.stringify(definitions.map(function(definition) {
+  return definition.name;
+})));
+`);
+
+	const parsed = output.split("\n").map(line => line.trim()).filter(Boolean).at(-1);
+	if (!parsed) {
+		throw new Error("Could not resolve local ClickStack saved search output");
+	}
+	return JSON.parse(parsed) as string[];
+}
+
 async function main() {
 	const accessKey = ensureLocalBootstrap();
 	const operator = ensureLocalOperator(accessKey);
@@ -573,6 +702,11 @@ async function main() {
 
 		clickstackApi(accessKey, "POST", "/dashboards", definition);
 		console.log(`Created dashboard: ${definition.name}`);
+	}
+
+	const savedSearches = ensureLocalSavedSearches(sourceIds);
+	for (const name of savedSearches) {
+		console.log(`Upserted saved search: ${name}`);
 	}
 
 	console.log(`ClickStack operator email: ${operator.email}`);

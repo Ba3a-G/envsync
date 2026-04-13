@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { appDetailPath } from "@/lib/app-routes";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -257,7 +258,7 @@ export const CreateProject = () => {
         }
 
         setCreationProgress("Redirecting...");
-        navigate(`/applications/${response.id}`);
+        navigate(appDetailPath(response.id));
       } catch (error) {
         console.error("Failed to create project:", error);
         toast.error("Failed to create project. Please try again.");

@@ -360,8 +360,6 @@ function otherApiSlot(slot: ApiSlot): ApiSlot {
 function toYaml(value: unknown, indent = 0): string {
 	return YAML.stringify(value, {
 		indent: Math.max(2, indent || 2),
-		lineWidth: 0,
-		minContentWidth: 0,
 	});
 }
 

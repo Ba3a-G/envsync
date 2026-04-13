@@ -257,6 +257,50 @@ func (c *Client) GetCrl(
 	return response, nil
 }
 
+// Retrieve the current user's active system-generated certificate bundle
+func (c *Client) GetMyCertificateBundle(
+	ctx context.Context,
+	opts ...option.RequestOption,
+) (*sdk.MyCertificateBundleResponse, error) {
+	options := core.NewRequestOptions(opts...)
+	baseURL := internal.ResolveBaseURL(
+		options.BaseURL,
+		c.baseURL,
+		"http://localhost:4000",
+	)
+	endpointURL := baseURL + "/api/certificate/me"
+	headers := internal.MergeHeaders(
+		c.header.Clone(),
+		options.ToHeader(),
+	)
+	errorCodes := internal.ErrorCodes{
+		404: func(apiError *core.APIError) error {
+			return &sdk.NotFoundError{
+				APIError: apiError,
+			}
+		},
+	}
+
+	var response *sdk.MyCertificateBundleResponse
+	if err := c.caller.Call(
+		ctx,
+		&internal.CallParams{
+			URL:             endpointURL,
+			Method:          http.MethodGet,
+			Headers:         headers,
+			MaxAttempts:     options.MaxAttempts,
+			BodyProperties:  options.BodyProperties,
+			QueryParameters: options.QueryParameters,
+			Client:          options.HTTPClient,
+			Response:        &response,
+			ErrorDecoder:    internal.NewErrorDecoder(errorCodes),
+		},
+	); err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
 // List all certificates for the organization
 func (c *Client) ListCertificates(
 	ctx context.Context,

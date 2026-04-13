@@ -6,6 +6,7 @@ import { createKeycloakUser } from "@/helpers/keycloak";
 import { DB } from "@/libs/db";
 import { orNotFound } from "@/libs/errors";
 import { runSaga } from "@/helpers/saga";
+import { invalidateSessionToken } from "@/libs/kms/session-manager";
 import { AuthorizationService } from "@/services/authorization.service";
 
 export class UserService {
@@ -153,6 +154,7 @@ export class UserService {
 		const keysToInvalidate = [CacheKeys.user(id), CacheKeys.usersByOrg(user.org_id)];
 		if (user.auth_service_id) keysToInvalidate.push(CacheKeys.userByIdp(user.auth_service_id));
 		await invalidateCache(...keysToInvalidate);
+		invalidateSessionToken(id, user.org_id);
 	};
 
 	public static deleteUser = async (id: string) => {
@@ -187,9 +189,43 @@ export class UserService {
 					const keysToInvalidate = [CacheKeys.user(id), CacheKeys.usersByOrg(user.org_id), CacheKeys.allForUser(id)];
 					if (user.auth_service_id) keysToInvalidate.push(CacheKeys.userByIdp(user.auth_service_id));
 					await invalidateCache(...keysToInvalidate);
+					invalidateSessionToken(id, user.org_id);
 				},
 			},
 		]);
+	};
+
+	public static hasOtherMembershipsForAuthService = async (auth_service_id: string, excluding_user_id: string) => {
+		const db = await DB.getInstance();
+		const membership = await db
+			.selectFrom("users")
+			.select("id")
+			.where("auth_service_id", "=", auth_service_id)
+			.where("id", "!=", excluding_user_id)
+			.executeTakeFirst();
+
+		return Boolean(membership);
+	};
+
+	public static getOrphanedAuthServiceIdsForOrg = async (org_id: string) => {
+		const db = await DB.getInstance();
+		const orgUsers = await db
+			.selectFrom("users")
+			.select(["id", "auth_service_id"])
+			.where("org_id", "=", org_id)
+			.where("auth_service_id", "is not", null)
+			.execute();
+
+		const orphanedIds = new Set<string>();
+		for (const user of orgUsers) {
+			if (!user.auth_service_id) continue;
+			const hasOtherMemberships = await this.hasOtherMembershipsForAuthService(user.auth_service_id, user.id);
+			if (!hasOtherMemberships) {
+				orphanedIds.add(user.auth_service_id);
+			}
+		}
+
+		return Array.from(orphanedIds);
 	};
 
 	public static getUserByKeycloakId = async (auth_service_id: string) => {
@@ -218,4 +254,23 @@ export class UserService {
 	};
 
 	public static getUserByIdpId = (idpId: string) => UserService.getUserByKeycloakId(idpId);
+
+	public static getOrgUserByEmail = async (org_id: string, email: string) => {
+		const db = await DB.getInstance();
+		return db
+			.selectFrom("users")
+			.selectAll()
+			.where("org_id", "=", org_id)
+			.where("email", "=", email)
+			.executeTakeFirst();
+	};
+
+	public static getUserByEmail = async (email: string) => {
+		const db = await DB.getInstance();
+		return db
+			.selectFrom("users")
+			.selectAll()
+			.where("email", "=", email)
+			.executeTakeFirst();
+	};
 }

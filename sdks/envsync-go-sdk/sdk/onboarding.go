@@ -28,7 +28,8 @@ type CreateUserInviteRequest struct {
 }
 
 type AcceptOrgInviteResponse struct {
-	Message string `json:"message" url:"message"`
+	Message                    string                                             `json:"message" url:"message"`
+	GeneratedCertificateBundle *AcceptOrgInviteResponseGeneratedCertificateBundle `json:"generated_certificate_bundle" url:"generated_certificate_bundle"`
 
 	extraProperties map[string]interface{}
 	rawJSON         json.RawMessage
@@ -39,6 +40,13 @@ func (a *AcceptOrgInviteResponse) GetMessage() string {
 		return ""
 	}
 	return a.Message
+}
+
+func (a *AcceptOrgInviteResponse) GetGeneratedCertificateBundle() *AcceptOrgInviteResponseGeneratedCertificateBundle {
+	if a == nil {
+		return nil
+	}
+	return a.GeneratedCertificateBundle
 }
 
 func (a *AcceptOrgInviteResponse) GetExtraProperties() map[string]interface{} {
@@ -73,8 +81,95 @@ func (a *AcceptOrgInviteResponse) String() string {
 	return fmt.Sprintf("%#v", a)
 }
 
+type AcceptOrgInviteResponseGeneratedCertificateBundle struct {
+	RootCaPem           string `json:"root_ca_pem" url:"root_ca_pem"`
+	MemberCertPem       string `json:"member_cert_pem" url:"member_cert_pem"`
+	MemberKeyPem        string `json:"member_key_pem" url:"member_key_pem"`
+	MemberCertificateId string `json:"member_certificate_id" url:"member_certificate_id"`
+	MemberSerialHex     string `json:"member_serial_hex" url:"member_serial_hex"`
+	IsSystemGenerated   bool   `json:"is_system_generated" url:"is_system_generated"`
+
+	extraProperties map[string]interface{}
+	rawJSON         json.RawMessage
+}
+
+func (a *AcceptOrgInviteResponseGeneratedCertificateBundle) GetRootCaPem() string {
+	if a == nil {
+		return ""
+	}
+	return a.RootCaPem
+}
+
+func (a *AcceptOrgInviteResponseGeneratedCertificateBundle) GetMemberCertPem() string {
+	if a == nil {
+		return ""
+	}
+	return a.MemberCertPem
+}
+
+func (a *AcceptOrgInviteResponseGeneratedCertificateBundle) GetMemberKeyPem() string {
+	if a == nil {
+		return ""
+	}
+	return a.MemberKeyPem
+}
+
+func (a *AcceptOrgInviteResponseGeneratedCertificateBundle) GetMemberCertificateId() string {
+	if a == nil {
+		return ""
+	}
+	return a.MemberCertificateId
+}
+
+func (a *AcceptOrgInviteResponseGeneratedCertificateBundle) GetMemberSerialHex() string {
+	if a == nil {
+		return ""
+	}
+	return a.MemberSerialHex
+}
+
+func (a *AcceptOrgInviteResponseGeneratedCertificateBundle) GetIsSystemGenerated() bool {
+	if a == nil {
+		return false
+	}
+	return a.IsSystemGenerated
+}
+
+func (a *AcceptOrgInviteResponseGeneratedCertificateBundle) GetExtraProperties() map[string]interface{} {
+	return a.extraProperties
+}
+
+func (a *AcceptOrgInviteResponseGeneratedCertificateBundle) UnmarshalJSON(data []byte) error {
+	type unmarshaler AcceptOrgInviteResponseGeneratedCertificateBundle
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*a = AcceptOrgInviteResponseGeneratedCertificateBundle(value)
+	extraProperties, err := internal.ExtractExtraProperties(data, *a)
+	if err != nil {
+		return err
+	}
+	a.extraProperties = extraProperties
+	a.rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (a *AcceptOrgInviteResponseGeneratedCertificateBundle) String() string {
+	if len(a.rawJSON) > 0 {
+		if value, err := internal.StringifyJSON(a.rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := internal.StringifyJSON(a); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", a)
+}
+
 type AcceptUserInviteResponse struct {
-	Message string `json:"message" url:"message"`
+	Message                    string                                              `json:"message" url:"message"`
+	GeneratedCertificateBundle *AcceptUserInviteResponseGeneratedCertificateBundle `json:"generated_certificate_bundle" url:"generated_certificate_bundle"`
 
 	extraProperties map[string]interface{}
 	rawJSON         json.RawMessage
@@ -85,6 +180,13 @@ func (a *AcceptUserInviteResponse) GetMessage() string {
 		return ""
 	}
 	return a.Message
+}
+
+func (a *AcceptUserInviteResponse) GetGeneratedCertificateBundle() *AcceptUserInviteResponseGeneratedCertificateBundle {
+	if a == nil {
+		return nil
+	}
+	return a.GeneratedCertificateBundle
 }
 
 func (a *AcceptUserInviteResponse) GetExtraProperties() map[string]interface{} {
@@ -108,6 +210,92 @@ func (a *AcceptUserInviteResponse) UnmarshalJSON(data []byte) error {
 }
 
 func (a *AcceptUserInviteResponse) String() string {
+	if len(a.rawJSON) > 0 {
+		if value, err := internal.StringifyJSON(a.rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := internal.StringifyJSON(a); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", a)
+}
+
+type AcceptUserInviteResponseGeneratedCertificateBundle struct {
+	RootCaPem           string `json:"root_ca_pem" url:"root_ca_pem"`
+	MemberCertPem       string `json:"member_cert_pem" url:"member_cert_pem"`
+	MemberKeyPem        string `json:"member_key_pem" url:"member_key_pem"`
+	MemberCertificateId string `json:"member_certificate_id" url:"member_certificate_id"`
+	MemberSerialHex     string `json:"member_serial_hex" url:"member_serial_hex"`
+	IsSystemGenerated   bool   `json:"is_system_generated" url:"is_system_generated"`
+
+	extraProperties map[string]interface{}
+	rawJSON         json.RawMessage
+}
+
+func (a *AcceptUserInviteResponseGeneratedCertificateBundle) GetRootCaPem() string {
+	if a == nil {
+		return ""
+	}
+	return a.RootCaPem
+}
+
+func (a *AcceptUserInviteResponseGeneratedCertificateBundle) GetMemberCertPem() string {
+	if a == nil {
+		return ""
+	}
+	return a.MemberCertPem
+}
+
+func (a *AcceptUserInviteResponseGeneratedCertificateBundle) GetMemberKeyPem() string {
+	if a == nil {
+		return ""
+	}
+	return a.MemberKeyPem
+}
+
+func (a *AcceptUserInviteResponseGeneratedCertificateBundle) GetMemberCertificateId() string {
+	if a == nil {
+		return ""
+	}
+	return a.MemberCertificateId
+}
+
+func (a *AcceptUserInviteResponseGeneratedCertificateBundle) GetMemberSerialHex() string {
+	if a == nil {
+		return ""
+	}
+	return a.MemberSerialHex
+}
+
+func (a *AcceptUserInviteResponseGeneratedCertificateBundle) GetIsSystemGenerated() bool {
+	if a == nil {
+		return false
+	}
+	return a.IsSystemGenerated
+}
+
+func (a *AcceptUserInviteResponseGeneratedCertificateBundle) GetExtraProperties() map[string]interface{} {
+	return a.extraProperties
+}
+
+func (a *AcceptUserInviteResponseGeneratedCertificateBundle) UnmarshalJSON(data []byte) error {
+	type unmarshaler AcceptUserInviteResponseGeneratedCertificateBundle
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*a = AcceptUserInviteResponseGeneratedCertificateBundle(value)
+	extraProperties, err := internal.ExtractExtraProperties(data, *a)
+	if err != nil {
+		return err
+	}
+	a.extraProperties = extraProperties
+	a.rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (a *AcceptUserInviteResponseGeneratedCertificateBundle) String() string {
 	if len(a.rawJSON) > 0 {
 		if value, err := internal.StringifyJSON(a.rawJSON); err == nil {
 			return value

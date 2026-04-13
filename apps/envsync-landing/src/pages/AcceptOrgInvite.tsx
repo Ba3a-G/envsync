@@ -13,6 +13,28 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { api } from "@/helpers/api";
 import { trackAction } from "@/telemetry";
 
+function getErrorMessage(error: unknown) {
+  if (typeof error === "object" && error && "body" in error) {
+    const body = (error as { body?: { error?: string } }).body;
+    if (body?.error) return body.error;
+  }
+  return error instanceof Error ? error.message : "Something went wrong. Please try again.";
+}
+
+function copyToClipboard(value: string) {
+  navigator.clipboard.writeText(value);
+}
+
+function downloadText(filename: string, value: string) {
+  const blob = new Blob([value], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 const AcceptOrgInvite = () => {
   const { invite_code } = useParams();
   const [orgName, setOrgName] = useState("");
@@ -85,6 +107,13 @@ const AcceptOrgInvite = () => {
       console.error("Failed to accept organization invite:", error);
     }
   });
+  const generatedBundle = (acceptOrgInviteMutation.data as {
+    generated_certificate_bundle?: {
+      root_ca_pem: string;
+      member_cert_pem: string;
+      member_key_pem: string;
+    };
+  } | undefined)?.generated_certificate_bundle;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -271,11 +300,7 @@ const AcceptOrgInvite = () => {
                     {acceptOrgInviteMutation.isError && (
                       <div className="flex items-center gap-2 text-red-400 text-sm">
                         <AlertCircle className="h-4 w-4" />
-                        <span>
-                          {acceptOrgInviteMutation.error instanceof Error 
-                            ? acceptOrgInviteMutation.error.message 
-                            : "Something went wrong. Please try again."}
-                        </span>
+                        <span>{getErrorMessage(acceptOrgInviteMutation.error)}</span>
                       </div>
                     )}
                     
@@ -302,16 +327,49 @@ const AcceptOrgInvite = () => {
               </Card>
             ) : (
               <Card className="bg-slate-800 border-slate-700">
-                <CardContent className="pt-8 text-center">
-                  <div className="w-16 h-16 bg-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <CheckCircle className="h-8 w-8 text-white" />
+                <CardContent className="pt-8 space-y-6">
+                  <div className="text-center">
+                    <div className="w-16 h-16 bg-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <CheckCircle className="h-8 w-8 text-white" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-white mb-2">Organization Setup Complete!</h3>
+                    <p className="text-slate-300 mb-6">
+                      Your organization <span className="text-emerald-400">{orgName}</span> has been successfully created.
+                    </p>
                   </div>
-                  <h3 className="text-2xl font-bold text-white mb-2">Organization Setup Complete!</h3>
-                  <p className="text-slate-300 mb-6">
-                    Your organization <span className="text-emerald-400">{orgName}</span> has been successfully created.
-                  </p>
+                  {generatedBundle && (
+                    <div className="space-y-4">
+                      <div className="rounded-lg border border-slate-700 bg-slate-900/60 p-4 text-sm text-slate-300">
+                        These are system-generated EnvSync certificates. They remain available later under Account Settings → My Certificates.
+                      </div>
+                      {[
+                        ["Root CA PEM", generatedBundle.root_ca_pem, "envsync-root-ca.pem"],
+                        ["Member Certificate PEM", generatedBundle.member_cert_pem, "envsync-member-cert.pem"],
+                        ["Private Key PEM", generatedBundle.member_key_pem, "envsync-member-key.pem"],
+                      ].map(([label, value, filename]) => (
+                        <div key={label} className="space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-sm font-medium text-white">{label}</p>
+                            <div className="flex gap-2">
+                              <Button variant="outline" className="border-slate-600 text-slate-200" onClick={() => copyToClipboard(String(value))}>
+                                Copy
+                              </Button>
+                              <Button variant="outline" className="border-slate-600 text-slate-200" onClick={() => downloadText(String(filename), String(value))}>
+                                Download
+                              </Button>
+                            </div>
+                          </div>
+                          <textarea
+                            readOnly
+                            value={String(value)}
+                            className="min-h-[120px] w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 font-mono text-xs text-slate-200"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <Button 
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
                     onClick={() => window.location.href = runtimeConfig.appBaseUrl}
                   >
                     Get Started

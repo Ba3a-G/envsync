@@ -206,6 +206,26 @@ interface GrpcValidateSessionResponse { valid: boolean; member_id: string; org_i
 interface GrpcRevokeSessionResponse { success: boolean }
 interface GrpcRevokeMemberSessionsResponse { revoked_count: number }
 
+function isVaultEntryNotFound(error: unknown): error is grpc.ServiceError {
+	return Boolean(
+		error instanceof Error
+			&& "code" in error
+			&& (error as grpc.ServiceError).code === grpc.status.INTERNAL
+			&& error.message.toLowerCase().includes("vault entry not found"),
+	);
+}
+
+function normalizeVaultError(error: unknown): never {
+	if (isVaultEntryNotFound(error)) {
+		const normalized = new Error("vault entry not found") as grpc.ServiceError;
+		normalized.code = grpc.status.NOT_FOUND;
+		normalized.details = error.details;
+		normalized.metadata = error.metadata;
+		throw normalized;
+	}
+	throw error;
+}
+
 export class KMSClient {
 	private static instance: Promise<KMSClient> | undefined;
 	private grpcAddr: string;
@@ -665,7 +685,7 @@ export class KMSClient {
 			if (error instanceof Error) {
 				infoLogs(`Vault Read error: ${error.message}`, LogTypes.ERROR, "KMSClient");
 			}
-			throw error;
+			normalizeVaultError(error);
 		}
 	}
 
@@ -692,7 +712,7 @@ export class KMSClient {
 			if (error instanceof Error) {
 				infoLogs(`Vault Delete error: ${error.message}`, LogTypes.ERROR, "KMSClient");
 			}
-			throw error;
+			normalizeVaultError(error);
 		}
 	}
 
@@ -720,7 +740,7 @@ export class KMSClient {
 			if (error instanceof Error) {
 				infoLogs(`Vault Destroy error: ${error.message}`, LogTypes.ERROR, "KMSClient");
 			}
-			throw error;
+			normalizeVaultError(error);
 		}
 	}
 

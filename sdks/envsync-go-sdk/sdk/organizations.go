@@ -12,6 +12,10 @@ type CheckIfSlugExistsRequest struct {
 	Slug string `json:"-" url:"slug"`
 }
 
+type DeleteOrgRequest struct {
+	ConfirmName string `json:"confirm_name" url:"-"`
+}
+
 type CheckSlugResponse struct {
 	Exists bool `json:"exists" url:"exists"`
 
@@ -56,6 +60,52 @@ func (c *CheckSlugResponse) String() string {
 		return value
 	}
 	return fmt.Sprintf("%#v", c)
+}
+
+type DeleteOrgResponse struct {
+	Message string `json:"message" url:"message"`
+
+	extraProperties map[string]interface{}
+	rawJSON         json.RawMessage
+}
+
+func (d *DeleteOrgResponse) GetMessage() string {
+	if d == nil {
+		return ""
+	}
+	return d.Message
+}
+
+func (d *DeleteOrgResponse) GetExtraProperties() map[string]interface{} {
+	return d.extraProperties
+}
+
+func (d *DeleteOrgResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler DeleteOrgResponse
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*d = DeleteOrgResponse(value)
+	extraProperties, err := internal.ExtractExtraProperties(data, *d)
+	if err != nil {
+		return err
+	}
+	d.extraProperties = extraProperties
+	d.rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (d *DeleteOrgResponse) String() string {
+	if len(d.rawJSON) > 0 {
+		if value, err := internal.StringifyJSON(d.rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := internal.StringifyJSON(d); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", d)
 }
 
 type OrgResponse struct {

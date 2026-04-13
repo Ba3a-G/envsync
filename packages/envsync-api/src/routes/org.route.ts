@@ -9,6 +9,8 @@ import {
 	updateOrgRequestSchema,
 	orgResponseSchema,
 	checkSlugResponseSchema,
+	deleteOrgRequestSchema,
+	deleteOrgResponseSchema,
 } from "@/validators/org.validator";
 import { errorResponseSchema } from "@/validators/common";
 import { cliMiddleware } from "@/middlewares/cli.middleware";
@@ -114,6 +116,37 @@ app.get(
 		},
 	}),
 	OrgController.checkIfSlugExists,
+);
+
+app.delete(
+	"/",
+	describeRoute({
+		operationId: "deleteOrg",
+		summary: "Delete Organization",
+		description: "Permanently delete the current organization",
+		tags: ["Organizations"],
+		responses: {
+			200: {
+				description: "Organization deleted successfully",
+				content: {
+					"application/json": {
+						schema: resolver(deleteOrgResponseSchema),
+					},
+				},
+			},
+			500: {
+				description: "Internal server error",
+				content: {
+					"application/json": {
+						schema: resolver(errorResponseSchema),
+					},
+				},
+			},
+		},
+	}),
+	zValidator("json", deleteOrgRequestSchema),
+	requirePermission("can_manage_org_settings", "org"),
+	OrgController.deleteOrg,
 );
 
 export default app;

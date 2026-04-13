@@ -75,10 +75,14 @@ func (r *certRepo) IssueMemberCert(ctx context.Context, req requests.IssueMember
 	if req.Description != "" {
 		desc = &req.Description
 	}
+	var role *string
+	if req.Role != "" {
+		role = &req.Role
+	}
 
 	resp, err := r.client.Certificates.IssueMemberCert(ctx, &sdk.IssueMemberCertRequest{
 		MemberEmail: req.MemberEmail,
-		Role:        req.Role,
+		Role:        role,
 		Description: desc,
 		Metadata:    req.Metadata,
 	})
@@ -102,7 +106,7 @@ func (r *certRepo) IssueMemberCert(ctx context.Context, req requests.IssueMember
 		SubjectEmail: resp.SubjectEmail,
 		Status:       resp.Status,
 		Metadata:     metadata,
-		CertPEM:      resp.CertPem,
+		CertPEM:      derefString(resp.CertPem),
 		KeyPEM:       resp.KeyPem,
 		CreatedAt:    resp.CreatedAt,
 	}, nil
@@ -142,6 +146,13 @@ func (r *certRepo) List(ctx context.Context) ([]responses.CertificateResponse, e
 	}
 
 	return result, nil
+}
+
+func derefString(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 func (r *certRepo) Revoke(ctx context.Context, serialHex string, req requests.RevokeCertRequest) (responses.RevokeCertResponse, error) {

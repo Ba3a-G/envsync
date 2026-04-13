@@ -205,7 +205,14 @@ app.delete(
 			},
 		},
 	}),
-	requirePermission("can_manage_users", "org"),
+	async (ctx: Context, next: Next) => {
+		const userId = ctx.get("user_id");
+		const targetId = ctx.req.param("id");
+		if (userId && targetId && userId === targetId) {
+			return next();
+		}
+		return requirePermission("can_manage_users", "org")(ctx, next);
+	},
 	UserController.deleteUser,
 );
 

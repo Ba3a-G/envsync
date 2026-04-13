@@ -11,6 +11,12 @@ export const updateOrgRequestSchema = z
 	})
 	.openapi({ ref: "UpdateOrgRequest" });
 
+export const deleteOrgRequestSchema = z
+	.object({
+		confirm_name: z.string().min(1).openapi({ example: "My Organization" }),
+	})
+	.openapi({ ref: "DeleteOrgRequest" });
+
 export const orgResponseSchema = z
 	.object({
 		id: z.string().openapi({ example: "org_123" }),
@@ -30,3 +36,9 @@ export const checkSlugResponseSchema = z
 		exists: z.boolean().openapi({ example: true }),
 	})
 	.openapi({ ref: "CheckSlugResponse" });
+
+export const deleteOrgResponseSchema = z
+	.object({
+		message: z.string().openapi({ example: "Organization deleted successfully." }),
+	})
+	.openapi({ ref: "DeleteOrgResponse" });

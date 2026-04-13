@@ -15,7 +15,7 @@ type InitOrgCaRequest struct {
 
 type IssueMemberCertRequest struct {
 	MemberEmail string            `json:"member_email" url:"-"`
-	Role        string            `json:"role" url:"-"`
+	Role        *string           `json:"role,omitempty" url:"-"`
 	Description *string           `json:"description,omitempty" url:"-"`
 	Metadata    map[string]string `json:"metadata,omitempty" url:"-"`
 }
@@ -35,9 +35,7 @@ type RotateCertRequest struct {
 	Reason         *int    `json:"reason,omitempty" url:"-"`
 }
 
-type CertificateListResponse = []*CertificateListResponseItem
-
-type CertificateListResponseItem struct {
+type BaseCertificateResponse struct {
 	Id                      string             `json:"id" url:"id"`
 	OrgId                   string             `json:"org_id" url:"org_id"`
 	SerialHex               string             `json:"serial_hex" url:"serial_hex"`
@@ -45,10 +43,12 @@ type CertificateListResponseItem struct {
 	SubjectCn               string             `json:"subject_cn" url:"subject_cn"`
 	SubjectEmail            *string            `json:"subject_email,omitempty" url:"subject_email,omitempty"`
 	Status                  string             `json:"status" url:"status"`
-	NotBefore               *string            `json:"not_before,omitempty" url:"not_before,omitempty"`
-	NotAfter                *string            `json:"not_after,omitempty" url:"not_after,omitempty"`
 	Description             *string            `json:"description,omitempty" url:"description,omitempty"`
 	Metadata                map[string]*string `json:"metadata,omitempty" url:"metadata,omitempty"`
+	CertPem                 *string            `json:"cert_pem,omitempty" url:"cert_pem,omitempty"`
+	IsSystemGenerated       bool               `json:"is_system_generated" url:"is_system_generated"`
+	NotBefore               *string            `json:"not_before,omitempty" url:"not_before,omitempty"`
+	NotAfter                *string            `json:"not_after,omitempty" url:"not_after,omitempty"`
 	RevokedAt               *string            `json:"revoked_at,omitempty" url:"revoked_at,omitempty"`
 	SupersedesCertificateId *string            `json:"supersedes_certificate_id,omitempty" url:"supersedes_certificate_id,omitempty"`
 	CreatedAt               string             `json:"created_at" url:"created_at"`
@@ -58,142 +58,158 @@ type CertificateListResponseItem struct {
 	rawJSON         json.RawMessage
 }
 
-func (c *CertificateListResponseItem) GetId() string {
-	if c == nil {
+func (b *BaseCertificateResponse) GetId() string {
+	if b == nil {
 		return ""
 	}
-	return c.Id
+	return b.Id
 }
 
-func (c *CertificateListResponseItem) GetOrgId() string {
-	if c == nil {
+func (b *BaseCertificateResponse) GetOrgId() string {
+	if b == nil {
 		return ""
 	}
-	return c.OrgId
+	return b.OrgId
 }
 
-func (c *CertificateListResponseItem) GetSerialHex() string {
-	if c == nil {
+func (b *BaseCertificateResponse) GetSerialHex() string {
+	if b == nil {
 		return ""
 	}
-	return c.SerialHex
+	return b.SerialHex
 }
 
-func (c *CertificateListResponseItem) GetCertType() string {
-	if c == nil {
+func (b *BaseCertificateResponse) GetCertType() string {
+	if b == nil {
 		return ""
 	}
-	return c.CertType
+	return b.CertType
 }
 
-func (c *CertificateListResponseItem) GetSubjectCn() string {
-	if c == nil {
+func (b *BaseCertificateResponse) GetSubjectCn() string {
+	if b == nil {
 		return ""
 	}
-	return c.SubjectCn
+	return b.SubjectCn
 }
 
-func (c *CertificateListResponseItem) GetSubjectEmail() *string {
-	if c == nil {
+func (b *BaseCertificateResponse) GetSubjectEmail() *string {
+	if b == nil {
 		return nil
 	}
-	return c.SubjectEmail
+	return b.SubjectEmail
 }
 
-func (c *CertificateListResponseItem) GetStatus() string {
-	if c == nil {
+func (b *BaseCertificateResponse) GetStatus() string {
+	if b == nil {
 		return ""
 	}
-	return c.Status
+	return b.Status
 }
 
-func (c *CertificateListResponseItem) GetNotBefore() *string {
-	if c == nil {
+func (b *BaseCertificateResponse) GetDescription() *string {
+	if b == nil {
 		return nil
 	}
-	return c.NotBefore
+	return b.Description
 }
 
-func (c *CertificateListResponseItem) GetNotAfter() *string {
-	if c == nil {
+func (b *BaseCertificateResponse) GetMetadata() map[string]*string {
+	if b == nil {
 		return nil
 	}
-	return c.NotAfter
+	return b.Metadata
 }
 
-func (c *CertificateListResponseItem) GetDescription() *string {
-	if c == nil {
+func (b *BaseCertificateResponse) GetCertPem() *string {
+	if b == nil {
 		return nil
 	}
-	return c.Description
+	return b.CertPem
 }
 
-func (c *CertificateListResponseItem) GetMetadata() map[string]*string {
-	if c == nil {
+func (b *BaseCertificateResponse) GetIsSystemGenerated() bool {
+	if b == nil {
+		return false
+	}
+	return b.IsSystemGenerated
+}
+
+func (b *BaseCertificateResponse) GetNotBefore() *string {
+	if b == nil {
 		return nil
 	}
-	return c.Metadata
+	return b.NotBefore
 }
 
-func (c *CertificateListResponseItem) GetRevokedAt() *string {
-	if c == nil {
+func (b *BaseCertificateResponse) GetNotAfter() *string {
+	if b == nil {
 		return nil
 	}
-	return c.RevokedAt
+	return b.NotAfter
 }
 
-func (c *CertificateListResponseItem) GetSupersedesCertificateId() *string {
-	if c == nil {
+func (b *BaseCertificateResponse) GetRevokedAt() *string {
+	if b == nil {
 		return nil
 	}
-	return c.SupersedesCertificateId
+	return b.RevokedAt
 }
 
-func (c *CertificateListResponseItem) GetCreatedAt() string {
-	if c == nil {
+func (b *BaseCertificateResponse) GetSupersedesCertificateId() *string {
+	if b == nil {
+		return nil
+	}
+	return b.SupersedesCertificateId
+}
+
+func (b *BaseCertificateResponse) GetCreatedAt() string {
+	if b == nil {
 		return ""
 	}
-	return c.CreatedAt
+	return b.CreatedAt
 }
 
-func (c *CertificateListResponseItem) GetUpdatedAt() string {
-	if c == nil {
+func (b *BaseCertificateResponse) GetUpdatedAt() string {
+	if b == nil {
 		return ""
 	}
-	return c.UpdatedAt
+	return b.UpdatedAt
 }
 
-func (c *CertificateListResponseItem) GetExtraProperties() map[string]interface{} {
-	return c.extraProperties
+func (b *BaseCertificateResponse) GetExtraProperties() map[string]interface{} {
+	return b.extraProperties
 }
 
-func (c *CertificateListResponseItem) UnmarshalJSON(data []byte) error {
-	type unmarshaler CertificateListResponseItem
+func (b *BaseCertificateResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler BaseCertificateResponse
 	var value unmarshaler
 	if err := json.Unmarshal(data, &value); err != nil {
 		return err
 	}
-	*c = CertificateListResponseItem(value)
-	extraProperties, err := internal.ExtractExtraProperties(data, *c)
+	*b = BaseCertificateResponse(value)
+	extraProperties, err := internal.ExtractExtraProperties(data, *b)
 	if err != nil {
 		return err
 	}
-	c.extraProperties = extraProperties
-	c.rawJSON = json.RawMessage(data)
+	b.extraProperties = extraProperties
+	b.rawJSON = json.RawMessage(data)
 	return nil
 }
 
-func (c *CertificateListResponseItem) String() string {
-	if len(c.rawJSON) > 0 {
-		if value, err := internal.StringifyJSON(c.rawJSON); err == nil {
+func (b *BaseCertificateResponse) String() string {
+	if len(b.rawJSON) > 0 {
+		if value, err := internal.StringifyJSON(b.rawJSON); err == nil {
 			return value
 		}
 	}
-	if value, err := internal.StringifyJSON(c); err == nil {
+	if value, err := internal.StringifyJSON(b); err == nil {
 		return value
 	}
-	return fmt.Sprintf("%#v", c)
+	return fmt.Sprintf("%#v", b)
 }
+
+type CertificateListResponse = []*BaseCertificateResponse
 
 type CrlResponse struct {
 	CrlPem    string  `json:"crl_pem" url:"crl_pem"`
@@ -258,17 +274,24 @@ func (c *CrlResponse) String() string {
 }
 
 type MemberCertResponse struct {
-	Id           string             `json:"id" url:"id"`
-	OrgId        string             `json:"org_id" url:"org_id"`
-	SerialHex    string             `json:"serial_hex" url:"serial_hex"`
-	CertType     string             `json:"cert_type" url:"cert_type"`
-	SubjectCn    string             `json:"subject_cn" url:"subject_cn"`
-	SubjectEmail *string            `json:"subject_email,omitempty" url:"subject_email,omitempty"`
-	Status       string             `json:"status" url:"status"`
-	Metadata     map[string]*string `json:"metadata,omitempty" url:"metadata,omitempty"`
-	CertPem      string             `json:"cert_pem" url:"cert_pem"`
-	KeyPem       string             `json:"key_pem" url:"key_pem"`
-	CreatedAt    string             `json:"created_at" url:"created_at"`
+	Id                      string             `json:"id" url:"id"`
+	OrgId                   string             `json:"org_id" url:"org_id"`
+	SerialHex               string             `json:"serial_hex" url:"serial_hex"`
+	CertType                string             `json:"cert_type" url:"cert_type"`
+	SubjectCn               string             `json:"subject_cn" url:"subject_cn"`
+	SubjectEmail            *string            `json:"subject_email,omitempty" url:"subject_email,omitempty"`
+	Status                  string             `json:"status" url:"status"`
+	Description             *string            `json:"description,omitempty" url:"description,omitempty"`
+	Metadata                map[string]*string `json:"metadata,omitempty" url:"metadata,omitempty"`
+	CertPem                 *string            `json:"cert_pem,omitempty" url:"cert_pem,omitempty"`
+	IsSystemGenerated       bool               `json:"is_system_generated" url:"is_system_generated"`
+	NotBefore               *string            `json:"not_before,omitempty" url:"not_before,omitempty"`
+	NotAfter                *string            `json:"not_after,omitempty" url:"not_after,omitempty"`
+	RevokedAt               *string            `json:"revoked_at,omitempty" url:"revoked_at,omitempty"`
+	SupersedesCertificateId *string            `json:"supersedes_certificate_id,omitempty" url:"supersedes_certificate_id,omitempty"`
+	CreatedAt               string             `json:"created_at" url:"created_at"`
+	UpdatedAt               string             `json:"updated_at" url:"updated_at"`
+	KeyPem                  string             `json:"key_pem" url:"key_pem"`
 
 	extraProperties map[string]interface{}
 	rawJSON         json.RawMessage
@@ -323,6 +346,13 @@ func (m *MemberCertResponse) GetStatus() string {
 	return m.Status
 }
 
+func (m *MemberCertResponse) GetDescription() *string {
+	if m == nil {
+		return nil
+	}
+	return m.Description
+}
+
 func (m *MemberCertResponse) GetMetadata() map[string]*string {
 	if m == nil {
 		return nil
@@ -330,18 +360,46 @@ func (m *MemberCertResponse) GetMetadata() map[string]*string {
 	return m.Metadata
 }
 
-func (m *MemberCertResponse) GetCertPem() string {
+func (m *MemberCertResponse) GetCertPem() *string {
 	if m == nil {
-		return ""
+		return nil
 	}
 	return m.CertPem
 }
 
-func (m *MemberCertResponse) GetKeyPem() string {
+func (m *MemberCertResponse) GetIsSystemGenerated() bool {
 	if m == nil {
-		return ""
+		return false
 	}
-	return m.KeyPem
+	return m.IsSystemGenerated
+}
+
+func (m *MemberCertResponse) GetNotBefore() *string {
+	if m == nil {
+		return nil
+	}
+	return m.NotBefore
+}
+
+func (m *MemberCertResponse) GetNotAfter() *string {
+	if m == nil {
+		return nil
+	}
+	return m.NotAfter
+}
+
+func (m *MemberCertResponse) GetRevokedAt() *string {
+	if m == nil {
+		return nil
+	}
+	return m.RevokedAt
+}
+
+func (m *MemberCertResponse) GetSupersedesCertificateId() *string {
+	if m == nil {
+		return nil
+	}
+	return m.SupersedesCertificateId
 }
 
 func (m *MemberCertResponse) GetCreatedAt() string {
@@ -349,6 +407,20 @@ func (m *MemberCertResponse) GetCreatedAt() string {
 		return ""
 	}
 	return m.CreatedAt
+}
+
+func (m *MemberCertResponse) GetUpdatedAt() string {
+	if m == nil {
+		return ""
+	}
+	return m.UpdatedAt
+}
+
+func (m *MemberCertResponse) GetKeyPem() string {
+	if m == nil {
+		return ""
+	}
+	return m.KeyPem
 }
 
 func (m *MemberCertResponse) GetExtraProperties() map[string]interface{} {
@@ -372,6 +444,242 @@ func (m *MemberCertResponse) UnmarshalJSON(data []byte) error {
 }
 
 func (m *MemberCertResponse) String() string {
+	if len(m.rawJSON) > 0 {
+		if value, err := internal.StringifyJSON(m.rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := internal.StringifyJSON(m); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", m)
+}
+
+type MyCertificateBundleResponse struct {
+	RootCaPem         string                                        `json:"root_ca_pem" url:"root_ca_pem"`
+	MemberCertificate *MyCertificateBundleResponseMemberCertificate `json:"member_certificate" url:"member_certificate"`
+
+	extraProperties map[string]interface{}
+	rawJSON         json.RawMessage
+}
+
+func (m *MyCertificateBundleResponse) GetRootCaPem() string {
+	if m == nil {
+		return ""
+	}
+	return m.RootCaPem
+}
+
+func (m *MyCertificateBundleResponse) GetMemberCertificate() *MyCertificateBundleResponseMemberCertificate {
+	if m == nil {
+		return nil
+	}
+	return m.MemberCertificate
+}
+
+func (m *MyCertificateBundleResponse) GetExtraProperties() map[string]interface{} {
+	return m.extraProperties
+}
+
+func (m *MyCertificateBundleResponse) UnmarshalJSON(data []byte) error {
+	type unmarshaler MyCertificateBundleResponse
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*m = MyCertificateBundleResponse(value)
+	extraProperties, err := internal.ExtractExtraProperties(data, *m)
+	if err != nil {
+		return err
+	}
+	m.extraProperties = extraProperties
+	m.rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (m *MyCertificateBundleResponse) String() string {
+	if len(m.rawJSON) > 0 {
+		if value, err := internal.StringifyJSON(m.rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := internal.StringifyJSON(m); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", m)
+}
+
+type MyCertificateBundleResponseMemberCertificate struct {
+	Id                      string             `json:"id" url:"id"`
+	OrgId                   string             `json:"org_id" url:"org_id"`
+	SerialHex               string             `json:"serial_hex" url:"serial_hex"`
+	CertType                string             `json:"cert_type" url:"cert_type"`
+	SubjectCn               string             `json:"subject_cn" url:"subject_cn"`
+	SubjectEmail            *string            `json:"subject_email,omitempty" url:"subject_email,omitempty"`
+	Status                  string             `json:"status" url:"status"`
+	Description             *string            `json:"description,omitempty" url:"description,omitempty"`
+	Metadata                map[string]*string `json:"metadata,omitempty" url:"metadata,omitempty"`
+	CertPem                 *string            `json:"cert_pem,omitempty" url:"cert_pem,omitempty"`
+	IsSystemGenerated       bool               `json:"is_system_generated" url:"is_system_generated"`
+	NotBefore               *string            `json:"not_before,omitempty" url:"not_before,omitempty"`
+	NotAfter                *string            `json:"not_after,omitempty" url:"not_after,omitempty"`
+	RevokedAt               *string            `json:"revoked_at,omitempty" url:"revoked_at,omitempty"`
+	SupersedesCertificateId *string            `json:"supersedes_certificate_id,omitempty" url:"supersedes_certificate_id,omitempty"`
+	CreatedAt               string             `json:"created_at" url:"created_at"`
+	UpdatedAt               string             `json:"updated_at" url:"updated_at"`
+	KeyPem                  string             `json:"key_pem" url:"key_pem"`
+
+	extraProperties map[string]interface{}
+	rawJSON         json.RawMessage
+}
+
+func (m *MyCertificateBundleResponseMemberCertificate) GetId() string {
+	if m == nil {
+		return ""
+	}
+	return m.Id
+}
+
+func (m *MyCertificateBundleResponseMemberCertificate) GetOrgId() string {
+	if m == nil {
+		return ""
+	}
+	return m.OrgId
+}
+
+func (m *MyCertificateBundleResponseMemberCertificate) GetSerialHex() string {
+	if m == nil {
+		return ""
+	}
+	return m.SerialHex
+}
+
+func (m *MyCertificateBundleResponseMemberCertificate) GetCertType() string {
+	if m == nil {
+		return ""
+	}
+	return m.CertType
+}
+
+func (m *MyCertificateBundleResponseMemberCertificate) GetSubjectCn() string {
+	if m == nil {
+		return ""
+	}
+	return m.SubjectCn
+}
+
+func (m *MyCertificateBundleResponseMemberCertificate) GetSubjectEmail() *string {
+	if m == nil {
+		return nil
+	}
+	return m.SubjectEmail
+}
+
+func (m *MyCertificateBundleResponseMemberCertificate) GetStatus() string {
+	if m == nil {
+		return ""
+	}
+	return m.Status
+}
+
+func (m *MyCertificateBundleResponseMemberCertificate) GetDescription() *string {
+	if m == nil {
+		return nil
+	}
+	return m.Description
+}
+
+func (m *MyCertificateBundleResponseMemberCertificate) GetMetadata() map[string]*string {
+	if m == nil {
+		return nil
+	}
+	return m.Metadata
+}
+
+func (m *MyCertificateBundleResponseMemberCertificate) GetCertPem() *string {
+	if m == nil {
+		return nil
+	}
+	return m.CertPem
+}
+
+func (m *MyCertificateBundleResponseMemberCertificate) GetIsSystemGenerated() bool {
+	if m == nil {
+		return false
+	}
+	return m.IsSystemGenerated
+}
+
+func (m *MyCertificateBundleResponseMemberCertificate) GetNotBefore() *string {
+	if m == nil {
+		return nil
+	}
+	return m.NotBefore
+}
+
+func (m *MyCertificateBundleResponseMemberCertificate) GetNotAfter() *string {
+	if m == nil {
+		return nil
+	}
+	return m.NotAfter
+}
+
+func (m *MyCertificateBundleResponseMemberCertificate) GetRevokedAt() *string {
+	if m == nil {
+		return nil
+	}
+	return m.RevokedAt
+}
+
+func (m *MyCertificateBundleResponseMemberCertificate) GetSupersedesCertificateId() *string {
+	if m == nil {
+		return nil
+	}
+	return m.SupersedesCertificateId
+}
+
+func (m *MyCertificateBundleResponseMemberCertificate) GetCreatedAt() string {
+	if m == nil {
+		return ""
+	}
+	return m.CreatedAt
+}
+
+func (m *MyCertificateBundleResponseMemberCertificate) GetUpdatedAt() string {
+	if m == nil {
+		return ""
+	}
+	return m.UpdatedAt
+}
+
+func (m *MyCertificateBundleResponseMemberCertificate) GetKeyPem() string {
+	if m == nil {
+		return ""
+	}
+	return m.KeyPem
+}
+
+func (m *MyCertificateBundleResponseMemberCertificate) GetExtraProperties() map[string]interface{} {
+	return m.extraProperties
+}
+
+func (m *MyCertificateBundleResponseMemberCertificate) UnmarshalJSON(data []byte) error {
+	type unmarshaler MyCertificateBundleResponseMemberCertificate
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*m = MyCertificateBundleResponseMemberCertificate(value)
+	extraProperties, err := internal.ExtractExtraProperties(data, *m)
+	if err != nil {
+		return err
+	}
+	m.extraProperties = extraProperties
+	m.rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (m *MyCertificateBundleResponseMemberCertificate) String() string {
 	if len(m.rawJSON) > 0 {
 		if value, err := internal.StringifyJSON(m.rawJSON); err == nil {
 			return value
@@ -438,14 +746,23 @@ func (o *OcspResponse) String() string {
 }
 
 type OrgCaResponse struct {
-	Id        string  `json:"id" url:"id"`
-	OrgId     string  `json:"org_id" url:"org_id"`
-	SerialHex string  `json:"serial_hex" url:"serial_hex"`
-	CertType  string  `json:"cert_type" url:"cert_type"`
-	SubjectCn string  `json:"subject_cn" url:"subject_cn"`
-	Status    string  `json:"status" url:"status"`
-	CertPem   *string `json:"cert_pem,omitempty" url:"cert_pem,omitempty"`
-	CreatedAt string  `json:"created_at" url:"created_at"`
+	Id                      string             `json:"id" url:"id"`
+	OrgId                   string             `json:"org_id" url:"org_id"`
+	SerialHex               string             `json:"serial_hex" url:"serial_hex"`
+	CertType                string             `json:"cert_type" url:"cert_type"`
+	SubjectCn               string             `json:"subject_cn" url:"subject_cn"`
+	SubjectEmail            *string            `json:"subject_email,omitempty" url:"subject_email,omitempty"`
+	Status                  string             `json:"status" url:"status"`
+	Description             *string            `json:"description,omitempty" url:"description,omitempty"`
+	Metadata                map[string]*string `json:"metadata,omitempty" url:"metadata,omitempty"`
+	CertPem                 *string            `json:"cert_pem,omitempty" url:"cert_pem,omitempty"`
+	IsSystemGenerated       bool               `json:"is_system_generated" url:"is_system_generated"`
+	NotBefore               *string            `json:"not_before,omitempty" url:"not_before,omitempty"`
+	NotAfter                *string            `json:"not_after,omitempty" url:"not_after,omitempty"`
+	RevokedAt               *string            `json:"revoked_at,omitempty" url:"revoked_at,omitempty"`
+	SupersedesCertificateId *string            `json:"supersedes_certificate_id,omitempty" url:"supersedes_certificate_id,omitempty"`
+	CreatedAt               string             `json:"created_at" url:"created_at"`
+	UpdatedAt               string             `json:"updated_at" url:"updated_at"`
 
 	extraProperties map[string]interface{}
 	rawJSON         json.RawMessage
@@ -486,11 +803,32 @@ func (o *OrgCaResponse) GetSubjectCn() string {
 	return o.SubjectCn
 }
 
+func (o *OrgCaResponse) GetSubjectEmail() *string {
+	if o == nil {
+		return nil
+	}
+	return o.SubjectEmail
+}
+
 func (o *OrgCaResponse) GetStatus() string {
 	if o == nil {
 		return ""
 	}
 	return o.Status
+}
+
+func (o *OrgCaResponse) GetDescription() *string {
+	if o == nil {
+		return nil
+	}
+	return o.Description
+}
+
+func (o *OrgCaResponse) GetMetadata() map[string]*string {
+	if o == nil {
+		return nil
+	}
+	return o.Metadata
 }
 
 func (o *OrgCaResponse) GetCertPem() *string {
@@ -500,11 +838,53 @@ func (o *OrgCaResponse) GetCertPem() *string {
 	return o.CertPem
 }
 
+func (o *OrgCaResponse) GetIsSystemGenerated() bool {
+	if o == nil {
+		return false
+	}
+	return o.IsSystemGenerated
+}
+
+func (o *OrgCaResponse) GetNotBefore() *string {
+	if o == nil {
+		return nil
+	}
+	return o.NotBefore
+}
+
+func (o *OrgCaResponse) GetNotAfter() *string {
+	if o == nil {
+		return nil
+	}
+	return o.NotAfter
+}
+
+func (o *OrgCaResponse) GetRevokedAt() *string {
+	if o == nil {
+		return nil
+	}
+	return o.RevokedAt
+}
+
+func (o *OrgCaResponse) GetSupersedesCertificateId() *string {
+	if o == nil {
+		return nil
+	}
+	return o.SupersedesCertificateId
+}
+
 func (o *OrgCaResponse) GetCreatedAt() string {
 	if o == nil {
 		return ""
 	}
 	return o.CreatedAt
+}
+
+func (o *OrgCaResponse) GetUpdatedAt() string {
+	if o == nil {
+		return ""
+	}
+	return o.UpdatedAt
 }
 
 func (o *OrgCaResponse) GetExtraProperties() map[string]interface{} {

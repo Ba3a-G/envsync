@@ -46,7 +46,7 @@ export function useBreadcrumbs(): Breadcrumb[] {
       if (ROUTE_LABELS[segment]) {
         crumbs.push({ label: ROUTE_LABELS[segment], href: currentPath });
       } else {
-        // Try to resolve dynamic :projectNameId from cache
+        // Try to resolve dynamic :appId from cache
         let label = segment;
         const apps = queryClient.getQueryData<Array<{ name: string; id: string }>>([
           API_KEYS.ALL_APPLICATIONS,

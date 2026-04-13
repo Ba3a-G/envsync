@@ -79,7 +79,7 @@ export const ApiKeyRow = ({
           <span className="font-medium text-white">
             {apiKey.created_by?.name || "Unknown"}
           </span>
-          <span className="text-xs text-gray-400">
+          <span className="hdx-mask text-xs text-gray-400">
             {apiKey.created_by?.email}
           </span>
         </div>
