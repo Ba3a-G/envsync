@@ -35,7 +35,7 @@ export async function waitForService(url: string, label: string) {
 
 export async function waitForUiServices() {
 	const config = getUiHarnessConfig();
-	await waitForService(`${config.apiBaseUrl}/api/health`, "API");
+	await waitForService(`${config.apiBaseUrl}/health`, "API");
 	await waitForService(config.baseUrl, "Web app");
 }
 

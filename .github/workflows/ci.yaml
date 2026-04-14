@@ -136,7 +136,7 @@ jobs:
       - name: Wait for app services
         run: |
           for url in \
-            "http://api.lvh.me:4000/api/health" \
+            "http://api.lvh.me:4000/health" \
             "http://app.lvh.me:8001" \
             "http://localhost:8002" \
             "http://localhost:8025"
