@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { api } from "@/api";
+import { useAuthContext } from "@/contexts/auth";
 import { Role } from "@/api/roles.api";
 import { UserResponse } from "@envsync-cloud/envsync-ts-sdk";
 
@@ -9,9 +10,11 @@ export type RoleData = Role & {
 };
 
 export const useRolesTable = () => {
-  const { data: rolesData, isLoading: rolesLoading } = api.roles.getAllRoles();
-  const { data: usersData, isLoading: usersLoading } = api.users.getAllUsers();
-  const { data: teamsData, isLoading: teamsLoading } = api.teams.getTeams();
+  const { isLoading: isAuthLoading, isAuthenticated } = useAuthContext();
+  const authEnabled = !isAuthLoading && isAuthenticated;
+  const { data: rolesData, isLoading: rolesLoading } = api.roles.getAllRoles({ enabled: authEnabled });
+  const { data: usersData, isLoading: usersLoading } = api.users.getAllUsers({ enabled: authEnabled });
+  const { data: teamsData, isLoading: teamsLoading } = api.teams.getTeams({ enabled: authEnabled });
 
   const isLoading = rolesLoading || usersLoading || teamsLoading;
 

@@ -22,7 +22,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useAuth } from "@/hooks/useAuth";
+import { sdk } from "@/api";
+import { useAuthContext } from "@/contexts/auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { appDetailPath } from "@/lib/app-routes";
@@ -77,7 +78,7 @@ export const ManageEnvironment = () => {
     appId: string;
   }>();
   const navigate = useNavigate();
-  const { api } = useAuth();
+  const { isLoading: isAuthLoading, isAuthenticated } = useAuthContext();
   const queryClient = useQueryClient();
 
   // State
@@ -98,13 +99,13 @@ export const ManageEnvironment = () => {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["project-environments/manage", appId],
     queryFn: async () => {
-      const projectResponse = await api.applications.getApp(appId!);
+      const projectResponse = await sdk.applications.getApp(appId!);
       const envTypesResponse = projectResponse.env_types || [];
 
       // Map environment types to the expected format
       const envTypesWithCount = await Promise.all(
         envTypesResponse.map(async (envType) => {
-          const variables = await api.environmentVariables.getEnvs({
+          const variables = await sdk.environmentVariables.getEnvs({
             app_id: appId!,
             env_type_id: envType.id,
           });
@@ -128,7 +129,7 @@ export const ManageEnvironment = () => {
         environmentTypes: envTypesResponse,
       };
     },
-    enabled: !!appId,
+    enabled: !isAuthLoading && isAuthenticated && !!appId,
     staleTime: 30 * 1000,
   });
 
@@ -171,7 +172,7 @@ export const ManageEnvironment = () => {
   // Create environment type mutation
   const createEnvironmentType = useMutation({
     mutationFn: async (data: FormData) => {
-      return await api.environmentTypes.createEnvType({
+      return await sdk.environmentTypes.createEnvType({
         name: data.name.trim(),
         color: data.color,
         is_default: data.is_default,
@@ -200,7 +201,7 @@ export const ManageEnvironment = () => {
   const updateEnvironmentType = useMutation({
     mutationFn: async (data: FormData) => {
       if (!selectedEnvironment) throw new Error("No environment selected");
-      return await api.environmentTypes.updateEnvType(selectedEnvironment.id, {
+      return await sdk.environmentTypes.updateEnvType(selectedEnvironment.id, {
         id: selectedEnvironment.id,
         name: data.name.trim(),
         color: data.color,
@@ -230,7 +231,7 @@ export const ManageEnvironment = () => {
   const deleteEnvironmentType = useMutation({
     mutationFn: async () => {
       if (!selectedEnvironment) throw new Error("No environment selected");
-      return await api.environmentTypes.deleteEnvType(selectedEnvironment.id);
+      return await sdk.environmentTypes.deleteEnvType(selectedEnvironment.id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({

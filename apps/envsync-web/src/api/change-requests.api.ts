@@ -56,18 +56,19 @@ export interface PromotionChangeRequestPayload {
   message: string;
 }
 
-const useChangeRequests = (status?: string) =>
+const useChangeRequests = (status?: string, { enabled = true }: { enabled?: boolean } = {}) =>
   useQuery({
     queryKey: [API_KEYS.CHANGE_REQUESTS, status || "all"],
     queryFn: () =>
       apiRequest<ChangeRequest[]>(`/api/change_request${status ? `?status=${encodeURIComponent(status)}` : ""}`),
+    enabled,
   });
 
-const useChangeRequest = (id?: string) =>
+const useChangeRequest = (id?: string, { enabled = true }: { enabled?: boolean } = {}) =>
   useQuery({
     queryKey: [API_KEYS.CHANGE_REQUESTS, id],
     queryFn: () => apiRequest<ChangeRequest>(`/api/change_request/${id}`),
-    enabled: Boolean(id),
+    enabled: enabled && Boolean(id),
   });
 
 const useCreateDirectChangeRequest = ({

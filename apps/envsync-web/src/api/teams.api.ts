@@ -29,17 +29,18 @@ export interface TeamDetail extends Team {
   members: TeamMember[];
 }
 
-const useTeams = () =>
+const useTeams = ({ enabled = true }: { enabled?: boolean } = {}) =>
   useQuery({
     queryKey: [API_KEYS.ALL_TEAMS],
     queryFn: () => apiRequest<Team[]>("/api/team"),
+    enabled,
   });
 
-const useTeam = (id?: string) =>
+const useTeam = (id?: string, { enabled = true }: { enabled?: boolean } = {}) =>
   useQuery({
     queryKey: [API_KEYS.ALL_TEAMS, id],
     queryFn: () => apiRequest<TeamDetail>(`/api/team/${id}`),
-    enabled: Boolean(id),
+    enabled: enabled && Boolean(id),
   });
 
 const useCreateTeam = ({

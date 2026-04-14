@@ -1,7 +1,7 @@
 import { Search, Bell, LogOut, Settings, Globe } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useBreadcrumbs } from "@/hooks/useBreadcrumbs";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/contexts/auth";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -22,7 +22,7 @@ import { logoutWebSession } from "@/api";
 import { runtimeConfig } from "@/utils/runtime-config";
 
 export const Header = () => {
-  const { user } = useAuth();
+  const { user } = useAuthContext();
   const breadcrumbs = useBreadcrumbs();
   const navigate = useNavigate();
 

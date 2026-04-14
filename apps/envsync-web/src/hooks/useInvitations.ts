@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
-import { useAuth } from "@/hooks/useAuth";
+import { sdk } from "@/api";
+import { useAuthContext } from "@/contexts/auth";
 import { API_KEYS } from "@/constants";
 
 interface Invitation {
@@ -20,8 +21,9 @@ interface FormErrors {
 }
 
 export const useInvitations = () => {
-  const { api } = useAuth();
+  const { isLoading: isAuthLoading, isAuthenticated } = useAuthContext();
   const queryClient = useQueryClient();
+  const authEnabled = !isAuthLoading && isAuthenticated;
 
   // State management
   const [selectedInviteId, setSelectedInviteId] = useState<string | null>(null);
@@ -42,8 +44,8 @@ export const useInvitations = () => {
     queryKey: ["invitationsData"],
     queryFn: async () => {
       const [invitationsData, rolesData] = await Promise.all([
-        api.onboarding.getAllUserInvites(),
-        api.roles.getAllRoles(),
+        sdk.onboarding.getAllUserInvites(),
+        sdk.roles.getAllRoles(),
       ]);
 
       // Type assertion since SDK type is incorrect
@@ -82,6 +84,7 @@ export const useInvitations = () => {
       return { invitations: processedInvitations, roles: processedRoles };
     },
     staleTime: 5 * 60 * 1000,
+    enabled: authEnabled,
     retry: 3,
   });
 
@@ -106,7 +109,7 @@ export const useInvitations = () => {
   const deleteInvitationMutation = useMutation({
     mutationFn: async (inviteId: string) => {
       setActionLoading(inviteId, true);
-      return await api.onboarding.deleteUserInvite(inviteId);
+      return await sdk.onboarding.deleteUserInvite(inviteId);
     },
     onSuccess: (_, inviteId) => {
       queryClient.invalidateQueries({ queryKey: ["invitationsData"] });
@@ -128,7 +131,7 @@ export const useInvitations = () => {
       inviteToken: string;
       roleId: string;
     }) => {
-      return await api.onboarding.updateUserInvite(inviteToken, { role_id: roleId });
+      return await sdk.onboarding.updateUserInvite(inviteToken, { role_id: roleId });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["invitationsData"] });

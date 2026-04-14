@@ -46,7 +46,7 @@ export interface Role {
   updatedAt: Date;
 }
 
-const useAllRoles = () => {
+const useAllRoles = ({ enabled = true }: { enabled?: boolean } = {}) => {
   return useQuery({
     queryKey: ["roles/all"],
     queryFn: async () => {
@@ -68,6 +68,7 @@ const useAllRoles = () => {
           isMaster: role.is_master || false,
         })) satisfies Role[];
     },
+    enabled,
     refetchInterval: 5 * 60 * 1000, // 5 minutes
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,

@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "@/hooks/useAuth";
+import { sdk } from "@/api";
+import { useAuthContext } from "@/contexts/auth";
 import { toast } from "sonner";
 import { apiRequest } from "@/api";
 import {
@@ -15,8 +16,9 @@ import {
 } from "@/constants";
 
 export const useOrgSettings = () => {
-  const { api } = useAuth();
+  const { isLoading: isAuthLoading, isAuthenticated } = useAuthContext();
   const queryClient = useQueryClient();
+  const authEnabled = !isAuthLoading && isAuthenticated;
 
   // State management
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -35,9 +37,10 @@ export const useOrgSettings = () => {
   } = useQuery({
     queryKey: ["organization"],
     queryFn: async () => {
-      const data = await api.organizations.getOrg();
+      const data = await sdk.organizations.getOrg();
       return data;
     },
+    enabled: authEnabled,
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: 3,
   });
@@ -125,7 +128,7 @@ export const useOrgSettings = () => {
         reader.readAsDataURL(file);
 
         // Upload file
-        const fileData = await api.fileUpload.uploadFile({ file });
+        const fileData = await sdk.fileUpload.uploadFile({ file });
 
         // Update form data
         setFormData((prev) => ({
@@ -145,7 +148,7 @@ export const useOrgSettings = () => {
         toast.error("Failed to upload logo");
       }
     },
-    [api.fileUpload, formData.logo_url]
+    [formData.logo_url]
   );
 
   // Handle logo removal
@@ -173,7 +176,7 @@ export const useOrgSettings = () => {
   const updateOrgMutation = useMutation({
     mutationFn: async (updateData: Partial<FormData>) => {
       if (!orgData?.id) throw new Error("Organization ID not found");
-      return await api.organizations.updateOrg({
+      return await sdk.organizations.updateOrg({
         ...updateData,
       });
     },

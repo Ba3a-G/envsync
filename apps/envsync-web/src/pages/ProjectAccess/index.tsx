@@ -4,6 +4,7 @@ import { LockKeyhole, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { api } from "@/api";
+import { useAuthContext } from "@/contexts/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -16,23 +17,25 @@ const sourceOrder = ["org", "direct", "team"] as const;
 
 const ProjectAccess = () => {
   const { appId } = useParams();
+  const { isLoading: isAuthLoading, isAuthenticated } = useAuthContext();
+  const authEnabled = !isAuthLoading && isAuthenticated;
 
   const [subjectType, setSubjectType] = useState<"user" | "team">("user");
   const [subjectId, setSubjectId] = useState("");
   const [relation, setRelation] = useState<"viewer" | "editor" | "admin">("viewer");
 
-  const appQuery = api.applications.allApplications();
+  const appQuery = api.applications.allApplications({ enabled: authEnabled });
   const project = useMemo(
     () => appQuery.data.find((entry) => entry.id === appId),
     [appQuery.data, appId],
   );
 
-  const { data: permissions } = api.permissions.getMyPermissions();
+  const { data: permissions } = api.permissions.getMyPermissions({ enabled: authEnabled });
   const canManage = Boolean(permissions?.can_manage_apps);
-  const { data: grants = [] } = api.permissions.getAppGrants(appId);
-  const { data: effectiveAccess = [] } = api.permissions.getAppEffectiveAccess(appId);
-  const { data: teams = [] } = api.teams.getTeams();
-  const { data: users = [] } = api.users.getAllUsers();
+  const { data: grants = [] } = api.permissions.getAppGrants(appId, { enabled: authEnabled });
+  const { data: effectiveAccess = [] } = api.permissions.getAppEffectiveAccess(appId, { enabled: authEnabled });
+  const { data: teams = [] } = api.teams.getTeams({ enabled: authEnabled });
+  const { data: users = [] } = api.users.getAllUsers({ enabled: authEnabled });
 
   const grantAccess = api.permissions.grantAppAccess({
     onSuccess: () => toast.success("Access granted"),

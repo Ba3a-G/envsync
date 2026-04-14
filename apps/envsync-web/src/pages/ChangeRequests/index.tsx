@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { GitPullRequest, Check, X, Ban, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 
-import { api } from "@/api";
-import { useAuth } from "@/hooks/useAuth";
+import { api, sdk } from "@/api";
+import { useAuthContext } from "@/contexts/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,10 +15,11 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 const ChangeRequests = () => {
-  const { user, api: sdkApi } = useAuth();
+  const { user, isLoading: isAuthLoading, isAuthenticated } = useAuthContext();
+  const authEnabled = !isAuthLoading && isAuthenticated;
   const canReview = Boolean(user?.role?.is_admin || user?.role?.is_master);
-  const { data: requests = [] } = api.changeRequests.getChangeRequests();
-  const { data: apps = [] } = api.applications.allApplications();
+  const { data: requests = [] } = api.changeRequests.getChangeRequests(undefined, { enabled: authEnabled });
+  const { data: apps = [] } = api.applications.allApplications({ enabled: authEnabled });
 
   const [selectedAppId, setSelectedAppId] = useState("");
   const [mode, setMode] = useState<"direct" | "promotion">("direct");
@@ -33,9 +34,11 @@ const ChangeRequests = () => {
 
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
-  const { data: selectedRequest } = api.changeRequests.getChangeRequest(selectedRequestId || undefined);
+  const { data: selectedRequest } = api.changeRequests.getChangeRequest(selectedRequestId || undefined, {
+    enabled: authEnabled,
+  });
 
-  const [appDetail, setAppDetail] = useState<Awaited<ReturnType<typeof sdkApi.applications.getApp>> | null>(null);
+  const [appDetail, setAppDetail] = useState<Awaited<ReturnType<typeof sdk.applications.getApp>> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,7 +47,7 @@ const ChangeRequests = () => {
       return;
     }
 
-    sdkApi.applications
+    sdk.applications
       .getApp(selectedAppId)
       .then((response) => {
         if (!cancelled) setAppDetail(response);
@@ -56,7 +59,7 @@ const ChangeRequests = () => {
     return () => {
       cancelled = true;
     };
-  }, [selectedAppId, sdkApi.applications]);
+  }, [selectedAppId]);
 
   const createDirect = api.changeRequests.createDirect({
     onSuccess: () => toast.success("Change request created"),

@@ -1,14 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
-import { useAuth } from "@/hooks/useAuth";
-import { api as Api } from "@/api";
+import { api as Api, sdk } from "@/api";
+import { useAuthContext } from "@/contexts/auth";
 
 export function useDashboard() {
-  const { api } = useAuth();
+  const { isLoading: isAuthLoading, isAuthenticated } = useAuthContext();
+  const authEnabled = !isAuthLoading && isAuthenticated;
 
   const {
     data: apps = [],
     isLoading: appsLoading,
-  } = Api.applications.allApplications();
+  } = Api.applications.allApplications({ enabled: authEnabled });
 
   const {
     data: usersData,
@@ -16,9 +17,10 @@ export function useDashboard() {
   } = useQuery({
     queryKey: ["dashboard-users"],
     queryFn: async () => {
-      const users = await api.users.getUsers();
+      const users = await sdk.users.getUsers();
       return users;
     },
+    enabled: authEnabled,
     staleTime: 5 * 60 * 1000,
     retry: 2,
   });
@@ -29,9 +31,10 @@ export function useDashboard() {
   } = useQuery({
     queryKey: ["dashboard-api-keys"],
     queryFn: async () => {
-      const keys = await api.apiKeys.getAllApiKeys();
+      const keys = await sdk.apiKeys.getAllApiKeys();
       return keys;
     },
+    enabled: authEnabled,
     staleTime: 5 * 60 * 1000,
     retry: 2,
   });
@@ -42,9 +45,10 @@ export function useDashboard() {
   } = useQuery({
     queryKey: ["dashboard-audit"],
     queryFn: async () => {
-      const logs = await api.auditLogs.getAuditLogs("1", "20");
+      const logs = await sdk.auditLogs.getAuditLogs("1", "20");
       return logs.auditLogs ?? [];
     },
+    enabled: authEnabled,
     staleTime: 2 * 60 * 1000,
     retry: 2,
   });

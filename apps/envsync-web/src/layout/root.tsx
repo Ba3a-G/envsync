@@ -3,13 +3,13 @@ import { Sidebar } from "@/components/Sidebar";
 import { CommandPalette } from "@/components/CommandPalette";
 import { KeyboardShortcutsDialog } from "@/components/KeyboardShortcutsDialog";
 import { NotificationCenter } from "@/components/NotificationCenter";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/contexts/auth";
 import { useSidebar } from "@/hooks/useSidebar";
 import { Outlet } from "react-router-dom";
 import { useEffect } from "react";
 
 export const RootLayout = () => {
-  const { user, isAuthenticated, isLoading, authError } = useAuth();
+  const { user, isAuthenticated, isLoading, authError } = useAuthContext();
   const { sidebarExpanded, toggleSidebar } = useSidebar();
 
   // Save sidebar state to localStorage whenever it changes

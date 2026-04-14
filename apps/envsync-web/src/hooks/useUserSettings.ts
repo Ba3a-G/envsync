@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
-import { useAuth } from "@/hooks/useAuth";
+import { sdk } from "@/api";
+import { useAuthContext } from "@/contexts/auth";
 import { UpdateUserRequest } from "@envsync-cloud/envsync-ts-sdk";
 
 interface FormData {
@@ -16,9 +17,10 @@ interface FormErrors {
 }
 
 export const useUserSettings = () => {
-  const { api } = useAuth();
+  const { isLoading: isAuthLoading, isAuthenticated } = useAuthContext();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const authEnabled = !isAuthLoading && isAuthenticated;
 
   // State management
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -46,9 +48,10 @@ export const useUserSettings = () => {
   } = useQuery({
     queryKey: ["userInfo"],
     queryFn: async () => {
-      const { user: userData } = await api.authentication.whoami();
+      const { user: userData } = await sdk.authentication.whoami();
       return userData;
     },
+    enabled: authEnabled,
     staleTime: 5 * 60 * 1000,
     retry: 3,
   });
@@ -126,7 +129,7 @@ export const useUserSettings = () => {
         reader.readAsDataURL(file);
 
         // Upload file
-        const fileData = await api.fileUpload.uploadFile({ file });
+        const fileData = await sdk.fileUpload.uploadFile({ file });
 
         // Update form data
         setFormData((prev) => ({
@@ -145,7 +148,7 @@ export const useUserSettings = () => {
         setLogoPreview(formData.profile_picture_url);
       }
     },
-    [api.fileUpload, formData.profile_picture_url]
+    [formData.profile_picture_url]
   );
 
   // Handle profile picture removal
@@ -178,7 +181,7 @@ export const useUserSettings = () => {
   const updateUserSettings = useMutation({
     mutationFn: async (settings: UpdateUserRequest) => {
       if (!userData?.id) throw new Error("User ID not found");
-      return await api.users.updateUser(userData.id, settings);
+      return await sdk.users.updateUser(userData.id, settings);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["userInfo"] });
@@ -194,7 +197,7 @@ export const useUserSettings = () => {
   const resetPasswordMutation = useMutation({
     mutationFn: async () => {
       if (!userData?.id) throw new Error("User ID not found");
-      return await api.users.updatePassword(userData.id);
+      return await sdk.users.updatePassword(userData.id);
     },
     onSuccess: () => {
       console.log("Password reset successfully");
@@ -209,7 +212,7 @@ export const useUserSettings = () => {
   const deleteUserMutation = useMutation({
     mutationFn: async () => {
       if (!userData?.id) throw new Error("User ID not found");
-      return await api.users.deleteUser(userData.id);
+      return await sdk.users.deleteUser(userData.id);
     },
     onSuccess: () => {
       console.log("Organization membership deleted successfully");

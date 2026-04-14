@@ -40,24 +40,25 @@ export interface EffectivePermissions {
   can_manage_invites: boolean;
 }
 
-const useAppGrants = (appId?: string) =>
+const useAppGrants = (appId?: string, { enabled = true }: { enabled?: boolean } = {}) =>
   useQuery({
     queryKey: [API_KEYS.APP_GRANTS, appId],
     queryFn: () => apiRequest<GrantEntry[]>(`/api/permission/app/${appId}/grants`),
-    enabled: Boolean(appId),
+    enabled: enabled && Boolean(appId),
   });
 
-const useAppEffectiveAccess = (appId?: string) =>
+const useAppEffectiveAccess = (appId?: string, { enabled = true }: { enabled?: boolean } = {}) =>
   useQuery({
     queryKey: [API_KEYS.APP_EFFECTIVE_ACCESS, appId],
     queryFn: () => apiRequest<EffectiveAccessEntry[]>(`/api/permission/app/${appId}/effective-access`),
-    enabled: Boolean(appId),
+    enabled: enabled && Boolean(appId),
   });
 
-const useMyPermissions = () =>
+const useMyPermissions = ({ enabled = true }: { enabled?: boolean } = {}) =>
   useQuery({
     queryKey: [API_KEYS.APP_EFFECTIVE_ACCESS, "me"],
     queryFn: () => apiRequest<EffectivePermissions>("/api/permission/me"),
+    enabled,
   });
 
 const useGrantAppAccess = ({

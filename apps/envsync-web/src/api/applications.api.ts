@@ -2,7 +2,13 @@ import { useQuery } from "@tanstack/react-query";
 import { sdk } from "./base";
 import { API_KEYS, App } from "../constants";
 
-const useApplications = ({ refetchInterval = 5 * 60 * 1000 } = {}) => {
+const useApplications = ({
+  enabled = true,
+  refetchInterval = 5 * 60 * 1000,
+}: {
+  enabled?: boolean;
+  refetchInterval?: number;
+} = {}) => {
   return useQuery({
     queryKey: [API_KEYS.ALL_APPLICATIONS],
     queryFn: async () => {
@@ -26,6 +32,7 @@ const useApplications = ({ refetchInterval = 5 * 60 * 1000 } = {}) => {
         })
       );
     },
+    enabled,
     refetchInterval, // Refetch every 5 minutes
     retry: 3,
     initialData: [],

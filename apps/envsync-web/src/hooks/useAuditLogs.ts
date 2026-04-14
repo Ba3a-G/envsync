@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useAuth } from "@/hooks/useAuth";
+import { sdk } from "@/api";
+import { useAuthContext } from "@/contexts/auth";
 import { toast } from "sonner";
 import { AuditActions } from "@/lib/audit.type";
 import { AuditLog } from "@/components/audit/row";
@@ -253,7 +254,8 @@ export function getActionBadgeColor(action: AuditActions): string {
 }
 
 export function useAuditLogs() {
-  const { api } = useAuth();
+  const { isLoading: isAuthLoading, isAuthenticated } = useAuthContext();
+  const authEnabled = !isAuthLoading && isAuthenticated;
 
   const generatePageNumbers = useCallback(
     (currentPage: number, totalPages: number) => {
@@ -339,14 +341,14 @@ export function useAuditLogs() {
     ],
     queryFn: async () => {
       const [auditLogsResponse, usersResponse] = await Promise.all([
-        api.auditLogs.getAuditLogs(
+        sdk.auditLogs.getAuditLogs(
           pagination.page.toString(),
           pagination.pageSize.toString(),
           customFilters.filterByUser || undefined,
           customFilters.filterByCategory || undefined,
           customFilters.filterByPastTime || undefined
         ),
-        api.users.getUsers(),
+        sdk.users.getUsers(),
       ]);
 
       const usersMap = new Map(usersResponse.map((user) => [user.id, user]));
@@ -381,6 +383,7 @@ export function useAuditLogs() {
 
       return { logs, users: usersResponse, pagination: { totalCount, totalPages } };
     },
+    enabled: authEnabled,
     staleTime: 30 * 1000,
     retry: 3,
   });

@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { UserPlus2, Mail, Users as UsersIcon } from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/contexts/auth";
 import { useState, useCallback, useMemo } from "react";
 import { InviteUserModal } from "@/components/users/InviteUserModal";
 import { EditRoleModal } from "@/components/users/EditRoleModal";
@@ -21,7 +21,7 @@ interface User {
 }
 
 export const Users = () => {
-  const { user } = useAuth();
+  const { user } = useAuthContext();
   const {
     users,
     roles,

@@ -3,7 +3,7 @@ import { Users, Plus, UserPlus, ShieldAlert, Trash2, Pencil, UserMinus } from "l
 import { toast } from "sonner";
 
 import { api } from "@/api";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/contexts/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -17,15 +17,18 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 const DEFAULT_COLORS = ["#8b5cf6", "#06b6d4", "#22c55e", "#f59e0b", "#ef4444"];
 
 const Teams = () => {
-  const { user } = useAuth();
+  const { user, isLoading: isAuthLoading, isAuthenticated } = useAuthContext();
   const canManage = Boolean(user?.role?.is_admin || user?.role?.is_master);
+  const authEnabled = !isAuthLoading && isAuthenticated;
 
-  const { data: teams = [] } = api.teams.getTeams();
-  const { data: roles = [] } = api.roles.getAllRoles();
-  const { data: users = [] } = api.users.getAllUsers();
+  const { data: teams = [] } = api.teams.getTeams({ enabled: authEnabled });
+  const { data: roles = [] } = api.roles.getAllRoles({ enabled: authEnabled });
+  const { data: users = [] } = api.users.getAllUsers({ enabled: authEnabled });
 
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
-  const { data: selectedTeam } = api.teams.getTeam(selectedTeamId || undefined);
+  const { data: selectedTeam } = api.teams.getTeam(selectedTeamId || undefined, {
+    enabled: authEnabled,
+  });
 
   const createTeam = api.teams.createTeam({
     onSuccess: () => toast.success("Team created"),

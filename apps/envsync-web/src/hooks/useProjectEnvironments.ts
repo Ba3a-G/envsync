@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "./useAuth";
+import { sdk } from "@/api";
+import { useAuthContext } from "@/contexts/auth";
 import { toast } from "sonner";
 import { ApiError } from "@envsync-cloud/envsync-ts-sdk";
 import {
@@ -8,6 +9,7 @@ import {
   EnvironmentVariable,
   EnvironmentType,
   Project,
+  SingleItemEnvVarUpdateData,
 } from "@/constants";
 
 function getApiErrorMessage(error: unknown, fallback: string): string {
@@ -24,8 +26,9 @@ function getApiErrorMessage(error: unknown, fallback: string): string {
 }
 
 export const useProjectEnvironments = (appId?: string) => {
-  const { api } = useAuth();
+  const { isLoading: isAuthLoading, isAuthenticated } = useAuthContext();
   const queryClient = useQueryClient();
+  const authEnabled = !isAuthLoading && isAuthenticated;
 
   const {
     data: projectData,
@@ -35,12 +38,12 @@ export const useProjectEnvironments = (appId?: string) => {
   } = useQuery({
     queryKey: ["project-environments", appId],
     queryFn: async () => {
-      const projectResponse = await api.applications.getApp(appId);
-      const usersList = await api.users.getUsers();
+      const projectResponse = await sdk.applications.getApp(appId);
+      const usersList = await sdk.users.getUsers();
 
       const envVarsResponse = await Promise.all(
         projectResponse.env_types.map(async (envType) => {
-          const envVars = await api.environmentVariables.getEnvs({
+          const envVars = await sdk.environmentVariables.getEnvs({
             app_id: appId,
             env_type_id: envType.id,
           });
@@ -52,7 +55,7 @@ export const useProjectEnvironments = (appId?: string) => {
 
       const secretsResponse = await Promise.all(
         projectResponse.env_types.map(async (envType) => {
-          const envVars = await api.secrets.getSecrets({
+          const envVars = await sdk.secrets.getSecrets({
             app_id: appId,
             env_type_id: envType.id,
           });
@@ -114,6 +117,7 @@ export const useProjectEnvironments = (appId?: string) => {
         enableSecrets: projectResponse.enable_secrets ?? false,
       };
     },
+    enabled: authEnabled && Boolean(appId),
     staleTime: 30 * 1000, // 30 seconds
     retry: 3,
   });
@@ -122,7 +126,7 @@ export const useProjectEnvironments = (appId?: string) => {
   const createVariable = useMutation({
     mutationFn: async (data: EnvVarFormData) => {
       if (!appId) throw new Error("Project ID not found");
-      return await api.environmentVariables.createEnv({
+      return await sdk.environmentVariables.createEnv({
         key: data.key,
         value: data.value,
         env_type_id: data.env_type_id,
@@ -143,17 +147,11 @@ export const useProjectEnvironments = (appId?: string) => {
 
   // Update environment variable
   const updateVariable = useMutation({
-    mutationFn: async ({
-      data,
-      originalKey,
-    }: {
-      data: Partial<EnvVarFormData>;
-      originalKey: string;
-    }) => {
+    mutationFn: async ({ originalKey, value, env_type_id }: SingleItemEnvVarUpdateData) => {
       if (!appId) throw new Error("Project ID not found");
-      return await api.environmentVariables.updateEnv(originalKey, {
-        value: data.value!,
-        env_type_id: data.env_type_id!,
+      return await sdk.environmentVariables.updateEnv(originalKey, {
+        value,
+        env_type_id,
         app_id: appId,
       });
     },
@@ -180,7 +178,7 @@ export const useProjectEnvironments = (appId?: string) => {
       appId: string;
       key: string;
     }) => {
-      return await api.environmentVariables.deleteEnv({
+      return await sdk.environmentVariables.deleteEnv({
         app_id: appId,
         env_type_id: env_type_id,
         key,
@@ -202,7 +200,7 @@ export const useProjectEnvironments = (appId?: string) => {
   const bulkImportVariables = useMutation({
     mutationFn: async (data: BulkEnvVarData) => {
       if (!appId) throw new Error("Project ID not found");
-      return await api.environmentVariables.batchCreateEnvs({
+      return await sdk.environmentVariables.batchCreateEnvs({
         app_id: appId,
         env_type_id: data.env_type_id,
         envs: data.variables.map((variable) => ({
@@ -229,7 +227,7 @@ export const useProjectEnvironments = (appId?: string) => {
   const createSecret = useMutation({
     mutationFn: async (data: EnvVarFormData) => {
       if (!appId) throw new Error("Project ID not found");
-      return await api.secrets.createSecret({
+      return await sdk.secrets.createSecret({
         key: data.key,
         value: data.value,
         env_type_id: data.env_type_id,
@@ -250,17 +248,11 @@ export const useProjectEnvironments = (appId?: string) => {
 
   // Update secret
   const updateSecret = useMutation({
-    mutationFn: async ({
-      data,
-      originalKey,
-    }: {
-      data: Partial<EnvVarFormData>;
-      originalKey: string;
-    }) => {
+    mutationFn: async ({ originalKey, value, env_type_id }: SingleItemEnvVarUpdateData) => {
       if (!appId) throw new Error("Project ID not found");
-      return await api.secrets.updateSecret(originalKey, {
-        value: data.value!,
-        env_type_id: data.env_type_id!,
+      return await sdk.secrets.updateSecret(originalKey, {
+        value,
+        env_type_id,
         app_id: appId,
       });
     },
@@ -287,7 +279,7 @@ export const useProjectEnvironments = (appId?: string) => {
       appId: string;
       key: string;
     }) => {
-      return await api.secrets.deleteSecret({
+      return await sdk.secrets.deleteSecret({
         app_id: appId,
         env_type_id: env_type_id,
         key,
@@ -309,7 +301,7 @@ export const useProjectEnvironments = (appId?: string) => {
   const bulkImportSecrets = useMutation({
     mutationFn: async (data: BulkEnvVarData) => {
       if (!appId) throw new Error("Project ID not found");
-      return await api.secrets.batchCreateSecrets({
+      return await sdk.secrets.batchCreateSecrets({
         app_id: appId,
         env_type_id: data.env_type_id,
         envs: data.variables.map((variable) => ({
