@@ -24,6 +24,15 @@ function run(cmd: string, args: string[], cwd = rootDir) {
 	if (result.status !== 0) throw new Error(`Command failed: ${cmd} ${args.join(" ")}`);
 }
 
+function composeArgs(file?: string) {
+	return file ? ["compose", "-f", file] : ["compose"];
+}
+
+function ensureMiniKmsSchema(file?: string) {
+	run("docker", [...composeArgs(file), "run", "--rm", "minikms_migrate"]);
+	run("docker", [...composeArgs(file), "restart", "minikms"]);
+}
+
 function ensureEnv(example = ".env.example") {
 	const target = path.join(rootDir, ".env");
 	if (!fs.existsSync(target)) {
@@ -58,9 +67,11 @@ async function initLocal() {
 	ensureEnv();
 	run("docker", ["compose", "up", "-d", "postgres", "redis", "rustfs", "mailpit", "keycloak_db", "keycloak", "openfga_db", "openfga_migrate", "openfga", "minikms_db", "minikms_migrate", "minikms", "clickstack", "otel-agent"]);
 	await waitForPostgres();
+	await waitForPostgres("localhost", parseInt(process.env.MINIKMS_DB_PORT ?? "5544", 10));
 	await waitForOpenFGA();
 	await waitForMailpit();
 	await waitForKeycloak();
+	ensureMiniKmsSchema();
 	await waitForMiniKMS();
 	await initOpenFGA();
 	run("bun", ["run", "packages/envsync-api/scripts/cli.ts", "init"]);
@@ -71,8 +82,10 @@ async function initProd() {
 	ensureEnv(".env.prod.example");
 	run("docker", ["compose", "-f", "docker-compose.prod.yaml", "up", "-d", "postgres", "redis", "rustfs", "keycloak_db", "keycloak", "openfga_db", "openfga_migrate", "openfga", "minikms_db", "minikms_migrate", "minikms", "clickstack", "otel-agent"]);
 	await waitForPostgres("localhost", 5432);
+	await waitForPostgres("localhost", parseInt(process.env.MINIKMS_DB_PORT ?? "5544", 10));
 	await waitForOpenFGA("http://localhost:8090");
 	await waitForKeycloak("http://localhost:8080");
+	ensureMiniKmsSchema("docker-compose.prod.yaml");
 	await waitForMiniKMS("localhost", 50051);
 	run("docker", ["compose", "-f", "docker-compose.prod.yaml", "run", "--rm", "envsync_init"]);
 }

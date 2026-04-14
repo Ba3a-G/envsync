@@ -258,8 +258,51 @@ async function ensureDefaultRoles(orgId: string) {
 		.selectFrom("org_role")
 		.selectAll()
 		.where("org_id", "=", orgId)
-		.where("is_master", "=", true)
-		.executeTakeFirstOrThrow();
+		.execute();
+}
+
+function getFlagValue(rawArgs: string[], flagName: string) {
+	const inlinePrefix = `--${flagName}=`;
+	for (let index = 0; index < rawArgs.length; index += 1) {
+		const arg = rawArgs[index];
+		if (arg.startsWith(inlinePrefix)) {
+			return arg.slice(inlinePrefix.length);
+		}
+		if (arg === `--${flagName}`) {
+			return rawArgs[index + 1];
+		}
+	}
+
+	return undefined;
+}
+
+function normalizeRoleName(value: string) {
+	return value.trim().toLowerCase().replace(/[\s_-]+/g, " ");
+}
+
+function resolveRequestedRole(
+	roles: Array<{ id: string; name: string; is_master: boolean }>,
+	requestedRole: string | undefined,
+) {
+	if (!requestedRole) {
+		return roles.find(role => role.is_master) ?? null;
+	}
+
+	const normalizedRequestedRole = normalizeRoleName(requestedRole);
+	const roleAliases = new Map<string, string>([
+		["master", "Org Admin"],
+		["org admin", "Org Admin"],
+		["admin", "Org Admin"],
+		["billing admin", "Billing Admin"],
+		["manager", "Manager"],
+		["editor", "Developer"],
+		["developer", "Developer"],
+		["viewer", "Viewer"],
+	]);
+	const resolvedRoleName = roleAliases.get(normalizedRequestedRole) ?? requestedRole;
+	const normalizedRoleName = normalizeRoleName(resolvedRoleName);
+
+	return roles.find(role => normalizeRoleName(role.name) === normalizedRoleName) ?? null;
 }
 
 async function ensureUserRoleAccess(userId: string, orgId: string, roleId: string) {
@@ -607,15 +650,25 @@ async function seedDevWorkspace(orgId: string, orgName: string, userId: string, 
 
 async function createDevUser() {
 	const rawArgs = process.argv.slice(3);
-	const positional = rawArgs.filter(arg => !arg.startsWith("--"));
+	const positional = rawArgs.filter((arg, index) => {
+		if (!arg.startsWith("--")) {
+			return index === 0 || rawArgs[index - 1] !== "--role";
+		}
+		return false;
+	});
 	const flags = new Set(rawArgs.filter(arg => arg.startsWith("--")));
+	const requestedRole = getFlagValue(rawArgs, "role");
 	const email = positional[0] ?? "dev@envsync.local";
 	const fullName = positional[1] ?? "EnvSync Dev";
 	const password = DEV_USER_PASSWORD;
 	const db = await DB.getInstance();
 
 	const org = await ensureDevOrg();
-	const role = await ensureDefaultRoles(org.id);
+	const roles = await ensureDefaultRoles(org.id);
+	const role = resolveRequestedRole(roles, requestedRole);
+	if (!role) {
+		throw new Error(`Requested role "${requestedRole ?? "master"}" does not exist in org ${org.id}`);
+	}
 
 	let user = await db.selectFrom("users").selectAll().where("email", "=", email).executeTakeFirst();
 
@@ -672,6 +725,12 @@ async function createDevUser() {
 		}
 		await setKeycloakUserPassword(idpUser.id, password);
 		console.log(`Dev user login reset: ${email} / ${password}`);
+		if (user.role_id !== role.id) {
+			const { UserService } = await import("../src/services/user.service");
+			await UserService.updateUser(user.id, { role_id: role.id });
+			user = await db.selectFrom("users").selectAll().where("id", "=", user.id).executeTakeFirstOrThrow();
+			console.log(`Updated dev user role to ${role.name}`);
+		}
 	}
 
 	await ensureUserRoleAccess(user.id, org.id, role.id);

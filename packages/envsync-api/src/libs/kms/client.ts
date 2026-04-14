@@ -682,6 +682,9 @@ export class KMSClient {
 			);
 			return this.mapVaultReadResponse(response);
 		} catch (error) {
+			if (isVaultEntryNotFound(error)) {
+				normalizeVaultError(error);
+			}
 			if (error instanceof Error) {
 				infoLogs(`Vault Read error: ${error.message}`, LogTypes.ERROR, "KMSClient");
 			}
