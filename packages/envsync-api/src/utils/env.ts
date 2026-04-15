@@ -46,6 +46,8 @@ export const BaseEnvSchema = z.object({
 	KEYCLOAK_CLI_CLIENT_ID: z.string(),
 	KEYCLOAK_API_CLIENT_ID: z.string(),
 	KEYCLOAK_API_CLIENT_SECRET: z.string(),
+	KEYCLOAK_E2E_CLIENT_ID: z.string().optional(),
+	KEYCLOAK_E2E_CLIENT_SECRET: z.string().optional(),
 	KEYCLOAK_WEB_REDIRECT_URI: z.string(),
 	KEYCLOAK_WEB_CALLBACK_URL: z.string(),
 	KEYCLOAK_API_REDIRECT_URI: z.string(),

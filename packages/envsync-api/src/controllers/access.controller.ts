@@ -72,14 +72,27 @@ export class AccessController {
 			return c.json({ error: "email and password are required" }, 400);
 		}
 
-		const tokenData = await keycloakPasswordLogin(
-			email,
-			password,
-			config.KEYCLOAK_WEB_CLIENT_ID,
-			config.KEYCLOAK_WEB_CLIENT_SECRET,
-		);
-		setWebAuthCookies(c, tokenData);
-		return c.json({ message: "Local web session created." }, 200);
+		try {
+			const clientId = config.KEYCLOAK_E2E_CLIENT_ID || config.KEYCLOAK_WEB_CLIENT_ID;
+			const clientSecret = config.KEYCLOAK_E2E_CLIENT_SECRET || config.KEYCLOAK_WEB_CLIENT_SECRET;
+			const tokenData = await keycloakPasswordLogin(
+				email,
+				password,
+				clientId,
+				clientSecret,
+			);
+			setWebAuthCookies(c, tokenData);
+			return c.json({ message: "Local web session created." }, 200);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			return c.json(
+				{
+					error: "Local dev session bootstrap failed.",
+					detail: message,
+				},
+				500,
+			);
+		}
 	};
 
 	public static readonly callbackWebLogin = async (c: Context) => {

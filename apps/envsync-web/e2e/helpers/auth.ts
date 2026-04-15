@@ -76,19 +76,15 @@ function isOnAuthOrigin(page: Page) {
 
 async function startWebLogin(page: Page) {
 	const config = getUiHarnessConfig();
-	const loginUrl = await page.evaluate(async currentApiBaseUrl => {
-		const response = await fetch(`${currentApiBaseUrl}/api/access/web`, {
-			credentials: "include",
-		});
-		if (!response.ok) {
-			throw new Error(`Failed to create web login: ${response.status}`);
-		}
-		const payload = await response.json() as { loginUrl?: string };
-		if (!payload.loginUrl) {
-			throw new Error("Web login response did not include a loginUrl");
-		}
-		return payload.loginUrl;
-	}, config.apiBaseUrl);
+	const response = await page.context().request.get(`${config.apiBaseUrl}/api/access/web`);
+	if (!response.ok()) {
+		throw new Error(`Failed to create web login: ${response.status()} ${await response.text()}`);
+	}
+	const payload = await response.json() as { loginUrl?: string };
+	if (!payload.loginUrl) {
+		throw new Error("Web login response did not include a loginUrl");
+	}
+	const loginUrl = payload.loginUrl;
 
 	await page.goto(loginUrl, { waitUntil: "domcontentloaded" });
 }
@@ -118,7 +114,9 @@ async function startLocalDevSession(page: Page, credential: AuthCredential) {
 			console.warn(`[ui-login] dev session bootstrap failed (${result.status}): ${result.body}`);
 		}
 		return result.ok;
-	} catch {
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		console.warn(`[ui-login] dev session bootstrap threw: ${message}`);
 		return false;
 	}
 }
