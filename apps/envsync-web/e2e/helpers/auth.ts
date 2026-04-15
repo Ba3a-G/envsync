@@ -130,6 +130,21 @@ async function settleAuthenticatedPage(page: Page) {
 	}
 }
 
+async function recoverSessionIntoApp(page: Page) {
+	const config = getUiHarnessConfig();
+	if (!await hasRequiredSessionCookies(page.context())) {
+		return false;
+	}
+
+	try {
+		await page.goto(config.baseUrl, { waitUntil: "domcontentloaded" });
+	} catch {
+		return false;
+	}
+
+	return await isSessionReady(page);
+}
+
 async function startWebLogin(page: Page) {
 	const config = getUiHarnessConfig();
 	const response = await page.goto(`${config.apiBaseUrl}/api/access/web`, { waitUntil: "commit" });
@@ -173,6 +188,10 @@ async function startLocalDevSession(page: Page, credential: AuthCredential) {
 		return result.ok;
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
+		if (await hasRequiredSessionCookies(page.context())) {
+			console.warn(`[ui-login] dev session bootstrap navigation aborted after cookies were set: ${message}`);
+			return true;
+		}
 		console.warn(`[ui-login] dev session bootstrap threw: ${message}`);
 		return false;
 	}
@@ -246,6 +265,11 @@ async function ensureFreshCredentialContext(
 		if (await isSessionReady(page)) {
 			await settleAuthenticatedPage(page);
 			await page.goto(config.baseUrl, { waitUntil: "domcontentloaded" });
+			await saveStorageState(context, storageKey);
+			return { context, page };
+		}
+
+		if (await recoverSessionIntoApp(page)) {
 			await saveStorageState(context, storageKey);
 			return { context, page };
 		}
@@ -353,6 +377,11 @@ export async function ensureAuthenticatedPageWithCredential(
 	while (Date.now() - startedAt < config.loginTimeoutMs) {
 		if (await isSessionReady(page)) {
 			await settleAuthenticatedPage(page);
+			await saveStorageState(page.context(), storageKey);
+			return;
+		}
+
+		if (await recoverSessionIntoApp(page)) {
 			await saveStorageState(page.context(), storageKey);
 			return;
 		}
