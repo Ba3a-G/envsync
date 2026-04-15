@@ -61,6 +61,38 @@ export async function isAuthenticated(page: Page) {
 	}
 }
 
+function isOnAuthOrigin(page: Page) {
+	const config = getUiHarnessConfig();
+	try {
+		const currentUrl = page.url();
+		if (!currentUrl) {
+			return false;
+		}
+		return new URL(currentUrl).origin === new URL(config.authUrl).origin;
+	} catch {
+		return false;
+	}
+}
+
+async function startWebLogin(page: Page) {
+	const config = getUiHarnessConfig();
+	const loginUrl = await page.evaluate(async currentApiBaseUrl => {
+		const response = await fetch(`${currentApiBaseUrl}/api/access/web`, {
+			credentials: "include",
+		});
+		if (!response.ok) {
+			throw new Error(`Failed to create web login: ${response.status}`);
+		}
+		const payload = await response.json() as { loginUrl?: string };
+		if (!payload.loginUrl) {
+			throw new Error("Web login response did not include a loginUrl");
+		}
+		return payload.loginUrl;
+	}, config.apiBaseUrl);
+
+	await page.goto(loginUrl, { waitUntil: "domcontentloaded" });
+}
+
 async function attemptLocalAutologin(page: Page, role: UiRole) {
 	const config = getUiHarnessConfig();
 	return attemptLocalAutologinWithCredential(page, config.roleCredentials[role]);
@@ -121,6 +153,7 @@ async function ensureFreshCredentialContext(
 	const page = await context.newPage();
 	page.setDefaultTimeout(config.actionTimeoutMs);
 	await page.goto(config.baseUrl, { waitUntil: "domcontentloaded" });
+	let lastLoginStartAt = 0;
 
 	const startedAt = Date.now();
 	while (Date.now() - startedAt < config.loginTimeoutMs) {
@@ -128,6 +161,11 @@ async function ensureFreshCredentialContext(
 			await page.goto(config.baseUrl, { waitUntil: "domcontentloaded" });
 			await saveStorageState(context, storageKey);
 			return { context, page };
+		}
+
+		if (!isOnAuthOrigin(page) && Date.now() - lastLoginStartAt > 10_000) {
+			await startWebLogin(page);
+			lastLoginStartAt = Date.now();
 		}
 
 		await attemptLocalAutologinWithCredential(page, credential);
@@ -217,12 +255,19 @@ export async function ensureAuthenticatedPageWithCredential(
 		return;
 	}
 
+	let lastLoginStartAt = 0;
 	const startedAt = Date.now();
 	while (Date.now() - startedAt < config.loginTimeoutMs) {
 		if (await isAuthenticated(page)) {
 			await saveStorageState(page.context(), storageKey);
 			return;
 		}
+
+		if (!isOnAuthOrigin(page) && Date.now() - lastLoginStartAt > 10_000) {
+			await startWebLogin(page);
+			lastLoginStartAt = Date.now();
+		}
+
 		await attemptLocalAutologinWithCredential(page, credential);
 		await page.waitForTimeout(1_000);
 	}
