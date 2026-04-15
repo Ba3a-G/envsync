@@ -76,7 +76,10 @@ function isOnAuthOrigin(page: Page) {
 
 async function startWebLogin(page: Page) {
 	const config = getUiHarnessConfig();
-	const response = await page.context().request.get(`${config.apiBaseUrl}/api/access/web`);
+	const response = await page.goto(`${config.apiBaseUrl}/api/access/web`, { waitUntil: "domcontentloaded" });
+	if (!response) {
+		throw new Error("Failed to create web login: missing navigation response");
+	}
 	if (!response.ok()) {
 		throw new Error(`Failed to create web login: ${response.status()} ${await response.text()}`);
 	}
@@ -92,24 +95,22 @@ async function startWebLogin(page: Page) {
 async function startLocalDevSession(page: Page, credential: AuthCredential) {
 	const config = getUiHarnessConfig();
 	try {
-		const result = await page.evaluate(async (input) => {
-			const params = new URLSearchParams({
-				email: input.email,
-				password: input.password,
-			});
-			const response = await fetch(`${input.apiBaseUrl}/api/access/web/dev-session?${params.toString()}`, {
-				credentials: "include",
-			});
-			return {
-				ok: response.ok,
-				status: response.status,
-				body: response.ok ? "" : await response.text().catch(() => ""),
-			};
-		}, {
-			apiBaseUrl: config.apiBaseUrl,
+		const params = new URLSearchParams({
 			email: credential.email,
 			password: credential.password,
 		});
+		const response = await page.goto(`${config.apiBaseUrl}/api/access/web/dev-session?${params.toString()}`, {
+			waitUntil: "domcontentloaded",
+		});
+		if (!response) {
+			console.warn("[ui-login] dev session bootstrap returned no navigation response");
+			return false;
+		}
+		const result = {
+			ok: response.ok(),
+			status: response.status(),
+			body: response.ok() ? "" : await response.text().catch(() => ""),
+		};
 		if (!result.ok) {
 			console.warn(`[ui-login] dev session bootstrap failed (${result.status}): ${result.body}`);
 		}
