@@ -392,3 +392,28 @@ export async function keycloakRefreshToken(
 
 	return (await res.json()) as KeycloakTokenSet;
 }
+
+export async function keycloakPasswordLogin(
+	username: string,
+	password: string,
+	clientId = "admin-cli",
+): Promise<KeycloakTokenSet> {
+	const res = await fetch(`${base()}/realms/${realm()}/protocol/openid-connect/token`, {
+		method: "POST",
+		headers: { "Content-Type": "application/x-www-form-urlencoded" },
+		body: new URLSearchParams({
+			grant_type: "password",
+			client_id: clientId,
+			username,
+			password,
+			scope: "openid email profile",
+		}),
+		signal: AbortSignal.timeout(10_000),
+	});
+
+	if (!res.ok) {
+		throw new Error(`Keycloak password login failed: ${res.status} ${await res.text()}`);
+	}
+
+	return (await res.json()) as KeycloakTokenSet;
+}

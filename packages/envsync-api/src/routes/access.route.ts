@@ -66,6 +66,8 @@ app.get(
 	AccessController.createWebLogin,
 );
 
+app.get("/web/dev-session", AccessController.createDevWebSession);
+
 app.get(
 	"/web/callback",
 	describeRoute({

@@ -93,6 +93,28 @@ async function startWebLogin(page: Page) {
 	await page.goto(loginUrl, { waitUntil: "domcontentloaded" });
 }
 
+async function startLocalDevSession(page: Page, credential: AuthCredential) {
+	const config = getUiHarnessConfig();
+	try {
+		return await page.evaluate(async (input) => {
+			const params = new URLSearchParams({
+				email: input.email,
+				password: input.password,
+			});
+			const response = await fetch(`${input.apiBaseUrl}/api/access/web/dev-session?${params.toString()}`, {
+				credentials: "include",
+			});
+			return response.ok;
+		}, {
+			apiBaseUrl: config.apiBaseUrl,
+			email: credential.email,
+			password: credential.password,
+		});
+	} catch {
+		return false;
+	}
+}
+
 async function attemptLocalAutologin(page: Page, role: UiRole) {
 	const config = getUiHarnessConfig();
 	return attemptLocalAutologinWithCredential(page, config.roleCredentials[role]);
@@ -164,7 +186,11 @@ async function ensureFreshCredentialContext(
 		}
 
 		if (!isOnAuthOrigin(page) && Date.now() - lastLoginStartAt > 10_000) {
-			await startWebLogin(page);
+			if (await startLocalDevSession(page, credential)) {
+				await page.goto(config.baseUrl, { waitUntil: "domcontentloaded" });
+			} else {
+				await startWebLogin(page);
+			}
 			lastLoginStartAt = Date.now();
 		}
 
@@ -264,7 +290,11 @@ export async function ensureAuthenticatedPageWithCredential(
 		}
 
 		if (!isOnAuthOrigin(page) && Date.now() - lastLoginStartAt > 10_000) {
-			await startWebLogin(page);
+			if (await startLocalDevSession(page, credential)) {
+				await page.goto(config.baseUrl, { waitUntil: "domcontentloaded" });
+			} else {
+				await startWebLogin(page);
+			}
 			lastLoginStartAt = Date.now();
 		}
 
