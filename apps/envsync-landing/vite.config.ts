@@ -10,7 +10,7 @@ const rootDir = path.resolve(__dirname, "../..");
 export default defineConfig(({ mode }) => ({
   envDir: rootDir,
   server: {
-    host: "::",
+    host: "0.0.0.0",
     port: 8002,
     allowedHosts: ["localhost", "127.0.0.1", "landing.lvh.me"],
   },
