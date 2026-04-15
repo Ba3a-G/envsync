@@ -125,6 +125,13 @@ jobs:
           cp .env.example .env
           bun run e2e-setup init
 
+      - name: Build merged UI E2E env
+        run: |
+          cp .env .env.ui-e2e
+          cat packages/envsync-api/.env.e2e.test >> .env.ui-e2e
+          printf '\nDATABASE_NAME=envsync_e2e_test\n' >> .env.ui-e2e
+          printf 'DB_AUTO_MIGRATE=true\n' >> .env.ui-e2e
+
       - name: Start API and frontend apps
         run: |
           nohup bun run --filter envsync-api dev > /tmp/envsync-api.log 2>&1 &
@@ -135,6 +142,8 @@ jobs:
 
           nohup bun run --filter envsync-landing dev > /tmp/envsync-landing.log 2>&1 &
           echo $! > /tmp/envsync-landing.pid
+        env:
+          ROOT_ENV_PATH: ${{ github.workspace }}/.env.ui-e2e
 
       - name: Wait for app services
         run: |
@@ -167,6 +176,8 @@ jobs:
 
       - name: Run UI regression suite
         run: bun run --filter envsync-web ui:regression
+        env:
+          ROOT_ENV_PATH: ${{ github.workspace }}/.env.ui-e2e
 
       - name: Upload Playwright artifacts
         if: always()

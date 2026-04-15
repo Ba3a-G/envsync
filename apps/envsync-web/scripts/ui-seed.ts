@@ -10,6 +10,7 @@ function runSeedCommand(args: string[]) {
 	const proc = Bun.spawnSync({
 		cmd: ["bun", "run", apiCliPath, "create-dev-user", ...args],
 		cwd: repoRoot,
+		env: process.env,
 		stdout: "inherit",
 		stderr: "inherit",
 	});
