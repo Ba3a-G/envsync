@@ -117,6 +117,9 @@ jobs:
         run: bunx playwright install --with-deps chromium
         working-directory: apps/envsync-web
 
+      - name: Build TypeScript SDK
+        run: bun run --filter @envsync-cloud/envsync-ts-sdk build
+
       - name: Prepare E2E environment
         run: |
           cp .env.example .env
@@ -149,6 +152,12 @@ jobs:
 
               if [ "$i" -eq 90 ]; then
                 echo "service did not become ready: $url"
+                for logfile in /tmp/envsync-api.log /tmp/envsync-web.log /tmp/envsync-landing.log; do
+                  if [ -f "$logfile" ]; then
+                    echo "===== $logfile ====="
+                    tail -n 200 "$logfile" || true
+                  fi
+                done
                 exit 1
               fi
 
