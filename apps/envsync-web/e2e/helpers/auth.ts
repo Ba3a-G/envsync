@@ -13,6 +13,14 @@ function ensureParentDir(filePath: string) {
 	mkdirSync(filePath.replace(/\/[^/]+$/, ""), { recursive: true });
 }
 
+function isOnOrigin(url: string, origin: string) {
+	try {
+		return new URL(url).origin === new URL(origin).origin;
+	} catch {
+		return false;
+	}
+}
+
 export async function waitForService(url: string, label: string) {
 	const startedAt = Date.now();
 	const timeoutMs = 60_000;
@@ -74,9 +82,57 @@ function isOnAuthOrigin(page: Page) {
 	}
 }
 
+function isOnCallbackUrl(page: Page) {
+	const config = getUiHarnessConfig();
+	try {
+		const currentUrl = page.url();
+		if (!currentUrl) {
+			return false;
+		}
+		return currentUrl.startsWith(`${config.apiBaseUrl}/api/access/web/callback`)
+			|| currentUrl.startsWith(`${config.baseUrl}/auth/callback`);
+	} catch {
+		return false;
+	}
+}
+
+async function hasRequiredSessionCookies(context: BrowserContext) {
+	const config = getUiHarnessConfig();
+	const cookies = await context.cookies([config.baseUrl, config.apiBaseUrl]);
+	const hasAccessToken = cookies.some(cookie => cookie.name === "access_token");
+	const hasCsrfToken = cookies.some(cookie => cookie.name === "envsync_csrf");
+	return hasAccessToken && hasCsrfToken;
+}
+
+async function isSessionReady(page: Page) {
+	return await isAuthenticated(page) && await hasRequiredSessionCookies(page.context());
+}
+
+async function settleAuthenticatedPage(page: Page) {
+	const config = getUiHarnessConfig();
+	const deadline = Date.now() + 15_000;
+
+	while (Date.now() < deadline) {
+		if (await isSessionReady(page)) {
+			const currentUrl = page.url();
+			if (currentUrl && isOnOrigin(currentUrl, config.baseUrl) && !isOnCallbackUrl(page)) {
+				return;
+			}
+
+			try {
+				await page.goto(config.baseUrl, { waitUntil: "domcontentloaded" });
+			} catch {
+				// Continue retrying until redirect chain settles.
+			}
+		}
+
+		await page.waitForTimeout(500);
+	}
+}
+
 async function startWebLogin(page: Page) {
 	const config = getUiHarnessConfig();
-	const response = await page.goto(`${config.apiBaseUrl}/api/access/web`, { waitUntil: "domcontentloaded" });
+	const response = await page.goto(`${config.apiBaseUrl}/api/access/web`, { waitUntil: "commit" });
 	if (!response) {
 		throw new Error("Failed to create web login: missing navigation response");
 	}
@@ -100,7 +156,7 @@ async function startLocalDevSession(page: Page, credential: AuthCredential) {
 			password: credential.password,
 		});
 		const response = await page.goto(`${config.apiBaseUrl}/api/access/web/dev-session?${params.toString()}`, {
-			waitUntil: "domcontentloaded",
+			waitUntil: "commit",
 		});
 		if (!response) {
 			console.warn("[ui-login] dev session bootstrap returned no navigation response");
@@ -162,6 +218,7 @@ async function attemptLocalAutologinWithCredential(page: Page, credential: AuthC
 		page.waitForLoadState("domcontentloaded"),
 		submit.click(),
 	]);
+	await settleAuthenticatedPage(page);
 	return true;
 }
 
@@ -186,7 +243,8 @@ async function ensureFreshCredentialContext(
 
 	const startedAt = Date.now();
 	while (Date.now() - startedAt < config.loginTimeoutMs) {
-		if (await isAuthenticated(page)) {
+		if (await isSessionReady(page)) {
+			await settleAuthenticatedPage(page);
 			await page.goto(config.baseUrl, { waitUntil: "domcontentloaded" });
 			await saveStorageState(context, storageKey);
 			return { context, page };
@@ -194,6 +252,7 @@ async function ensureFreshCredentialContext(
 
 		if (!isOnAuthOrigin(page) && Date.now() - lastLoginStartAt > 10_000) {
 			if (await startLocalDevSession(page, credential)) {
+				await settleAuthenticatedPage(page);
 				await page.goto(config.baseUrl, { waitUntil: "domcontentloaded" });
 			} else {
 				await startWebLogin(page);
@@ -237,7 +296,8 @@ export async function ensureCredentialStorageState(storageKey: string, credentia
 			const page = await context.newPage();
 			page.setDefaultTimeout(config.actionTimeoutMs);
 			await page.goto(config.baseUrl, { waitUntil: "domcontentloaded" });
-			if (await isAuthenticated(page)) {
+			if (await isSessionReady(page)) {
+				await settleAuthenticatedPage(page);
 				await context.close();
 				return storageStatePath;
 			}
@@ -291,13 +351,15 @@ export async function ensureAuthenticatedPageWithCredential(
 	let lastLoginStartAt = 0;
 	const startedAt = Date.now();
 	while (Date.now() - startedAt < config.loginTimeoutMs) {
-		if (await isAuthenticated(page)) {
+		if (await isSessionReady(page)) {
+			await settleAuthenticatedPage(page);
 			await saveStorageState(page.context(), storageKey);
 			return;
 		}
 
 		if (!isOnAuthOrigin(page) && Date.now() - lastLoginStartAt > 10_000) {
 			if (await startLocalDevSession(page, credential)) {
+				await settleAuthenticatedPage(page);
 				await page.goto(config.baseUrl, { waitUntil: "domcontentloaded" });
 			} else {
 				await startWebLogin(page);
