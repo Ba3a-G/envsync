@@ -20,7 +20,7 @@
       "publicClient": false,
       "secret": "test-web-client-secret",
       "standardFlowEnabled": true,
-      "directAccessGrantsEnabled": false,
+      "directAccessGrantsEnabled": true,
       "serviceAccountsEnabled": false,
       "redirectUris": [
         "http://app.lvh.me:8001",

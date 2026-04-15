@@ -72,7 +72,12 @@ export class AccessController {
 			return c.json({ error: "email and password are required" }, 400);
 		}
 
-		const tokenData = await keycloakPasswordLogin(email, password);
+		const tokenData = await keycloakPasswordLogin(
+			email,
+			password,
+			config.KEYCLOAK_WEB_CLIENT_ID,
+			config.KEYCLOAK_WEB_CLIENT_SECRET,
+		);
 		setWebAuthCookies(c, tokenData);
 		return c.json({ message: "Local web session created." }, 200);
 	};

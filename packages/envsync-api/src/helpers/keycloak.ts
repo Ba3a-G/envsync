@@ -396,18 +396,24 @@ export async function keycloakRefreshToken(
 export async function keycloakPasswordLogin(
 	username: string,
 	password: string,
-	clientId = "admin-cli",
+	clientId = config.KEYCLOAK_WEB_CLIENT_ID,
+	clientSecret?: string,
 ): Promise<KeycloakTokenSet> {
+	const body = new URLSearchParams({
+		grant_type: "password",
+		client_id: clientId,
+		username,
+		password,
+		scope: "openid email profile",
+	});
+	if (clientSecret) {
+		body.set("client_secret", clientSecret);
+	}
+
 	const res = await fetch(`${base()}/realms/${realm()}/protocol/openid-connect/token`, {
 		method: "POST",
 		headers: { "Content-Type": "application/x-www-form-urlencoded" },
-		body: new URLSearchParams({
-			grant_type: "password",
-			client_id: clientId,
-			username,
-			password,
-			scope: "openid email profile",
-		}),
+		body,
 		signal: AbortSignal.timeout(10_000),
 	});
 

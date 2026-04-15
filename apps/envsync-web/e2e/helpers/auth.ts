@@ -96,7 +96,7 @@ async function startWebLogin(page: Page) {
 async function startLocalDevSession(page: Page, credential: AuthCredential) {
 	const config = getUiHarnessConfig();
 	try {
-		return await page.evaluate(async (input) => {
+		const result = await page.evaluate(async (input) => {
 			const params = new URLSearchParams({
 				email: input.email,
 				password: input.password,
@@ -104,12 +104,20 @@ async function startLocalDevSession(page: Page, credential: AuthCredential) {
 			const response = await fetch(`${input.apiBaseUrl}/api/access/web/dev-session?${params.toString()}`, {
 				credentials: "include",
 			});
-			return response.ok;
+			return {
+				ok: response.ok,
+				status: response.status,
+				body: response.ok ? "" : await response.text().catch(() => ""),
+			};
 		}, {
 			apiBaseUrl: config.apiBaseUrl,
 			email: credential.email,
 			password: credential.password,
 		});
+		if (!result.ok) {
+			console.warn(`[ui-login] dev session bootstrap failed (${result.status}): ${result.body}`);
+		}
+		return result.ok;
 	} catch {
 		return false;
 	}

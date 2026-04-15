@@ -114,6 +114,7 @@ async function ensureKeycloakClient(
 		publicClient: boolean;
 		redirectUris: string[];
 		standardFlowEnabled: boolean;
+		directAccessGrantsEnabled?: boolean;
 		deviceGrant?: boolean;
 		webOrigins?: string[];
 		attributes?: Record<string, string>;
@@ -126,6 +127,31 @@ async function ensureKeycloakClient(
 	if (!lookup.ok) throw new Error(`Keycloak client lookup failed: ${lookup.status} ${await lookup.text()}`);
 	const existing = ((await lookup.json()) as Array<{ id: string }>)[0];
 	if (existing?.id) {
+		const updateRes = await fetch(`${base}/clients/${existing.id}`, {
+			method: "PUT",
+			headers: {
+				Authorization: `Bearer ${token}`,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				clientId,
+				name: clientId,
+				protocol: "openid-connect",
+				publicClient: opts.publicClient,
+				standardFlowEnabled: opts.standardFlowEnabled,
+				directAccessGrantsEnabled: opts.directAccessGrantsEnabled ?? false,
+				serviceAccountsEnabled: false,
+				redirectUris: opts.redirectUris,
+				webOrigins: opts.webOrigins ?? ["*"],
+				attributes: {
+					...(opts.attributes ?? {}),
+					...(opts.deviceGrant ? { "oauth2.device.authorization.grant.enabled": "true" } : {}),
+				},
+			}),
+		});
+		if (!updateRes.ok && updateRes.status !== 204) {
+			throw new Error(`Keycloak client update failed: ${updateRes.status} ${await updateRes.text()}`);
+		}
 		if (opts.publicClient) return { clientId, clientSecret: "" };
 		const secretRes = await fetch(`${base}/clients/${existing.id}/client-secret`, {
 			headers: { Authorization: `Bearer ${token}` },
@@ -146,7 +172,7 @@ async function ensureKeycloakClient(
 			protocol: "openid-connect",
 			publicClient: opts.publicClient,
 			standardFlowEnabled: opts.standardFlowEnabled,
-			directAccessGrantsEnabled: false,
+			directAccessGrantsEnabled: opts.directAccessGrantsEnabled ?? false,
 			serviceAccountsEnabled: false,
 			redirectUris: opts.redirectUris,
 			webOrigins: opts.webOrigins ?? ["*"],
@@ -175,6 +201,7 @@ async function initKeycloakClients() {
 			publicClient: false,
 			redirectUris: [config.KEYCLOAK_WEB_REDIRECT_URI, config.KEYCLOAK_WEB_CALLBACK_URL, webCallbackOrigin],
 			standardFlowEnabled: true,
+			directAccessGrantsEnabled: true,
 			webOrigins: [webCallbackOrigin],
 			attributes: { "post.logout.redirect.uris": "+" },
 		});
