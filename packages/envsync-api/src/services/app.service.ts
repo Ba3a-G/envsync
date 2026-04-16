@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
+import { sql } from "kysely";
 
 import { cacheAside, invalidateCache } from "@/helpers/cache";
 import { CacheKeys, CacheTTL } from "@/helpers/cache-keys";
@@ -12,6 +13,60 @@ import { runSaga } from "@/helpers/saga";
 import { AuthorizationService } from "@/services/authorization.service";
 
 export class AppService {
+	private static getEnvCountsByOrg = async ({ org_id, app_id }: { org_id: string; app_id?: string }) => {
+		const db = await DB.getInstance();
+
+		const rows = await sql<{ app_id: string; count: number }>`
+			WITH ranked AS (
+				SELECT
+					env_store_pit.app_id AS app_id,
+					env_store_pit_change_request.operation AS operation,
+					ROW_NUMBER() OVER (
+						PARTITION BY env_store_pit.app_id, env_store_pit.env_type_id, env_store_pit_change_request.key
+						ORDER BY env_store_pit.created_at DESC, env_store_pit_change_request.created_at DESC
+					) AS rn
+				FROM env_store_pit
+				INNER JOIN env_store_pit_change_request
+					ON env_store_pit.id = env_store_pit_change_request.env_store_pit_id
+				WHERE env_store_pit.org_id = ${org_id}
+				${app_id ? sql`AND env_store_pit.app_id = ${app_id}` : sql``}
+			)
+			SELECT app_id, COUNT(*)::int AS count
+			FROM ranked
+			WHERE rn = 1 AND operation <> ${"DELETE"}
+			GROUP BY app_id
+		`.execute(db);
+
+		return new Map(rows.rows.map(row => [row.app_id, Number(row.count)]));
+	};
+
+	private static getSecretCountsByOrg = async ({ org_id, app_id }: { org_id: string; app_id?: string }) => {
+		const db = await DB.getInstance();
+
+		const rows = await sql<{ app_id: string; count: number }>`
+			WITH ranked AS (
+				SELECT
+					secret_store_pit.app_id AS app_id,
+					secret_store_pit_change_request.operation AS operation,
+					ROW_NUMBER() OVER (
+						PARTITION BY secret_store_pit.app_id, secret_store_pit.env_type_id, secret_store_pit_change_request.key
+						ORDER BY secret_store_pit.created_at DESC, secret_store_pit_change_request.created_at DESC
+					) AS rn
+				FROM secret_store_pit
+				INNER JOIN secret_store_pit_change_request
+					ON secret_store_pit.id = secret_store_pit_change_request.secret_store_pit_id
+				WHERE secret_store_pit.org_id = ${org_id}
+				${app_id ? sql`AND secret_store_pit.app_id = ${app_id}` : sql``}
+			)
+			SELECT app_id, COUNT(*)::int AS count
+			FROM ranked
+			WHERE rn = 1 AND operation <> ${"DELETE"}
+			GROUP BY app_id
+		`.execute(db);
+
+		return new Map(rows.rows.map(row => [row.app_id, Number(row.count)]));
+	};
+
 	public static createApp = async ({
 		name,
 		org_id,
@@ -250,6 +305,11 @@ export class AppService {
 		org_id: string;
 		user_id: string;
 	}) => {
+		const fastCount = (await AppService.getEnvCountsByOrg({ org_id, app_id })).get(app_id) ?? 0;
+		if (fastCount > 0) {
+			return fastCount;
+		}
+
 		const db = await DB.getInstance();
 		const envTypes = await db
 			.selectFrom("env_type")
@@ -289,6 +349,11 @@ export class AppService {
 		org_id: string;
 		user_id: string;
 	}) => {
+		const fastCount = (await AppService.getSecretCountsByOrg({ org_id, app_id })).get(app_id) ?? 0;
+		if (fastCount > 0) {
+			return fastCount;
+		}
+
 		const db = await DB.getInstance();
 		const envTypes = await db
 			.selectFrom("env_type")
@@ -317,6 +382,15 @@ export class AppService {
 			);
 			return 0;
 		}
+	};
+
+	public static getConfigCountsByOrg = async ({ org_id }: { org_id: string }) => {
+		const [envCounts, secretCounts] = await Promise.all([
+			AppService.getEnvCountsByOrg({ org_id }),
+			AppService.getSecretCountsByOrg({ org_id }),
+		]);
+
+		return { envCounts, secretCounts };
 	};
 
 	public static getManagedAppPrivateKey = async (app_id: string) => {

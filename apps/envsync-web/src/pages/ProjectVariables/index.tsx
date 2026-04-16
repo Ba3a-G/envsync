@@ -14,9 +14,10 @@ import {
   EnvironmentVariable,
   EnvVarFormData,
   BulkEnvVarData,
+  SingleItemEnvVarUpdateData,
 } from "@/constants";
 import { toast } from "sonner";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/contexts/auth";
 import { useNavigate, useParams } from "react-router-dom";
 import { parseAsString, useQueryState } from "nuqs";
 import { getDefaultEnvironmentType } from "@/lib/utils";
@@ -24,7 +25,7 @@ import { appManageEnvironmentsPath } from "@/lib/app-routes";
 
 export const ProjectEnvironments = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user } = useAuthContext();
   const { appId } = useParams();
 
   const onBack = () => navigate("/");
@@ -84,9 +85,9 @@ export const ProjectEnvironments = () => {
     [createVariable]
   );
 
-  const handleEditVariable = (data: Partial<EnvVarFormData>, originalKey: string) => {
+  const handleEditVariable = (data: SingleItemEnvVarUpdateData) => {
     updateVariable.mutate(
-      { data, originalKey },
+      data,
       {
         onSuccess: () => {
           setShowEditModal(false);
@@ -281,6 +282,8 @@ export const ProjectEnvironments = () => {
         onEdit={handleEditClick}
         onDelete={handleDeleteClick}
         canEdit={user.role.can_edit}
+        onPrimaryAction={() => setShowAddModal(true)}
+        primaryActionLabel="Add Variable"
       />
 
       {/* Add Variable Modal */}

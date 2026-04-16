@@ -216,6 +216,13 @@ if (!isE2E) {
 					expires_in: 900,
 					refresh_expires_in: 86400,
 				}),
+				keycloakPasswordLogin: async (username: string, _password: string) => ({
+					access_token: `mock-password-access-token-${username}`,
+					id_token: `mock-password-id-token-${username}`,
+					refresh_token: `mock-password-refresh-token-${username}`,
+					expires_in: 900,
+					refresh_expires_in: 86400,
+				}),
 				keycloakRefreshToken: async (refreshToken: string) => ({
 					access_token: `mock-refreshed-access-token-${refreshToken}`,
 					refresh_token: refreshToken,

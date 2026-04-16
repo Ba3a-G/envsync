@@ -346,6 +346,20 @@ export class CertificateService {
 			.executeTakeFirst();
 	};
 
+	public static getLatestActiveManualMemberCert = async (org_id: string, user_id: string) => {
+		const db = await DB.getInstance();
+		return db
+			.selectFrom("org_certificates")
+			.selectAll()
+			.where("org_id", "=", org_id)
+			.where("user_id", "=", user_id)
+			.where("cert_type", "=", "member")
+			.where("status", "=", "active")
+			.where("is_system_generated", "=", false)
+			.orderBy("created_at", "desc")
+			.executeTakeFirst();
+	};
+
 	public static getMyCertificateBundle = async (org_id: string, user_id: string) => {
 		const cert = await this.getLatestActiveSystemMemberCert(org_id, user_id);
 		if (!cert) {

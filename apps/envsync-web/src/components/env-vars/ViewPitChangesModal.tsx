@@ -22,8 +22,10 @@ import {
   Loader2,
   AlertCircle,
 } from "lucide-react";
+import { sdk } from "@/api";
 import { useEnvsAtPit } from "@/api/pointInTime.api";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 interface ViewPitChangesModalProps {
   isOpen: boolean;
@@ -40,6 +42,15 @@ export const ViewPitChangesModal = ({
   projectId,
   environmentId,
 }: ViewPitChangesModalProps) => {
+  const { data: users = [] } = useQuery({
+    queryKey: ["pit-users"],
+    queryFn: async () => sdk.users.getUsers(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const usersMap = useMemo(
+    () => new Map(users.map((entry) => [entry.id, entry])),
+    [users]
+  );
   // Fetch the actual changes for this PiT
   const {
     data: pitStateData,
@@ -108,6 +119,13 @@ export const ViewPitChangesModal = ({
   };
 
   const getUserDisplayName = (userId: string) => {
+    const matchingUser = usersMap.get(userId);
+    if (matchingUser?.full_name?.trim()) {
+      return matchingUser.full_name;
+    }
+    if (matchingUser?.email?.trim()) {
+      return matchingUser.email;
+    }
     if (userId?.includes("@")) {
       return userId.split("@")[0];
     }

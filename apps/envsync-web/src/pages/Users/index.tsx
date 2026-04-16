@@ -1,13 +1,16 @@
 import { Button } from "@/components/ui/button";
-import { UserPlus2, Mail, Users as UsersIcon } from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
+import { User, UserPlus2, ShieldCheck } from "lucide-react";
+import { useAuthContext } from "@/contexts/auth";
 import { useState, useCallback, useMemo } from "react";
+import { PageShell } from "@/components/PageShell";
 import { InviteUserModal } from "@/components/users/InviteUserModal";
 import { EditRoleModal } from "@/components/users/EditRoleModal";
 import { DeleteUserModal } from "@/components/users/DeleteUserModal";
-import { InvitationsModal } from "@/components/users/InvitationsModal";
+import { InvitationsPanel } from "@/components/users/InvitationsPanel";
 import { UsersTable } from "@/components/users/UsersTable";
 import { useUsers } from "@/hooks/useUsers";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 
 interface User {
   id: string;
@@ -21,7 +24,7 @@ interface User {
 }
 
 export const Users = () => {
-  const { user } = useAuth();
+  const { user } = useAuthContext();
   const {
     users,
     roles,
@@ -52,7 +55,7 @@ export const Users = () => {
   const [showInviteUserModalOpen, setShowInviteUserModalOpen] = useState(false);
   const [showEditRoleModalOpen, setShowEditRoleModalOpen] = useState(false);
   const [showDeleteUserModalOpen, setShowDeleteUserModalOpen] = useState(false);
-  const [showInvitationsModalOpen, setShowInvitationsModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("members");
 
   // Event handlers
   const handleInviteUser = useCallback(() => {
@@ -135,42 +138,72 @@ export const Users = () => {
     if (!user?.role) return false;
     return user.role.is_master || user.role.is_admin;
   }, [user]);
+  const activeMembers = useMemo(
+    () => users.filter((member) => member.status === "active").length,
+    [users]
+  );
+  const adminMembers = useMemo(
+    () =>
+      users.filter((member) => member.role.toLowerCase().includes("admin") || member.role.toLowerCase().includes("master")).length,
+    [users]
+  );
 
   return (
     <div className="animate-page-enter space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <div className="p-2 bg-violet-500/10 rounded-lg ring-1 ring-violet-500/20">
-            <UsersIcon className="size-5 text-violet-400" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold text-gray-100 tracking-tight">Team</h1>
-            <p className="text-sm text-gray-400 mt-0.5">
-              Manage your team members and their access permissions
-            </p>
-          </div>
-        </div>
-        {canManageUsers && (
-          <div className="flex items-center space-x-3">
-            <Button
-              variant="outline"
-              className="border-gray-600 text-gray-300 hover:bg-gray-700"
-              onClick={() => setShowInvitationsModalOpen(true)}
-            >
-              <Mail className="size-4 mr-1" />
-              Manage Invitations
-            </Button>
+      <PageShell
+        title="Users"
+        description="Manage members, invitations, and access posture from one operational surface."
+        icon={User}
+        stickyActions
+        actions={
+          canManageUsers ? (
             <Button
               className="bg-violet-500 hover:bg-violet-600 text-white"
               onClick={() => setShowInviteUserModalOpen(true)}
               disabled={inviteUserMutation.isPending}
+              data-testid="users-invite-member"
             >
-              <UserPlus2 className="size-4 mr-1" />
+              <UserPlus2 className="size-4 mr-2" />
               Invite Member
             </Button>
-          </div>
-        )}
-      </div>
+          ) : null
+        }
+        stats={[
+          { label: "Members", value: users.length, hint: "Current organization members" },
+          { label: "Active", value: activeMembers, hint: "Members active in the workspace", tone: activeMembers > 0 ? "success" : "default" },
+          { label: "Privileged", value: adminMembers, hint: "Admin or master-level access", tone: adminMembers > 0 ? "warning" : "default" },
+        ]}
+        secondaryNav={
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="h-auto bg-transparent p-0">
+              <TabsTrigger value="members" className="rounded-xl data-[state=active]:bg-violet-500/18 data-[state=active]:text-white">
+                <span data-testid="users-tab-members">Members</span>
+              </TabsTrigger>
+              <TabsTrigger value="invitations" className="rounded-xl data-[state=active]:bg-violet-500/18 data-[state=active]:text-white">
+                <span data-testid="users-tab-invitations">Invitations</span>
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        }
+      >
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsContent value="members" className="mt-0" data-testid="users-members-table">
+            <UsersTable
+              users={users}
+              loading={isLoading}
+              actionLoadingStates={actionLoadingStates}
+              canManageUsers={canManageUsers}
+              onInviteClick={() => setShowInviteUserModalOpen(true)}
+              onEditRole={handleOpenEditModal}
+              onDeleteUser={handleOpenDeleteModal}
+              refetch={refetch}
+            />
+          </TabsContent>
+          <TabsContent value="invitations" className="mt-0">
+            <InvitationsPanel />
+          </TabsContent>
+        </Tabs>
+      </PageShell>
 
       {/* Invite User Modal */}
       <InviteUserModal
@@ -215,24 +248,6 @@ export const Users = () => {
         }
         onDelete={handleDeleteUser}
         onClose={handleCloseDeleteModal}
-      />
-
-      {/* Invitations Modal */}
-      <InvitationsModal
-        open={showInvitationsModalOpen}
-        onOpenChange={setShowInvitationsModalOpen}
-      />
-
-      {/* Users Table */}
-      <UsersTable
-        users={users}
-        loading={isLoading}
-        actionLoadingStates={actionLoadingStates}
-        canManageUsers={canManageUsers}
-        onInviteClick={() => setShowInviteUserModalOpen(true)}
-        onEditRole={handleOpenEditModal}
-        onDeleteUser={handleOpenDeleteModal}
-        refetch={refetch}
       />
     </div>
   );

@@ -12,6 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useState, useCallback } from "react";
 import { api } from "@/api";
+import { useAuthContext } from "@/contexts/auth";
 import { toast } from "sonner";
 import { useCopy } from "@/hooks/useClipboard";
 import { cn, formatDate, formatLastUsed } from "@/lib/utils";
@@ -39,6 +40,8 @@ const WEBHOOK_EVENTS = [
 ];
 
 export const WebHooks = () => {
+  const { isLoading: isAuthLoading, isAuthenticated } = useAuthContext();
+  const authEnabled = !isAuthLoading && isAuthenticated;
   const copy = useCopy();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newWebhookData, setNewWebhookData] = useState<WebhookFormData>({
@@ -76,14 +79,14 @@ export const WebHooks = () => {
   }, []);
 
   // Move ALL hooks to the top level - no conditional hooks
-  const { data: webhooks, isLoading, error } = api.webhooks.getWebhooks();
+  const { data: webhooks, isLoading, error } = api.webhooks.getWebhooks({ enabled: authEnabled });
 
   // Always call this hook, but we'll only use the data when needed
   const {
     data: applications,
     isLoading: applicationsLoading,
     error: applicationsError,
-  } = api.applications.allApplications();
+  } = api.applications.allApplications({ enabled: authEnabled });
 
   const createWebhook = api.webhooks.createWebhook({
     onSuccess: ({ data }) => {

@@ -3,29 +3,34 @@ import { Users, Plus, UserPlus, ShieldAlert, Trash2, Pencil, UserMinus } from "l
 import { toast } from "sonner";
 
 import { api } from "@/api";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/contexts/auth";
+import { PageShell } from "@/components/PageShell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 const DEFAULT_COLORS = ["#8b5cf6", "#06b6d4", "#22c55e", "#f59e0b", "#ef4444"];
 
 const Teams = () => {
-  const { user } = useAuth();
+  const { user, isLoading: isAuthLoading, isAuthenticated } = useAuthContext();
   const canManage = Boolean(user?.role?.is_admin || user?.role?.is_master);
+  const authEnabled = !isAuthLoading && isAuthenticated;
 
-  const { data: teams = [] } = api.teams.getTeams();
-  const { data: roles = [] } = api.roles.getAllRoles();
-  const { data: users = [] } = api.users.getAllUsers();
+  const { data: teams = [] } = api.teams.getTeams({ enabled: authEnabled });
+  const { data: roles = [] } = api.roles.getAllRoles({ enabled: authEnabled });
+  const { data: users = [] } = api.users.getAllUsers({ enabled: authEnabled });
 
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
-  const { data: selectedTeam } = api.teams.getTeam(selectedTeamId || undefined);
+  const { data: selectedTeam } = api.teams.getTeam(selectedTeamId || undefined, {
+    enabled: authEnabled,
+  });
 
   const createTeam = api.teams.createTeam({
     onSuccess: () => toast.success("Team created"),
@@ -67,6 +72,8 @@ const Teams = () => {
 
   const [memberUserId, setMemberUserId] = useState("");
   const [teamRoleId, setTeamRoleId] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<"teams" | "detail">("teams");
 
   const selectedRoleName = useMemo(() => {
     if (!selectedTeam?.role_id) return "No team role";
@@ -81,6 +88,21 @@ const Teams = () => {
   const availableUsers = useMemo(
     () => users.filter((entry) => !memberIds.has(entry.id)),
     [users, memberIds],
+  );
+  const filteredTeams = useMemo(
+    () =>
+      teams.filter((team) =>
+        `${team.name} ${team.description || ""}`.toLowerCase().includes(searchQuery.toLowerCase())
+      ),
+    [searchQuery, teams]
+  );
+  const totalMembers = useMemo(
+    () => teams.reduce((count, team) => count + (team.member_count || 0), 0),
+    [teams]
+  );
+  const teamsWithRole = useMemo(
+    () => teams.filter((team) => team.role_id).length,
+    [teams]
   );
 
   const openCreate = () => {
@@ -119,30 +141,49 @@ const Teams = () => {
 
   return (
     <div className="animate-page-enter space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="rounded-lg bg-violet-500/10 p-2 ring-1 ring-violet-500/20">
-            <Users className="size-5 text-violet-400" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold text-gray-100 tracking-tight">Teams</h1>
-            <p className="mt-0.5 text-sm text-gray-400">
-              Create teams, assign a shared role, and grant app access through membership.
-            </p>
-          </div>
-        </div>
-        {canManage && (
-          <Button className="bg-violet-500 hover:bg-violet-600" onClick={openCreate}>
-            <Plus className="mr-2 size-4" />
-            New Team
-          </Button>
-        )}
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <Card className="border-gray-800 bg-gray-950/70">
+      <PageShell
+        title="Teams"
+        description="Create role-bearing teams, manage membership, and make inherited access easier to understand."
+        icon={Users}
+        stickyActions
+        actions={
+          canManage ? (
+            <Button data-testid="teams-create" className="bg-violet-500 hover:bg-violet-600" onClick={openCreate}>
+              <Plus className="mr-2 size-4" />
+              New Team
+            </Button>
+          ) : null
+        }
+        stats={[
+          { label: "Teams", value: teams.length, hint: "Collaboration groups across the org" },
+          { label: "Members", value: totalMembers, hint: "Team memberships in total", tone: totalMembers > 0 ? "success" : "default" },
+          { label: "Teams With Role", value: teamsWithRole, hint: "Ready for inherited access", tone: teamsWithRole > 0 ? "warning" : "default" },
+        ]}
+        secondaryNav={
+          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "teams" | "detail")}>
+            <TabsList className="h-auto bg-transparent p-0">
+              <TabsTrigger data-testid="teams-tab-directory" value="teams" className="rounded-xl data-[state=active]:bg-violet-500/18 data-[state=active]:text-white">
+                Teams Directory
+              </TabsTrigger>
+              <TabsTrigger data-testid="teams-tab-detail" value="detail" className="rounded-xl data-[state=active]:bg-violet-500/18 data-[state=active]:text-white">
+                Team Details
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        }
+      >
+      {activeTab === "teams" ? (
+        <Card data-testid="teams-directory-list" className="border-gray-800 bg-gray-950/70">
           <CardHeader>
-            <CardTitle className="text-white">Teams</CardTitle>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle className="text-white">Teams</CardTitle>
+              <Input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search teams…"
+                className="max-w-sm border-gray-700 bg-gray-950 text-white"
+              />
+            </div>
           </CardHeader>
           <CardContent>
             <Table>
@@ -155,11 +196,15 @@ const Teams = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {teams.map((team) => (
+                {filteredTeams.map((team) => (
                   <TableRow
                     key={team.id}
+                    data-testid={`teams-row-${team.id}`}
                     className={`cursor-pointer border-gray-800 ${selectedTeamId === team.id ? "bg-gray-900" : "hover:bg-gray-900/60"}`}
-                    onClick={() => setSelectedTeamId(team.id)}
+                    onClick={() => {
+                      setSelectedTeamId(team.id);
+                      setActiveTab("detail");
+                    }}
                   >
                     <TableCell className="font-medium text-white">
                       <div className="flex items-center gap-2">
@@ -188,8 +233,8 @@ const Teams = () => {
             </Table>
           </CardContent>
         </Card>
-
-        <Card className="border-gray-800 bg-gray-950/70">
+      ) : (
+        <Card data-testid="teams-detail-panel" className="border-gray-800 bg-gray-950/70">
           <CardHeader className="flex flex-row items-start justify-between">
             <div>
               <CardTitle className="text-white">
@@ -198,7 +243,7 @@ const Teams = () => {
               <p className="mt-1 text-sm text-gray-400">
                 {selectedTeam
                   ? "Members inherit the team role and any app access granted to this team."
-                  : "Pick a team to manage membership and the shared role."}
+                  : "Pick a team from the directory to manage membership and the shared role."}
               </p>
             </div>
             {selectedTeam && canManage && (
@@ -345,22 +390,22 @@ const Teams = () => {
                 </div>
               </>
             ) : (
-              <div className="rounded-lg border border-dashed border-gray-800 bg-gray-900/50 p-8 text-center text-gray-400">
-                Pick a team from the table to manage membership, shared roles, and inherited access.
+              <div data-testid="teams-empty-detail" className="rounded-lg border border-dashed border-gray-800 bg-gray-900/50 p-8 text-center text-gray-400">
+                Pick a team from the directory to manage membership, shared roles, and inherited access.
               </div>
             )}
           </CardContent>
         </Card>
-      </div>
+      )}
 
-      <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
-        <DialogContent className="border-gray-800 bg-gray-900">
-          <DialogHeader>
-            <DialogTitle className="text-white">
+      <Sheet open={editorOpen} onOpenChange={setEditorOpen}>
+        <SheetContent side="right" className="border-gray-800 bg-gray-900 sm:max-w-xl">
+          <SheetHeader>
+            <SheetTitle className="text-white">
               {editingTeamId ? "Edit Team" : "Create Team"}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
+            </SheetTitle>
+          </SheetHeader>
+          <div className="mt-6 space-y-4">
             <div className="space-y-2">
               <Label className="text-white">Name</Label>
               <Input value={name} onChange={(event) => setName(event.target.value)} className="border-gray-700 bg-gray-950 text-white" />
@@ -384,16 +429,17 @@ const Teams = () => {
               </div>
             </div>
           </div>
-          <DialogFooter>
+          <SheetFooter className="mt-8">
             <Button variant="outline" className="border-gray-700 text-gray-200" onClick={() => setEditorOpen(false)}>
               Cancel
             </Button>
             <Button className="bg-violet-500 hover:bg-violet-600" onClick={saveTeam}>
               Save
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+      </PageShell>
     </div>
   );
 };

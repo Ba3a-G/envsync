@@ -59,6 +59,18 @@ export class CertificateController {
 			);
 		}
 
+		const existingManualCert = await CertificateService.getLatestActiveManualMemberCert(
+			org_id,
+			member.id,
+		);
+		if (existingManualCert) {
+			throw new BusinessRuleError(
+				`Active member certificate already exists for ${member_email}. Use renew, rotate, or revoke first.`,
+				409,
+				"ACTIVE_MEMBER_CERT_EXISTS",
+			);
+		}
+
 		const role = await RoleService.getRole(member.role_id);
 
 		const cert = await CertificateService.issueMemberCert({

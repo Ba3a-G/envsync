@@ -1864,6 +1864,32 @@ function writeFrontendRuntimeConfig(targetDir: string, runtimeConfig: string) {
 	writeFile(path.join(targetDir, "runtime-config.js"), runtimeConfig);
 }
 
+function syncFrontendReleaseContents(sourceDir: string, targetDir: string) {
+	ensureDir(targetDir);
+	const deferredEntries = new Set(["index.html", "runtime-config.js"]);
+	const entries = fs.readdirSync(sourceDir, { withFileTypes: true });
+
+	for (const entry of entries) {
+		if (deferredEntries.has(entry.name)) {
+			continue;
+		}
+		fs.cpSync(path.join(sourceDir, entry.name), path.join(targetDir, entry.name), {
+			recursive: true,
+			force: true,
+		});
+	}
+
+	const stagedRuntimeConfig = path.join(sourceDir, "runtime-config.js");
+	if (exists(stagedRuntimeConfig)) {
+		fs.cpSync(stagedRuntimeConfig, path.join(targetDir, "runtime-config.js"), { force: true });
+	}
+
+	const stagedIndex = path.join(sourceDir, "index.html");
+	if (exists(stagedIndex)) {
+		fs.cpSync(stagedIndex, path.join(targetDir, "index.html"), { force: true });
+	}
+}
+
 function activateFrontendRelease(kind: "web" | "landing", version: string, runtimeConfig: string) {
 	const stagedDir = releaseAssetDir(kind, version);
 	const currentDir = currentReleaseDir(kind);
@@ -1877,10 +1903,8 @@ function activateFrontendRelease(kind: "web" | "landing", version: string, runti
 	}
 	validateStaticBundle(kind, stagedDir);
 	writeFrontendRuntimeConfig(stagedDir, runtimeConfig);
-	fs.rmSync(currentDir, { recursive: true, force: true });
 	ensureDir(currentDir);
-	fs.cpSync(stagedDir, currentDir, { recursive: true });
-	writeFrontendRuntimeConfig(currentDir, runtimeConfig);
+	syncFrontendReleaseContents(stagedDir, currentDir);
 	validateStaticBundle(kind, currentDir);
 }
 

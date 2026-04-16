@@ -9,6 +9,7 @@ import {
   Settings,
   ShieldAlert,
   ShieldCheck,
+  User,
   Users,
 } from "lucide-react";
 
@@ -175,7 +176,7 @@ export const coreWebModules: WebModule[] = [
       {
         label: "Collaboration",
         items: [
-          { id: "users", name: "Users", href: "/users", icon: Users },
+          { id: "users", name: "Users", href: "/users", icon: User },
           { id: "teams", name: "Teams", href: "/teams", icon: Users },
           { id: "roles", name: "Roles", href: "/roles", icon: ShieldAlert },
           { id: "change-requests", name: "Change Requests", href: "/change-requests", icon: ShieldCheck },

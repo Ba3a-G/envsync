@@ -148,6 +148,12 @@ export interface EnvVarFormData {
   env_type_id: string;
 }
 
+export interface SingleItemEnvVarUpdateData {
+  originalKey: string;
+  value: string;
+  env_type_id: string;
+}
+
 export interface EnvVarFormErrors {
   key?: string;
   value?: string;

@@ -2,7 +2,7 @@ import { type Context } from "hono";
 import * as openid from "openid-client";
 
 import { config } from "@/utils/env";
-import { getKeycloakIssuer, getKeycloakPublicBaseUrl, getKeycloakRealm, keycloakTokenExchange } from "@/helpers/keycloak";
+import { getKeycloakIssuer, getKeycloakPublicBaseUrl, getKeycloakRealm, keycloakPasswordLogin, keycloakTokenExchange } from "@/helpers/keycloak";
 import { clearWebAuthCookies, readLoginState, setLoginStateCookie, setWebAuthCookies } from "@/helpers/web-auth";
 
 const keycloakDiscoveryUrl = () => `${getKeycloakIssuer()}/.well-known/openid-configuration`;
@@ -15,6 +15,12 @@ const clientMetadata: openid.ClientMetadata = {
 const clientAuth: openid.ClientAuth = openid.None();
 
 export class AccessController {
+	private static assertDevSessionAllowed() {
+		if (config.NODE_ENV === "production") {
+			throw new Error("Local dev session bootstrap is disabled in production");
+		}
+	}
+
 	public static readonly createCliLogin = async (c: Context) => {
 		const { KEYCLOAK_CLI_CLIENT_ID } = config;
 
@@ -55,6 +61,38 @@ export class AccessController {
 		const loginUrl = `${authorizeEndpoint()}?client_id=${KEYCLOAK_WEB_CLIENT_ID}&response_type=code&scope=openid%20email%20profile&redirect_uri=${encodeURIComponent(KEYCLOAK_WEB_REDIRECT_URI)}&state=${encodeURIComponent(state)}`;
 
 		return c.json({ message: "Web login created successfully.", loginUrl }, 201);
+	};
+
+	public static readonly createDevWebSession = async (c: Context) => {
+		this.assertDevSessionAllowed();
+
+		const email = c.req.query("email");
+		const password = c.req.query("password");
+		if (!email || !password) {
+			return c.json({ error: "email and password are required" }, 400);
+		}
+
+		try {
+			const clientId = config.KEYCLOAK_E2E_CLIENT_ID || config.KEYCLOAK_WEB_CLIENT_ID;
+			const clientSecret = config.KEYCLOAK_E2E_CLIENT_SECRET || config.KEYCLOAK_WEB_CLIENT_SECRET;
+			const tokenData = await keycloakPasswordLogin(
+				email,
+				password,
+				clientId,
+				clientSecret,
+			);
+			setWebAuthCookies(c, tokenData);
+			return c.json({ message: "Local web session created." }, 200);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			return c.json(
+				{
+					error: "Local dev session bootstrap failed.",
+					detail: message,
+				},
+				500,
+			);
+		}
 	};
 
 	public static readonly callbackWebLogin = async (c: Context) => {

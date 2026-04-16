@@ -98,16 +98,33 @@ describe("Env Type CRUD E2E", () => {
 		expect(body.name).toBe("staging");
 	});
 
-	test("update env type name", async () => {
+	test("update env type name and protection state", async () => {
 		const res = await testRequest(`/api/env_type/${stagingId}`, {
 			method: "PATCH",
 			token: seed.masterUser.token,
-			body: { id: stagingId, name: "staging-v2" },
+			body: { id: stagingId, name: "staging-v2", is_protected: true },
 		});
 		expect(res.status).toBe(200);
 
-		const body = await res.json<{ message: string }>();
-		expect(body.message).toBe("Env type updated successfully.");
+		const body = await res.json<{ id: string; name: string; is_protected: boolean }>();
+		expect(body.id).toBe(stagingId);
+		expect(body.name).toBe("staging-v2");
+		expect(body.is_protected).toBe(true);
+	});
+
+	test("updated protection state persists in app detail", async () => {
+		const res = await testRequest(`/api/app/${appId}`, {
+			token: seed.masterUser.token,
+		});
+		expect(res.status).toBe(200);
+
+		const body = await res.json<{
+			env_types: Array<{ id: string; name: string; is_protected: boolean }>;
+		}>();
+		const staging = body.env_types.find((envType) => envType.id === stagingId);
+		expect(staging).toBeDefined();
+		expect(staging?.name).toBe("staging-v2");
+		expect(staging?.is_protected).toBe(true);
 	});
 
 	test("delete env type", async () => {

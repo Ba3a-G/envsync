@@ -38,6 +38,7 @@ export default function Dashboard() {
               icon={card.icon}
               gradient={card.gradient}
               iconColor={card.iconColor}
+              testId={card.testId}
             />
           </BentoGridItem>
         ))}
@@ -50,6 +51,7 @@ export default function Dashboard() {
             icon={statCardConfigs[3].icon}
             gradient={statCardConfigs[3].gradient}
             iconColor={statCardConfigs[3].iconColor}
+            testId={statCardConfigs[3].testId}
           />
         </BentoGridItem>
 

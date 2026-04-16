@@ -1,13 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  MoreHorizontal,
-  Eye,
-  Edit,
-  Trash2,
-  Key,
-  Shield,
-} from "lucide-react";
+import { MoreHorizontal, Eye, Edit, Trash2, Key } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,6 +27,7 @@ export const ApplicationCard = ({
   onDelete,
 }: ApplicationCardProps) => {
   const navigate = useNavigate();
+  const configItemCount = (app.env_count ?? 0) + (app.secret_count ?? 0);
 
   const getRelativeTime = (date: Date) => {
     const now = new Date();
@@ -138,14 +132,8 @@ export const ApplicationCard = ({
           <div className="flex items-center space-x-3">
             <div className="flex items-center space-x-1.5 text-gray-400">
               <Key className="w-3 h-3" />
-              <span>{app.env_count || 0} vars</span>
+              <span data-testid={`application-card-${app.id}-config-count`}>{configItemCount} vars / secrets</span>
             </div>
-            {app.enable_secrets && (
-              <div className="flex items-center space-x-1.5 text-gray-400">
-                <Shield className="w-3 h-3" />
-                <span>{app.secret_count || 0} secrets</span>
-              </div>
-            )}
           </div>
 
           <span className="text-gray-500">

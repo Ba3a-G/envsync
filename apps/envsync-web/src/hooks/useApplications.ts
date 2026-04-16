@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "@/hooks/useAuth";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { api as Api, sdk } from "@/api";
+import { useAuthContext } from "@/contexts/auth";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ApiError } from "@envsync-cloud/envsync-ts-sdk";
@@ -12,7 +13,6 @@ import {
   DEFAULT_FILTER_OPTIONS,
   DEBOUNCE_DELAY,
 } from "@/constants";
-import { api as Api } from "@/api";
 
 function getApiErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof ApiError && error.body?.error) {
@@ -22,9 +22,10 @@ function getApiErrorMessage(error: unknown, fallback: string): string {
 }
 
 export const useApplications = () => {
-  const { api, user } = useAuth();
+  const { user, isLoading: isAuthLoading, isAuthenticated } = useAuthContext();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const authEnabled = !isAuthLoading && isAuthenticated;
 
   // State management
   const [searchQuery, setSearchQuery] = useState("");
@@ -56,7 +57,7 @@ export const useApplications = () => {
     error,
     refetch,
     isRefetching,
-  } = Api.applications.allApplications();
+  } = Api.applications.allApplications({ enabled: authEnabled });
   // useQuery({
   //   queryKey: [API_KEYS.ALL_APPLICATIONS],
   //   queryFn: async () => {
@@ -92,7 +93,7 @@ export const useApplications = () => {
       appId: string;
       data: Partial<App>;
     }) => {
-      return await api.applications.updateApp(appId, {
+      return await sdk.applications.updateApp(appId, {
         name: data.name,
         description: data.description,
         // Note: status update might need a different API endpoint
@@ -113,7 +114,7 @@ export const useApplications = () => {
   // Delete application mutation
   const deleteAppMutation = useMutation({
     mutationFn: async (appId: string) => {
-      return await api.applications.deleteApp(appId);
+      return await sdk.applications.deleteApp(appId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [API_KEYS.ALL_APPLICATIONS] });

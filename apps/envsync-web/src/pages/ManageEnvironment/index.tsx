@@ -1,19 +1,27 @@
-import { useState, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { useCallback, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowLeft,
-  Settings,
-  Palette,
-  Save,
-  Trash2,
   AlertTriangle,
+  ArrowLeft,
+  FolderKanban,
+  Layers3,
   Plus,
+  Settings,
+  ShieldAlert,
+  Sparkles,
+  Trash2,
   Edit3,
 } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+
+import { sdk } from "@/api";
+import { PageShell } from "@/components/PageShell";
+import { useAuthContext } from "@/contexts/auth";
+import { appDetailPath } from "@/lib/app-routes";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -22,10 +30,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useAuth } from "@/hooks/useAuth";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
-import { appDetailPath } from "@/lib/app-routes";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
 
 interface EnvironmentType {
   id: string;
@@ -40,7 +55,6 @@ interface Project {
   id: string;
   name: string;
   description?: string;
-  env_types?: EnvironmentType[];
 }
 
 interface FormData {
@@ -48,7 +62,6 @@ interface FormData {
   color: string;
   is_default: boolean;
   is_protected: boolean;
-  variable_count?: number;
 }
 
 interface FormErrors {
@@ -58,57 +71,52 @@ interface FormErrors {
 
 const MAX_NAME_LENGTH = 50;
 const ENV_NAME_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9-_\s]*[a-zA-Z0-9]$/;
-
 const PRESET_COLORS = [
-  "#ef4444", // red
-  "#f97316", // orange
-  "#eab308", // yellow
-  "#22c55e", // green
-  "#06b6d4", // cyan
-  "#3b82f6", // blue
-  "#6366f1", // indigo
-  "#8b5cf6", // violet
-  "#ec4899", // pink
-  "#f59e0b", // amber
+  "#ef4444",
+  "#f97316",
+  "#eab308",
+  "#22c55e",
+  "#06b6d4",
+  "#3b82f6",
+  "#6366f1",
+  "#8b5cf6",
+  "#ec4899",
+  "#f59e0b",
 ];
 
+const INITIAL_FORM: FormData = {
+  name: "",
+  color: "#6366f1",
+  is_default: false,
+  is_protected: false,
+};
+
 export const ManageEnvironment = () => {
-  const { appId } = useParams<{
-    appId: string;
-  }>();
+  const { appId } = useParams<{ appId: string }>();
   const navigate = useNavigate();
-  const { api } = useAuth();
+  const { isLoading: isAuthLoading, isAuthenticated } = useAuthContext();
   const queryClient = useQueryClient();
 
-  // State
   const [selectedEnvironment, setSelectedEnvironment] =
     useState<EnvironmentType | null>(null);
-  const [formData, setFormData] = useState<FormData>({
-    name: "",
-    color: "#6366f1",
-    is_default: false,
-    is_protected: false,
-  });
+  const [formData, setFormData] = useState<FormData>(INITIAL_FORM);
   const [formErrors, setFormErrors] = useState<FormErrors>({});
-  const [showEditDialog, setShowEditDialog] = useState(false);
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showEditSheet, setShowEditSheet] = useState(false);
+  const [showCreateSheet, setShowCreateSheet] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["project-environments/manage", appId],
     queryFn: async () => {
-      const projectResponse = await api.applications.getApp(appId!);
-      const envTypesResponse = projectResponse.env_types || [];
-
-      // Map environment types to the expected format
-      const envTypesWithCount = await Promise.all(
-        envTypesResponse.map(async (envType) => {
-          const variables = await api.environmentVariables.getEnvs({
+      const projectResponse = await sdk.applications.getApp(appId!);
+      const environmentTypes = await Promise.all(
+        projectResponse.env_types.map(async (envType) => {
+          const variables = await sdk.environmentVariables.getEnvs({
             app_id: appId!,
             env_type_id: envType.id,
           });
-          // Ensure variables is an array
+
           return {
             ...envType,
             variable_count: variables.length,
@@ -120,19 +128,14 @@ export const ManageEnvironment = () => {
         id: projectResponse.id,
         name: projectResponse.name,
         description: projectResponse.description,
-        env_types: envTypesWithCount,
       };
 
-      return {
-        project,
-        environmentTypes: envTypesResponse,
-      };
+      return { project, environmentTypes };
     },
-    enabled: !!appId,
-    staleTime: 30 * 1000,
+    enabled: !isAuthLoading && isAuthenticated && !!appId,
+    staleTime: 30_000,
   });
 
-  // Form validation
   const validateForm = useCallback((): boolean => {
     const errors: FormErrors = {};
 
@@ -155,12 +158,9 @@ export const ManageEnvironment = () => {
     return Object.keys(errors).length === 0;
   }, [formData]);
 
-  // Handle input changes
   const handleInputChange = useCallback(
     (field: keyof FormData, value: string | boolean) => {
       setFormData((prev) => ({ ...prev, [field]: value }));
-
-      // Clear field error when user starts typing
       if (typeof value === "string" && formErrors[field as keyof FormErrors]) {
         setFormErrors((prev) => ({ ...prev, [field]: undefined }));
       }
@@ -168,105 +168,100 @@ export const ManageEnvironment = () => {
     [formErrors]
   );
 
-  // Create environment type mutation
+  const invalidateEnvironmentQueries = useCallback(async () => {
+    await queryClient.invalidateQueries({
+      queryKey: ["project-environments", appId],
+    });
+    await queryClient.invalidateQueries({
+      queryKey: ["project-environments/manage", appId],
+    });
+    await queryClient.refetchQueries({
+      queryKey: ["project-environments/manage", appId],
+      type: "active",
+    });
+  }, [appId, queryClient]);
+
   const createEnvironmentType = useMutation({
-    mutationFn: async (data: FormData) => {
-      return await api.environmentTypes.createEnvType({
-        name: data.name.trim(),
-        color: data.color,
-        is_default: data.is_default,
-        is_protected: data.is_protected,
+    mutationFn: async (payload: FormData) =>
+      sdk.environmentTypes.createEnvType({
+        name: payload.name.trim(),
+        color: payload.color,
+        is_default: payload.is_default,
+        is_protected: payload.is_protected,
         app_id: appId!,
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["project-environments", appId],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["project-environments/manage", appId],
-      });
-      setShowCreateDialog(false);
-      resetForm();
+      }),
+    onSuccess: async () => {
+      await invalidateEnvironmentQueries();
+      setShowCreateSheet(false);
+      setFormData(INITIAL_FORM);
+      setFormErrors({});
       toast.success("Environment type created successfully");
     },
-    onError: (error) => {
-      console.error("Failed to create environment type:", error);
+    onError: (mutationError) => {
+      console.error("Failed to create environment type:", mutationError);
       toast.error("Failed to create environment type");
     },
   });
 
-  // Update environment type mutation
   const updateEnvironmentType = useMutation({
-    mutationFn: async (data: FormData) => {
-      if (!selectedEnvironment) throw new Error("No environment selected");
-      return await api.environmentTypes.updateEnvType(selectedEnvironment.id, {
+    mutationFn: async (payload: FormData) => {
+      if (!selectedEnvironment) {
+        throw new Error("No environment selected");
+      }
+
+      return sdk.environmentTypes.updateEnvType(selectedEnvironment.id, {
         id: selectedEnvironment.id,
-        name: data.name.trim(),
-        color: data.color,
-        is_default: data.is_default,
-        is_protected: data.is_protected,
+        name: payload.name.trim(),
+        color: payload.color,
+        is_default: payload.is_default,
+        is_protected: payload.is_protected,
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["project-environments", appId],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["project-environments/manage", appId],
-      });
-      setShowEditDialog(false);
+    onSuccess: async () => {
+      await invalidateEnvironmentQueries();
+      setShowEditSheet(false);
       setSelectedEnvironment(null);
-      resetForm();
+      setFormData(INITIAL_FORM);
+      setFormErrors({});
       toast.success("Environment type updated successfully");
     },
-    onError: (error) => {
-      console.error("Failed to update environment type:", error);
+    onError: (mutationError) => {
+      console.error("Failed to update environment type:", mutationError);
       toast.error("Failed to update environment type");
     },
   });
 
-  // Delete environment type mutation
   const deleteEnvironmentType = useMutation({
     mutationFn: async () => {
-      if (!selectedEnvironment) throw new Error("No environment selected");
-      return await api.environmentTypes.deleteEnvType(selectedEnvironment.id);
+      if (!selectedEnvironment) {
+        throw new Error("No environment selected");
+      }
+      return sdk.environmentTypes.deleteEnvType(selectedEnvironment.id);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["project-environments", appId],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["project-environments/manage", appId],
-      });
+    onSuccess: async () => {
+      await invalidateEnvironmentQueries();
       setShowDeleteDialog(false);
       setSelectedEnvironment(null);
       setDeleteConfirmText("");
       toast.success("Environment type deleted successfully");
     },
-    onError: (error) => {
-      console.error("Failed to delete environment type:", error);
+    onError: (mutationError) => {
+      console.error("Failed to delete environment type:", mutationError);
       toast.error("Failed to delete environment type");
     },
   });
 
-  // Helper functions
   const resetForm = useCallback(() => {
-    setFormData({
-      name: "",
-      color: "#6366f1",
-      is_default: false,
-      is_protected: false,
-    });
+    setFormData(INITIAL_FORM);
     setFormErrors({});
   }, []);
 
-  const openCreateDialog = useCallback(() => {
+  const openCreateSheet = useCallback(() => {
     resetForm();
-    setShowCreateDialog(true);
+    setShowCreateSheet(true);
   }, [resetForm]);
 
-  const openEditDialog = useCallback((environment: EnvironmentType) => {
+  const openEditSheet = useCallback((environment: EnvironmentType) => {
     setSelectedEnvironment(environment);
     setFormData({
       name: environment.name,
@@ -275,7 +270,7 @@ export const ManageEnvironment = () => {
       is_protected: environment.is_protected,
     });
     setFormErrors({});
-    setShowEditDialog(true);
+    setShowEditSheet(true);
   }, []);
 
   const openDeleteDialog = useCallback((environment: EnvironmentType) => {
@@ -284,71 +279,165 @@ export const ManageEnvironment = () => {
     setShowDeleteDialog(true);
   }, []);
 
-  // Handle form submissions
   const handleCreate = useCallback(() => {
-    if (!validateForm() || createEnvironmentType.isPending) return;
+    if (!validateForm() || createEnvironmentType.isPending) {
+      return;
+    }
     createEnvironmentType.mutate(formData);
-  }, [formData, validateForm, createEnvironmentType]);
+  }, [createEnvironmentType, formData, validateForm]);
 
   const handleUpdate = useCallback(() => {
-    if (!validateForm() || updateEnvironmentType.isPending) return;
+    if (!validateForm() || updateEnvironmentType.isPending) {
+      return;
+    }
     updateEnvironmentType.mutate(formData);
-  }, [formData, validateForm, updateEnvironmentType]);
+  }, [formData, updateEnvironmentType, validateForm]);
 
   const handleDelete = useCallback(() => {
     if (
       deleteConfirmText !== selectedEnvironment?.name ||
       deleteEnvironmentType.isPending
-    )
+    ) {
       return;
+    }
     deleteEnvironmentType.mutate();
-  }, [deleteConfirmText, selectedEnvironment?.name, deleteEnvironmentType]);
+  }, [
+    deleteConfirmText,
+    deleteEnvironmentType,
+    selectedEnvironment?.name,
+  ]);
 
-  // Handle back navigation
   const handleBack = useCallback(() => {
     navigate(appDetailPath(appId ?? ""));
-  }, [navigate, appId]);
+  }, [appId, navigate]);
 
-  // Loading state
+  const closeEditSheet = useCallback(() => {
+    setShowEditSheet(false);
+    setSelectedEnvironment(null);
+    resetForm();
+  }, [resetForm]);
+
+  const renderEnvironmentForm = (mode: "create" | "edit") => (
+      <div className="space-y-6">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-gray-300">
+        {mode === "create"
+          ? "Create a lane. Protect it only when changes should require review."
+          : "Rename the lane, update its color, or adjust default and protection rules."}
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor={`${mode}-env-name`} className="text-white">
+          Environment Name *
+        </Label>
+        <Input
+          id={`${mode}-env-name`}
+          value={formData.name}
+          onChange={(event) => handleInputChange("name", event.target.value)}
+          placeholder="e.g. Production"
+          className="border-gray-700 bg-gray-950 text-white"
+        />
+        {formErrors.name && (
+          <p className="text-sm text-red-400">{formErrors.name}</p>
+        )}
+      </div>
+
+      <div className="space-y-3">
+        <Label className="text-white">Color</Label>
+        <div className="flex flex-wrap gap-3">
+          {PRESET_COLORS.map((color) => (
+            <button
+              type="button"
+              key={color}
+              className={`size-10 rounded-2xl border-2 transition-all ${
+                formData.color === color
+                  ? "scale-105 border-white"
+                  : "border-transparent"
+              }`}
+              style={{ backgroundColor: color }}
+              onClick={() => handleInputChange("color", color)}
+              aria-label={`Use ${color} as environment color`}
+            />
+          ))}
+        </div>
+        {formErrors.color && (
+          <p className="text-sm text-red-400">{formErrors.color}</p>
+        )}
+      </div>
+
+      <div className="space-y-4 rounded-2xl border border-white/10 bg-black/10 p-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="font-medium text-white">Default environment</p>
+            <p className="text-sm text-gray-400">
+              New workflows land here first when no environment is specified.
+            </p>
+          </div>
+          <Switch
+            checked={formData.is_default}
+            onCheckedChange={(checked) =>
+              handleInputChange("is_default", checked)
+            }
+            data-testid="env-type-default-checkbox"
+          />
+        </div>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="font-medium text-white">Protected environment</p>
+            <p className="text-sm text-gray-400">
+              Direct changes are blocked and move into a reviewable change-request flow.
+            </p>
+          </div>
+          <Switch
+            checked={formData.is_protected}
+            onCheckedChange={(checked) =>
+              handleInputChange("is_protected", checked)
+            }
+            data-testid="env-type-protected-checkbox"
+          />
+        </div>
+      </div>
+    </div>
+  );
+
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="flex min-h-[60vh] items-center justify-center">
         <div className="flex flex-col items-center space-y-4">
-          <div className="size-12 border-4 border-t-violet-500 border-gray-800 rounded-full animate-spin"></div>
+          <div className="size-12 animate-spin rounded-full border-4 border-gray-800 border-t-violet-500" />
           <p className="text-gray-400">Loading environment types...</p>
         </div>
       </div>
     );
   }
 
-  // Error state
   if (error || !data) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="flex flex-col items-center space-y-4 text-center">
-          <AlertTriangle className="w-12 h-12 text-red-400" />
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="space-y-4 text-center">
+          <AlertTriangle className="mx-auto h-12 w-12 text-red-400" />
           <div>
-            <h3 className="text-lg font-semibold text-white mb-2">
+            <h3 className="mb-2 text-lg font-semibold text-white">
               Failed to load project
             </h3>
-            <p className="text-gray-400 mb-4">
-              The requested project could not be found or you don't have access
-              to it.
+            <p className="mb-4 text-gray-400">
+              The requested project could not be found or you do not have access.
             </p>
-            <Button
-              onClick={() => refetch()}
-              className="bg-violet-500 hover:bg-violet-600 text-white mr-2"
-            >
-              Try Again
-            </Button>
-            <Button
-              onClick={handleBack}
-              variant="outline"
-              className="text-white border-gray-700 hover:bg-gray-800"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Go Back
-            </Button>
+            <div className="flex justify-center gap-2">
+              <Button
+                onClick={() => refetch()}
+                className="bg-violet-500 text-white hover:bg-violet-600"
+              >
+                Try Again
+              </Button>
+              <Button
+                onClick={handleBack}
+                variant="outline"
+                className="border-gray-700 text-white hover:bg-gray-800"
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Go Back
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -356,654 +445,338 @@ export const ManageEnvironment = () => {
   }
 
   const { project, environmentTypes } = data;
+  const protectedCount = environmentTypes.filter((env) => env.is_protected).length;
+  const defaultEnvironment = environmentTypes.find((env) => env.is_default);
+  const totalVariables = environmentTypes.reduce(
+    (sum, env) => sum + (env.variable_count || 0),
+    0
+  );
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <Button
-            onClick={handleBack}
-            variant="ghost"
-            size="sm"
-            className="text-gray-400 hover:text-white hover:bg-gray-800"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Project
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold text-white">
-              Manage Environments
-            </h1>
-            <p className="text-gray-400 mt-2">
-              Configure environment types for{" "}
-              <span className="text-violet-400 font-medium">
-                {project.name}
-              </span>
-            </p>
-          </div>
-        </div>
-        <Button
-          onClick={openCreateDialog}
-          className="bg-violet-500 hover:bg-violet-600 text-white"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Add Environment Type
-        </Button>
-      </div>
-
-      {/* Environment Types Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {environmentTypes.map((envType) => (
-          <Card
-            key={envType.id}
-            className="bg-gray-900 border-gray-800 hover:border-gray-700 transition-colors"
-          >
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div
-                    className="w-4 h-4 rounded-full"
-                    style={{ backgroundColor: envType.color }}
-                  />
-                  <CardTitle className="text-white text-lg">
-                    {envType.name}
-                  </CardTitle>
-                </div>
-                <div className="flex items-center space-x-1">
-                  {envType.is_default && (
-                    <span className="px-2 py-1 text-xs bg-violet-500/10 text-violet-400 rounded-full">
-                      Default
-                    </span>
-                  )}
-                  {envType.is_protected && (
-                    <span className="px-2 py-1 text-xs bg-red-500/20 text-red-400 rounded-full">
-                      Protected
-                    </span>
-                  )}
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {/* Actions */}
-                <div className="flex items-center justify-between pt-2 border-t border-gray-800">
-                  <Button
-                    onClick={() =>
-                      navigate(
-                        `${appDetailPath(appId ?? "")}?env=${envType.id}&selected=${envType.id}`
-                      )
-                    }
-                    variant="ghost"
-                    size="sm"
-                    className="text-gray-400 hover:text-white hover:bg-gray-800"
-                  >
-                    <Settings className="w-4 h-4 mr-2" />
-                    View Variables
-                  </Button>
-                  <div className="flex items-center space-x-1">
-                    <Button
-                      onClick={() => openEditDialog(envType)}
-                      variant="ghost"
-                      size="sm"
-                      className="text-gray-400 hover:text-white hover:bg-gray-800"
-                    >
-                      <Edit3 className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      onClick={() => openDeleteDialog(envType)}
-                      variant="ghost"
-                      size="sm"
-                      className="text-gray-400 hover:text-red-400 hover:bg-red-900/20"
-                      disabled={envType.is_protected}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+    <div className="mx-auto max-w-7xl space-y-6">
+      <PageShell
+        title="Manage Environments"
+        description={`Configure environment lanes for ${project.name}.`}
+        icon={Settings}
+        stickyActions
+        actions={
+          <>
+            <Button
+              onClick={handleBack}
+              variant="outline"
+              className="border-gray-700 text-gray-200 hover:bg-gray-800"
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Project
+            </Button>
+            <Button
+              onClick={openCreateSheet}
+              className="bg-violet-500 text-white hover:bg-violet-600"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add Environment Type
+            </Button>
+          </>
+        }
+        stats={[
+          {
+            label: "Environment Types",
+            value: <span data-testid="manage-env-stat-types">{environmentTypes.length}</span>,
+            hint: "Runtime lanes",
+          },
+          {
+            label: "Protected",
+            value: <span data-testid="manage-env-stat-protected">{protectedCount}</span>,
+            hint: "Review required",
+            tone: protectedCount > 0 ? "warning" : "default",
+          },
+          {
+            label: "Default",
+            value: <span data-testid="manage-env-stat-default">{defaultEnvironment?.name || "None"}</span>,
+            hint: "Starting lane",
+          },
+          {
+            label: "Variables Indexed",
+            value: <span data-testid="manage-env-stat-config-items">{totalVariables}</span>,
+            hint: "Across all lanes",
+            tone: totalVariables > 0 ? "success" : "default",
+          },
+        ]}
+      >
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            {environmentTypes.map((envType) => (
+              <Card
+                key={envType.id}
+                data-testid={`env-type-card-${envType.id}`}
+                className="border-gray-800 bg-gradient-to-br from-gray-900 to-gray-950 transition-colors hover:border-gray-700"
+              >
+                <CardHeader className="space-y-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="h-4 w-4 rounded-full"
+                        style={{ backgroundColor: envType.color }}
+                      />
+                      <CardTitle className="text-lg text-white">
+                        {envType.name}
+                      </CardTitle>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {envType.is_default && (
+                        <span data-testid={`env-type-default-badge-${envType.id}`} className="rounded-full bg-violet-500/10 px-2 py-1 text-xs text-violet-300">
+                          Default
+                        </span>
+                      )}
+                      {envType.is_protected && (
+                        <span data-testid={`env-type-protected-badge-${envType.id}`} className="rounded-full bg-red-500/20 px-2 py-1 text-xs text-red-300">
+                          Protected
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                      <p className="text-[11px] uppercase tracking-[0.2em] text-gray-500">
+                        Indexed Variables
+                      </p>
+                      <p className="mt-2 text-2xl font-semibold text-white">
+                        {envType.variable_count || 0}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                      <p className="text-[11px] uppercase tracking-[0.2em] text-gray-500">
+                        Mutation Policy
+                      </p>
+                      <p className="mt-2 text-sm font-medium text-white">
+                        {envType.is_protected
+                          ? "Reviewed only"
+                          : "Direct edits enabled"}
+                      </p>
+                    </div>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="space-y-4">
+                  <div className="rounded-2xl border border-white/10 bg-black/10 px-4 py-3 text-sm text-gray-400">
+                    {envType.is_protected ? (
+                      <div className="flex items-start gap-3">
+                        <ShieldAlert className="mt-0.5 h-4 w-4 text-red-300" />
+                        <span>Changes go through Change Requests.</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-start gap-3">
+                        <Layers3 className="mt-0.5 h-4 w-4 text-violet-300" />
+                        <span>Direct edits are allowed.</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between border-t border-gray-800 pt-2">
+                    <Button
+                      onClick={() =>
+                        navigate(
+                          `${appDetailPath(appId ?? "")}?env=${envType.id}&selected=${envType.id}`
+                        )
+                      }
+                      data-testid={`env-type-open-workspace-${envType.id}`}
+                      variant="ghost"
+                      size="sm"
+                      className="text-gray-400 hover:bg-gray-800 hover:text-white"
+                    >
+                      <FolderKanban className="mr-2 h-4 w-4" />
+                      Open Workspace
+                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        onClick={() => openEditSheet(envType)}
+                        variant="ghost"
+                        size="sm"
+                        data-testid={`env-type-edit-${envType.id}`}
+                        className="text-gray-400 hover:bg-gray-800 hover:text-white"
+                      >
+                        <Edit3 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        onClick={() => openDeleteDialog(envType)}
+                        variant="ghost"
+                        size="sm"
+                        data-testid={`env-type-delete-${envType.id}`}
+                        className="text-gray-400 hover:bg-red-900/20 hover:text-red-400"
+                        disabled={envType.is_protected}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+
+            {environmentTypes.length === 0 && (
+              <div className="col-span-full">
+                <Card className="border-dashed border-gray-800 bg-gray-900">
+                  <CardContent className="flex flex-col items-center justify-center py-12">
+                    <Settings className="mb-4 h-12 w-12 text-gray-600" />
+                    <h3 className="mb-2 text-lg font-medium text-white">
+                      No Environment Types
+                    </h3>
+                    <p className="mb-6 max-w-md text-center text-gray-400">
+                      Create your first environment type to start organizing variables. Common types include Development, Staging, and Production.
+                    </p>
+                    <Button
+                      onClick={openCreateSheet}
+                      className="bg-violet-500 text-white hover:bg-violet-600"
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Create Environment Type
+                    </Button>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+          </div>
+
+          <Card className="border-gray-800 bg-gradient-to-br from-gray-900 to-gray-950">
+            <CardHeader>
+              <CardTitle className="text-white">Quick Rules</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-gray-400">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                <p className="font-medium text-gray-200">Keep daily lanes editable</p>
+                <p className="mt-2">Development and preview usually stay direct-edit.</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                <p className="font-medium text-gray-200">Choose one default lane</p>
+                <p className="mt-2">It becomes the starting context for operators.</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                <p className="font-medium text-gray-200">Protect production-like lanes</p>
+                <p className="mt-2">Use protection when changes should be reviewed first.</p>
               </div>
             </CardContent>
           </Card>
-        ))}
+        </div>
+      </PageShell>
 
-        {/* Empty State */}
-        {environmentTypes.length === 0 && (
-          <div className="col-span-full">
-            <Card className="bg-gray-900 border-gray-800 border-dashed">
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <Settings className="w-12 h-12 text-gray-600 mb-4" />
-                <h3 className="text-lg font-medium text-white mb-2">
-                  No Environment Types
-                </h3>
-                <p className="text-gray-400 text-center mb-6 max-w-md">
-                  Create your first environment type to start organizing your
-                  variables. Common types include Development,
-                  Staging, and Production.
-                </p>
-                <Button
-                  onClick={openCreateDialog}
-                  className="bg-violet-500 hover:bg-violet-600 text-white"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create Environment Type
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-      </div>
-
-      {/* Create Environment Type Dialog */}
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent className="bg-gray-900 border-gray-800 max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-white">
+      <Sheet open={showCreateSheet} onOpenChange={setShowCreateSheet}>
+        <SheetContent
+          side="right"
+          className="w-full border-gray-800 bg-gray-900 sm:max-w-2xl"
+        >
+          <SheetHeader>
+            <SheetTitle className="text-white">
               Create Environment Type
-            </DialogTitle>
-            <DialogDescription className="text-gray-400">
-              Add a new environment type to organize your variables.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-6">
-            {/* Environment Name */}
-            <div className="space-y-2">
-              <Label htmlFor="create-env-name" className="text-white">
-                Environment Name *
-              </Label>
-              <Input
-                id="create-env-name"
-                value={formData.name}
-                onChange={(e) => handleInputChange("name", e.target.value)}
-                className={`bg-gray-800 border-gray-800 text-white ${formErrors.name ? "border-red-500" : ""
-                  }`}
-                placeholder="e.g., Production, Staging, Development"
-                disabled={createEnvironmentType.isPending}
-                maxLength={MAX_NAME_LENGTH}
-              />
-              {formErrors.name && (
-                <p className="text-red-400 text-sm">{formErrors.name}</p>
-              )}
-              <div className="flex justify-between text-xs text-gray-400">
-                <span>Used to identify this environment type</span>
-                <span>
-                  {formData.name.length}/{MAX_NAME_LENGTH}
-                </span>
-              </div>
-            </div>
-
-            {/* Environment Color */}
-            <div className="space-y-2">
-              <Label className="text-white flex items-center">
-                <Palette className="w-4 h-4 mr-2" />
-                Environment Color
-              </Label>
-              <div className="space-y-3">
-                {/* Color Presets */}
-                <div className="flex flex-wrap gap-2">
-                  {PRESET_COLORS.map((color) => (
-                    <button
-                      key={color}
-                      type="button"
-                      onClick={() => handleInputChange("color", color)}
-                      className={`w-8 h-8 rounded-full border-2 transition-all ${formData.color === color
-                          ? "border-white scale-110"
-                          : "border-gray-700 hover:border-gray-400"
-                        }`}
-                      style={{ backgroundColor: color }}
-                      disabled={createEnvironmentType.isPending}
-                    />
-                  ))}
-                </div>
-
-                {/* Custom Color Input */}
-                <div className="flex items-center space-x-3">
-                  <Input
-                    type="color"
-                    value={formData.color}
-                    onChange={(e) => handleInputChange("color", e.target.value)}
-                    className="w-16 h-10 bg-gray-800 border-gray-800 cursor-pointer"
-                    disabled={createEnvironmentType.isPending}
-                  />
-                  <Input
-                    type="text"
-                    value={formData.color}
-                    onChange={(e) => handleInputChange("color", e.target.value)}
-                    className="bg-gray-800 border-gray-800 text-white font-mono"
-                    placeholder="#6366f1"
-                    disabled={createEnvironmentType.isPending}
-                  />
-                </div>
-              </div>
-              {formErrors.color && (
-                <p className="text-red-400 text-sm">{formErrors.color}</p>
-              )}
-            </div>
-
-            {/* Environment Settings */}
-            <div className="space-y-4">
-              <Label className="text-white">Environment Settings</Label>
-
-              {/* Default Environment */}
-              <div className="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
-                <div className="space-y-1">
-                  <div className="text-sm font-medium text-white">Default Environment</div>
-                  <div className="text-xs text-gray-400">
-                    Make this the default environment for new variables
-                  </div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={formData.is_default}
-                  onChange={(e) => handleInputChange("is_default", e.target.checked)}
-                  className="w-4 h-4 text-violet-600 bg-gray-900 border-gray-700 rounded focus:ring-violet-500"
-                  disabled={createEnvironmentType.isPending}
-                />
-              </div>
-
-              {/* Protected Environment */}
-              <div className="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
-                <div className="space-y-1">
-                  <div className="text-sm font-medium text-white">Protected Environment</div>
-                  <div className="text-xs text-gray-400">
-                    Prevent accidental deletion of this environment
-                  </div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={formData.is_protected}
-                  onChange={(e) => handleInputChange("is_protected", e.target.checked)}
-                  className="w-4 h-4 text-red-600 bg-gray-900 border-gray-700 rounded focus:ring-red-500"
-                  disabled={createEnvironmentType.isPending}
-                />
-              </div>
-            </div>
-
-            {/* Preview */}
-            <div className="bg-gray-800 rounded-lg p-4 border border-gray-800">
-              <h4 className="text-sm font-medium text-white mb-3">Preview</h4>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div
-                    className="w-4 h-4 rounded-full"
-                    style={{ backgroundColor: formData.color }}
-                  />
-                  <span className="font-medium text-white">
-                    {formData.name || "Environment Name"}
-                  </span>
-                </div>
-                <div className="flex items-center space-x-1">
-                  {formData.is_default && (
-                    <span className="px-2 py-1 text-xs bg-violet-500/10 text-violet-400 rounded-full">
-                      Default
-                    </span>
-                  )}
-                  {formData.is_protected && (
-                    <span className="px-2 py-1 text-xs bg-red-500/20 text-red-400 rounded-full">
-                      Protected
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter>
+            </SheetTitle>
+            <SheetDescription className="text-gray-400">
+              Add a new environment lane for this project.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="mt-6">{renderEnvironmentForm("create")}</div>
+          <SheetFooter className="mt-8">
             <Button
+              onClick={() => setShowCreateSheet(false)}
               variant="outline"
-              onClick={() => setShowCreateDialog(false)}
-              className="text-white border-gray-700 hover:bg-gray-800"
-              disabled={createEnvironmentType.isPending}
+              className="border-gray-700 text-white hover:bg-gray-800"
             >
               Cancel
             </Button>
             <Button
               onClick={handleCreate}
-              className="bg-violet-500 hover:bg-violet-600 text-white"
-              disabled={
-                createEnvironmentType.isPending || !formData.name.trim()
-              }
+              disabled={createEnvironmentType.isPending}
+              className="bg-violet-500 text-white hover:bg-violet-600"
             >
-              {createEnvironmentType.isPending ? (
-                <>
-                  <div className="w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Creating...
-                </>
-              ) : (
-                <>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create Environment Type
-                </>
-              )}
+              {createEnvironmentType.isPending
+                ? "Creating..."
+                : "Create Environment Type"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
 
-      {/* Edit Environment Type Dialog */}
-      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="bg-gray-900 border-gray-800 max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-white">
-              Edit Environment Type
-            </DialogTitle>
-            <DialogDescription className="text-gray-400">
-              Update the settings for{" "}
-              <strong className="text-white">
-                {selectedEnvironment?.name}
-              </strong>
-              .
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-6">
-            {/* Environment Name */}
-            <div className="space-y-2">
-              <Label htmlFor="edit-env-name" className="text-white">
-                Environment Name *
-              </Label>
-              <Input
-                id="edit-env-name"
-                value={formData.name}
-                onChange={(e) => handleInputChange("name", e.target.value)}
-                className={`bg-gray-800 border-gray-800 text-white ${formErrors.name ? "border-red-500" : ""
-                  }`}
-                placeholder="Enter environment name"
-                disabled={updateEnvironmentType.isPending}
-                maxLength={MAX_NAME_LENGTH}
-              />
-              {formErrors.name && (
-                <p className="text-red-400 text-sm">{formErrors.name}</p>
-              )}
-              <div className="flex justify-between text-xs text-gray-400">
-                <span>Used to identify this environment type</span>
-                <span>
-                  {formData.name.length}/{MAX_NAME_LENGTH}
-                </span>
-              </div>
-            </div>
-
-            {/* Environment Color */}
-            <div className="space-y-2">
-              <Label className="text-white flex items-center">
-                <Palette className="w-4 h-4 mr-2" />
-                Environment Color
-              </Label>
-              <div className="space-y-3">
-                {/* Color Presets */}
-                <div className="flex flex-wrap gap-2">
-                  {PRESET_COLORS.map((color) => (
-                    <button
-                      key={color}
-                      type="button"
-                      onClick={() => handleInputChange("color", color)}
-                      className={`w-8 h-8 rounded-full border-2 transition-all ${formData.color === color
-                          ? "border-white scale-110"
-                          : "border-gray-700 hover:border-gray-400"
-                        }`}
-                      style={{ backgroundColor: color }}
-                      disabled={updateEnvironmentType.isPending}
-                    />
-                  ))}
-                </div>
-
-                {/* Custom Color Input */}
-                <div className="flex items-center space-x-3">
-                  <Input
-                    type="color"
-                    value={formData.color}
-                    onChange={(e) => handleInputChange("color", e.target.value)}
-                    className="w-16 h-10 bg-gray-800 border-gray-800 cursor-pointer"
-                    disabled={updateEnvironmentType.isPending}
-                  />
-                  <Input
-                    type="text"
-                    value={formData.color}
-                    onChange={(e) => handleInputChange("color", e.target.value)}
-                    className="bg-gray-800 border-gray-800 text-white font-mono"
-                    placeholder="#6366f1"
-                    disabled={updateEnvironmentType.isPending}
-                  />
-                </div>
-              </div>
-              {formErrors.color && (
-                <p className="text-red-400 text-sm">{formErrors.color}</p>
-              )}
-            </div>
-
-            {/* Environment Settings */}
-            <div className="space-y-4">
-              <Label className="text-white">Environment Settings</Label>
-
-              {/* Default Environment */}
-              <div className="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
-                <div className="space-y-1">
-                  <div className="text-sm font-medium text-white">Default Environment</div>
-                  <div className="text-xs text-gray-400">
-                    Make this the default environment for new variables
-                  </div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={formData.is_default}
-                  onChange={(e) => handleInputChange("is_default", e.target.checked)}
-                  className="w-4 h-4 text-violet-600 bg-gray-900 border-gray-700 rounded focus:ring-violet-500"
-                  disabled={updateEnvironmentType.isPending}
-                />
-              </div>
-
-              {/* Protected Environment */}
-              <div className="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
-                <div className="space-y-1">
-                  <div className="text-sm font-medium text-white">Protected Environment</div>
-                  <div className="text-xs text-gray-400">
-                    Prevent accidental deletion of this environment
-                  </div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={formData.is_protected}
-                  onChange={(e) => handleInputChange("is_protected", e.target.checked)}
-                  className="w-4 h-4 text-red-600 bg-gray-900 border-gray-700 rounded focus:ring-red-500"
-                  disabled={updateEnvironmentType.isPending}
-                />
-              </div>
-            </div>
-
-            {/* Environment Stats */}
-            <div className="bg-gray-800 rounded-lg p-4 border border-gray-800">
-              <h4 className="text-sm font-medium text-white mb-3">
-                Environment Info
-              </h4>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-1">
-                  <div className="text-lg font-bold text-white">
-                    {selectedEnvironment?.variable_count || 0}
-                  </div>
-                  <div className="text-xs text-gray-400">
-                    Variables
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Preview */}
-            <div className="bg-gray-800 rounded-lg p-4 border border-gray-800">
-              <h4 className="text-sm font-medium text-white mb-3">Preview</h4>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div
-                    className="w-4 h-4 rounded-full"
-                    style={{ backgroundColor: formData.color }}
-                  />
-                  <span className="font-medium text-white">
-                    {formData.name || "Environment Name"}
-                  </span>
-                </div>
-                <div className="flex items-center space-x-1">
-                  {formData.is_default && (
-                    <span className="px-2 py-1 text-xs bg-violet-500/10 text-violet-400 rounded-full">
-                      Default
-                    </span>
-                  )}
-                  {formData.is_protected && (
-                    <span className="px-2 py-1 text-xs bg-red-500/20 text-red-400 rounded-full">
-                      Protected
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter>
+      <Sheet open={showEditSheet} onOpenChange={setShowEditSheet}>
+        <SheetContent
+          side="right"
+          className="w-full border-gray-800 bg-gray-900 sm:max-w-2xl"
+        >
+          <SheetHeader>
+            <SheetTitle className="text-white">Edit Environment Type</SheetTitle>
+            <SheetDescription className="text-gray-400">
+              Update naming, color, and workflow rules.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="mt-6">{renderEnvironmentForm("edit")}</div>
+          <SheetFooter className="mt-8">
             <Button
+              onClick={closeEditSheet}
               variant="outline"
-              onClick={() => setShowEditDialog(false)}
-              className="text-white border-gray-700 hover:bg-gray-800"
-              disabled={updateEnvironmentType.isPending}
+              className="border-gray-700 text-white hover:bg-gray-800"
             >
               Cancel
             </Button>
             <Button
               onClick={handleUpdate}
-              className="bg-violet-500 hover:bg-violet-600 text-white"
-              disabled={
-                updateEnvironmentType.isPending || !formData.name.trim()
-              }
+              disabled={updateEnvironmentType.isPending}
+              className="bg-violet-500 text-white hover:bg-violet-600"
             >
-              {updateEnvironmentType.isPending ? (
-                <>
-                  <div className="w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Updating...
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4 mr-2" />
-                  Save Changes
-                </>
-              )}
+              {updateEnvironmentType.isPending
+                ? "Updating..."
+                : "Update Environment Type"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
 
-      {/* Delete Confirmation Dialog */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <DialogContent className="bg-gray-900 border-gray-800">
+        <DialogContent className="border-gray-800 bg-gray-900">
           <DialogHeader>
-            <DialogTitle className="text-white flex items-center">
-              <AlertTriangle className="w-5 h-5 text-red-500 mr-2" />
+            <DialogTitle className="text-white">
               Delete Environment Type
             </DialogTitle>
             <DialogDescription className="text-gray-400">
-              This action cannot be undone. This will permanently delete the
-              environment type
-              <strong className="text-white">
-                {" "}
-                {selectedEnvironment?.name}{" "}
-              </strong>
-              and all its variables.
+              This action cannot be undone. Type the environment name to confirm deletion.
             </DialogDescription>
           </DialogHeader>
-
           <div className="space-y-4">
-            {/* Protection Warning */}
-            {selectedEnvironment?.is_protected && (
-              <div className="bg-red-900/20 border border-red-800 rounded-lg p-4">
-                <div className="flex items-start space-x-3">
-                  <AlertTriangle className="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0" />
-                  <div className="text-sm text-red-200">
-                    <p className="font-medium mb-1">
-                      This environment type is protected
-                    </p>
-                    <p className="text-red-300">
-                      Protected environment types cannot be deleted to prevent accidental data loss.
-                      You must first disable protection in the edit dialog.
-                    </p>
-                  </div>
-                </div>
+            <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="mt-0.5 h-4 w-4" />
+                <span>
+                  Deleting <strong>{selectedEnvironment?.name}</strong> removes that environment type from this project.
+                </span>
               </div>
-            )}
-
-            {/* Deletion Warning */}
-            {!selectedEnvironment?.is_protected && (
-              <>
-                <div className="bg-red-900/20 border border-red-800 rounded-lg p-4">
-                  <div className="flex items-start space-x-3">
-                    <AlertTriangle className="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0" />
-                    <div className="text-sm text-red-200">
-                      <p className="font-medium mb-1">
-                        This will permanently delete:
-                      </p>
-                      <ul className="list-disc list-inside space-y-1 text-red-300">
-                        <li>The environment type configuration</li>
-                        <li>
-                          All {selectedEnvironment?.variable_count || 0} variables
-                          in this type
-                        </li>
-                        <li>All deployment history for this environment type</li>
-                        <li>Any integrations using this environment type</li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="delete-confirm" className="text-white">
-                    Type{" "}
-                    <code className="bg-gray-800 px-1 rounded text-red-400">
-                      {selectedEnvironment?.name}
-                    </code>{" "}
-                    to confirm:
-                  </Label>
-                  <Input
-                    id="delete-confirm"
-                    value={deleteConfirmText}
-                    onChange={(e) => setDeleteConfirmText(e.target.value)}
-                    className="bg-gray-800 border-gray-800 text-white"
-                    placeholder="Enter environment type name"
-                    disabled={deleteEnvironmentType.isPending}
-                  />
-                </div>
-              </>
-            )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="delete-confirm-text" className="text-white">
+                Confirm Environment Name
+              </Label>
+              <Input
+                id="delete-confirm-text"
+                value={deleteConfirmText}
+                onChange={(event) => setDeleteConfirmText(event.target.value)}
+                placeholder={selectedEnvironment?.name}
+                className="border-gray-700 bg-gray-950 text-white"
+              />
+            </div>
           </div>
-
           <DialogFooter>
             <Button
+              onClick={() => setShowDeleteDialog(false)}
               variant="outline"
-              onClick={() => {
-                setShowDeleteDialog(false);
-                setDeleteConfirmText("");
-                setSelectedEnvironment(null);
-              }}
-              className="text-white border-gray-700 hover:bg-gray-800"
-              disabled={deleteEnvironmentType.isPending}
+              className="border-gray-700 text-white hover:bg-gray-800"
             >
               Cancel
             </Button>
             <Button
-              variant="destructive"
               onClick={handleDelete}
               disabled={
-                selectedEnvironment?.is_protected ||
                 deleteConfirmText !== selectedEnvironment?.name ||
                 deleteEnvironmentType.isPending
               }
-              className="bg-red-600 hover:bg-red-700 text-white"
+              variant="destructive"
             >
-              {deleteEnvironmentType.isPending ? (
-                <>
-                  <div className="w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                <>
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Delete Environment Type
-                </>
-              )}
+              {deleteEnvironmentType.isPending ? "Deleting..." : "Delete Environment Type"}
             </Button>
           </DialogFooter>
         </DialogContent>

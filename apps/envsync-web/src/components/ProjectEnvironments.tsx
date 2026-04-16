@@ -36,7 +36,8 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { useAuth } from "@/hooks/useAuth";
+import { sdk } from "@/api";
+import { useAuthContext } from "@/contexts/auth";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -87,8 +88,9 @@ export const ProjectEnvironments = ({
   onBack,
 }: ProjectEnvironmentsProps) => {
   const navigate = useNavigate();
-  const { api, user } = useAuth();
+  const { user, isLoading: isAuthLoading, isAuthenticated } = useAuthContext();
   const queryClient = useQueryClient();
+  const authEnabled = !isAuthLoading && isAuthenticated;
 
   // UI State
   const [searchEnv, setSearchEnv] = useState("");
@@ -144,7 +146,7 @@ export const ProjectEnvironments = ({
   } = useQuery({
     queryKey: ["project", projectNameId],
     queryFn: async () => {
-      const appData = await api.applications.getApp(projectNameId);
+      const appData = await sdk.applications.getApp(projectNameId);
 
       const environments = appData.env_types;
 
@@ -153,7 +155,7 @@ export const ProjectEnvironments = ({
         environments,
       };
     },
-    enabled: !!projectNameId,
+    enabled: authEnabled && !!projectNameId,
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: 3,
   });
@@ -176,7 +178,7 @@ export const ProjectEnvironments = ({
     queryKey: ["envVars", projectNameId, selectedEnv],
     queryFn: async () => {
       if (!selectedEnv) return [];
-      const envVarsData = await api.environmentVariables.getEnvs({
+      const envVarsData = await sdk.environmentVariables.getEnvs({
         app_id: projectNameId,
         env_type_id: selectedEnv,
       });
@@ -186,7 +188,7 @@ export const ProjectEnvironments = ({
         sensitive: false, // You might want to get this from the API
       }));
     },
-    enabled: !!selectedEnv && !!projectNameId,
+    enabled: authEnabled && !!selectedEnv && !!projectNameId,
     staleTime: 2 * 60 * 1000, // 2 minutes
     retry: 2,
   });
@@ -282,7 +284,7 @@ export const ProjectEnvironments = ({
   const addEnvVarMutation = useMutation({
     mutationFn: async (envVar: EnvVarFormData) => {
       if (!selectedEnv) throw new Error("No environment selected");
-      return api.environmentVariables.createEnv({
+      return sdk.environmentVariables.createEnv({
         app_id: projectNameId,
         env_type_id: selectedEnv,
         key: envVar.key,
@@ -310,7 +312,7 @@ export const ProjectEnvironments = ({
     mutationFn: async ({ key, value }: { key: string; value: string }) => {
       if (!selectedEnv) throw new Error("No environment selected");
       setActionLoading(key, true);
-      return api.environmentVariables.updateEnv(key, {
+      return sdk.environmentVariables.updateEnv(key, {
         app_id: projectNameId,
         env_type_id: selectedEnv,
         value,
@@ -339,7 +341,7 @@ export const ProjectEnvironments = ({
     mutationFn: async (key: string) => {
       if (!selectedEnv) throw new Error("No environment selected");
       setActionLoading(key, true);
-      return api.environmentVariables.deleteEnv({
+      return sdk.environmentVariables.deleteEnv({
         app_id: projectNameId,
         env_type_id: selectedEnv,
         key,
@@ -445,7 +447,7 @@ export const ProjectEnvironments = ({
 
     const results = await Promise.allSettled(
       parsedEnvVars.map((envVar) =>
-        api.environmentVariables.createEnv({
+        sdk.environmentVariables.createEnv({
           app_id: projectNameId,
           env_type_id: selectedEnv,
           key: envVar.key,
@@ -474,7 +476,7 @@ export const ProjectEnvironments = ({
     setBulkEnvText("");
     setParsedEnvVars([]);
     setBulkImportErrors([]);
-  }, [parsedEnvVars, api, projectNameId, selectedEnv, queryClient]);
+  }, [parsedEnvVars, projectNameId, selectedEnv, queryClient]);
 
   const handleCloseBulkImportDialog = useCallback(() => {
     setShowBulkImportDialog(false);
@@ -989,19 +991,10 @@ export const ProjectEnvironments = ({
                 <p className="text-red-400 text-sm">{formErrors.value}</p>
               )}
             </div>
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="sensitive"
-                checked={formData.sensitive}
-                onChange={(e) =>
-                  handleFormChange("sensitive", e.target.checked)
-                }
-                className="rounded border-gray-700 bg-gray-900"
-              />
-              <label htmlFor="sensitive" className="text-sm text-white">
-                Mark as sensitive
-              </label>
+            <div className="rounded border border-gray-700 bg-gray-900/50 p-3">
+              <p className="text-sm text-gray-300">
+                Secrets are managed separately. Use the Secrets page for sensitive values.
+              </p>
             </div>
           </div>
           <DialogFooter>
@@ -1069,19 +1062,10 @@ export const ProjectEnvironments = ({
                 <p className="text-red-400 text-sm">{formErrors.value}</p>
               )}
             </div>
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="sensitive-edit"
-                checked={formData.sensitive}
-                onChange={(e) =>
-                  handleFormChange("sensitive", e.target.checked)
-                }
-                className="rounded border-gray-700 bg-gray-900"
-              />
-              <label htmlFor="sensitive-edit" className="text-sm text-white">
-                Mark as sensitive
-              </label>
+            <div className="rounded border border-gray-700 bg-gray-900/50 p-3">
+              <p className="text-sm text-gray-300">
+                Secret/variable type cannot be changed from this env-only editor.
+              </p>
             </div>
           </div>
           <DialogFooter>

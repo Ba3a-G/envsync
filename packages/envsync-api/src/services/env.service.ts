@@ -1,10 +1,12 @@
 import { DB } from "@/libs/db";
 import { ConflictError, NotFoundError } from "@/libs/errors";
+import infoLogs, { LogTypes } from "@/libs/logger";
 import { variableOperations } from "@/libs/telemetry/metrics";
 import { KMSClient } from "@/libs/kms/client";
 import { getVaultSessionToken } from "@/libs/kms/session-manager";
 
 import { KeyValidationService } from "./key_validation.service";
+import { EnvStorePiTService } from "./env_store_pit.service";
 
 /** Simple concurrency limiter for parallel operations. */
 function pLimit(concurrency: number) {
@@ -223,30 +225,51 @@ export class EnvService {
 		env_type_id: string;
 		user_id: string;
 	}) => {
-		const kms = await KMSClient.getInstance();
-		const sessionToken = await getVaultSessionToken(user_id, org_id);
-		const entries = await kms.vaultList(org_id, app_id, "env", env_type_id, sessionToken);
-
-		if (entries.length === 0) {
+		const candidates = await EnvStorePiTService.getCurrentEnvState({
+			org_id,
+			app_id,
+			env_type_id,
+		});
+		if (candidates.length === 0) {
 			return [];
 		}
 
+		const kms = await KMSClient.getInstance();
+		const sessionToken = await getVaultSessionToken(user_id, org_id);
 		const results = await Promise.all(
-			entries.map(entry => limit(async () => {
+			candidates.map(candidate => limit(async () => {
 				try {
 					const result = await kms.vaultRead(
-						{ orgId: org_id, scopeId: app_id, entryType: "env", key: entry.key, envTypeId: env_type_id, clientSideDecrypt: false },
+						{
+							orgId: org_id,
+							scopeId: app_id,
+							entryType: "env",
+							key: candidate.key,
+							envTypeId: env_type_id,
+							clientSideDecrypt: false,
+						},
 						sessionToken,
 					);
 					const plaintext = result.encryptedValue.toString("utf-8");
-					return toEnvRecord(org_id, app_id, env_type_id, entry.key, plaintext, result.createdAt);
-				} catch {
+					return toEnvRecord(org_id, app_id, env_type_id, candidate.key, plaintext, result.createdAt);
+				} catch (error) {
+					const isNotFound = error instanceof Error && "code" in error && (error as { code?: number }).code === 5;
+					if (isNotFound) {
+						infoLogs(
+							`Vault list mismatch for env ${candidate.key} in ${app_id}/${env_type_id}; dropping stale PiT key`,
+							LogTypes.LOGS,
+							"EnvService",
+						);
+						return null;
+					}
 					return null;
 				}
 			})),
 		);
 
-		return results.filter(r => r !== null);
+		return results
+			.filter((r): r is NonNullable<typeof r> => r !== null)
+			.sort((left, right) => left.key.localeCompare(right.key));
 	};
 
 	public static batchCreateEnvs = async (

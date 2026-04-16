@@ -280,14 +280,15 @@ export const MockKMSClient = {
 	},
 
 	async vaultDelete(
-		_orgId: string,
-		_scopeId: string,
-		_entryType: string,
-		_key: string,
-		_envTypeId: string | undefined,
+		orgId: string,
+		scopeId: string,
+		entryType: string,
+		key: string,
+		envTypeId: string | undefined,
 		_sessionToken: string,
 	): Promise<boolean> {
-		return true;
+		const k = vaultKey(orgId, scopeId, entryType, key, envTypeId);
+		return vaultStore.delete(k);
 	},
 
 	async vaultDestroy(

@@ -10,7 +10,7 @@ import { API_KEYS } from "../constants";
 import { useInvalidateQueries } from "@/hooks/useApi";
 import { trackAction } from "@/telemetry";
 
-const useWebhooks = () => {
+const useWebhooks = ({ enabled = true }: { enabled?: boolean } = {}) => {
   return useQuery({
     queryKey: [API_KEYS.ALL_WEBHOOKS],
     queryFn: async () => {
@@ -34,6 +34,7 @@ const useWebhooks = () => {
         updated_at: new Date(webhook.updated_at),
       }));
     },
+    enabled,
     refetchInterval: 5 * 60 * 1000,
     retry: 3,
   });

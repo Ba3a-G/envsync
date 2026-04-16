@@ -20,7 +20,7 @@ import {
   X,
   Layers,
 } from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
+import { sdk } from "@/api";
 import { toast } from "sonner";
 import { trackAction } from "@/telemetry";
 import {
@@ -64,7 +64,6 @@ const ENV_PRESETS: Omit<PendingEnvType, "tempId">[] = [
 
 export const CreateProject = () => {
   const navigate = useNavigate();
-  const { api } = useAuth();
 
   // Form state
   const [formData, setFormData] = useState<CreateProjectFormData>({
@@ -200,7 +199,7 @@ export const CreateProject = () => {
 
       try {
         // Step 1: Create the project
-        const response = await api.applications.createApp({
+        const response = await sdk.applications.createApp({
           name: formData.name.trim(),
           description: formData.description.trim() || undefined,
           enable_secrets: formData.enableSecrets,
@@ -228,7 +227,7 @@ export const CreateProject = () => {
               `Creating environments (${i + 1}/${pendingEnvTypes.length})...`
             );
             try {
-              await api.environmentTypes.createEnvType({
+              await sdk.environmentTypes.createEnvType({
                 name: envType.name,
                 color: envType.color,
                 app_id: response.id,
@@ -267,7 +266,7 @@ export const CreateProject = () => {
         setCreationProgress("");
       }
     },
-    [formData, validateForm, isCreating, pendingEnvTypes, api, navigate]
+    [formData, validateForm, isCreating, pendingEnvTypes, navigate]
   );
 
   // Handle back navigation

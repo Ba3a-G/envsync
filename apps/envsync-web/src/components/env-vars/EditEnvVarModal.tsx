@@ -25,18 +25,20 @@ import {
   EnvVarFormErrors,
   EnvironmentVariable,
   EnvironmentType,
+  SingleItemEnvVarUpdateData,
   ENV_VAR_KEY_REGEX,
   MAX_KEY_LENGTH,
   MAX_VALUE_LENGTH,
   INITIAL_ENV_FORM_ERRORS,
 } from "@/constants";
+import { buildSingleItemEnvVarUpdate } from "@/lib/single-item-env-update";
 
 interface EditEnvVarModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   variable: EnvironmentVariable | null;
   environmentTypes: EnvironmentType[];
-  onSave: (data: Partial<EnvVarFormData>, originalKey: string) => void;
+  onSave: (data: SingleItemEnvVarUpdateData) => void;
   isSaving: boolean;
 }
 
@@ -83,10 +85,7 @@ export const EditEnvVarModal = ({
     if (!variable) return;
 
     const hasChanges =
-      formData.key !== variable.key ||
-      (isValueModified && formData.value.trim() !== "") || // Only consider value changed if it was actually modified
-      formData.sensitive !== variable.sensitive ||
-      formData.env_type_id !== variable.env_type_id;
+      isValueModified && formData.value.trim() !== "" && formData.value !== variable.value;
 
     setHasUnsavedChanges(hasChanges);
   }, [formData, variable, isValueModified]);
@@ -95,18 +94,18 @@ export const EditEnvVarModal = ({
   const validateForm = useCallback((): boolean => {
     const errors: EnvVarFormErrors = {};
 
-    // Validate key
-    if (!formData.key.trim()) {
-      errors.key = "Variable key is required";
-    } else if (!ENV_VAR_KEY_REGEX.test(formData.key)) {
+    if (!variable) {
+      return false;
+    }
+
+    if (!ENV_VAR_KEY_REGEX.test(variable.key)) {
       errors.key =
         "Key must start with a letter and contain only uppercase letters, numbers, and underscores";
-    } else if (formData.key.length > MAX_KEY_LENGTH) {
+    } else if (variable.key.length > MAX_KEY_LENGTH) {
       errors.key = `Key must be less than ${MAX_KEY_LENGTH} characters`;
     }
 
-    // Validate value - only if it's been modified or not sensitive
-    if (!variable?.sensitive || isValueModified) {
+    if (isValueModified) {
       if (!formData.value.trim()) {
         errors.value = "Variable value is required";
       } else if (formData.value.length > MAX_VALUE_LENGTH) {
@@ -114,8 +113,7 @@ export const EditEnvVarModal = ({
       }
     }
 
-    // Validate environment type
-    if (!formData.env_type_id) {
+    if (!variable.env_type_id) {
       errors.env_type_id = "Environment type is required";
     }
 
@@ -144,8 +142,6 @@ export const EditEnvVarModal = ({
   // Handle revealing sensitive value
   const handleRevealSensitiveValue = useCallback(() => {
     if (variable && variable.sensitive && !showSensitiveValue) {
-      variable.value = ""; // Ensure value is set
-      setFormData((prev) => ({ ...prev, value: variable.value }));
       setShowSensitiveValue(true);
     }
   }, [variable, showSensitiveValue]);
@@ -162,24 +158,14 @@ export const EditEnvVarModal = ({
   const handleSave = useCallback(() => {
     if (!variable || !validateForm() || isSaving) return;
 
-    const updateData: Partial<EnvVarFormData> = {};
+    const updateData = buildSingleItemEnvVarUpdate(
+      variable,
+      formData,
+      isValueModified
+    );
+    if (!updateData) return;
 
-    // Only include changed fields
-    if (formData.key !== variable.key) {
-      updateData.key = formData.key.trim().toUpperCase();
-    }
-    // Only include value if it was actually modified
-    if (isValueModified && formData.value.trim() !== "") {
-      updateData.value = formData.value.trim();
-    }
-    if (formData.sensitive !== variable.sensitive) {
-      updateData.sensitive = formData.sensitive;
-    }
-    if (formData.env_type_id !== variable.env_type_id) {
-      updateData.env_type_id = formData.env_type_id;
-    }
-
-    onSave(updateData, variable.key);
+    onSave(updateData);
   }, [variable, formData, validateForm, isSaving, onSave, isValueModified]);
 
   // Handle modal close
@@ -213,8 +199,7 @@ export const EditEnvVarModal = ({
             </Label>
             <Select
               value={formData.env_type_id}
-              onValueChange={(value) => handleInputChange("env_type_id", value)}
-              disabled={isSaving}
+              disabled
             >
               <SelectTrigger
                 className={`bg-gray-900 border-gray-800 text-white ${
@@ -244,6 +229,9 @@ export const EditEnvVarModal = ({
             {formErrors.env_type_id && (
               <p className="text-red-400 text-sm">{formErrors.env_type_id}</p>
             )}
+            <p className="text-xs text-gray-400">
+              Moving variables between environments is not supported from edit mode.
+            </p>
           </div>
 
           {/* Variable Key */}
@@ -254,22 +242,18 @@ export const EditEnvVarModal = ({
             <Input
               id="edit-var-key"
               value={formData.key}
-              onChange={(e) =>
-                handleInputChange("key", e.target.value.toUpperCase())
-              }
               className={`bg-gray-900 border-gray-800 text-white font-mono ${
                 formErrors.key ? "border-red-500" : ""
               }`}
               placeholder="DATABASE_URL"
-              disabled={isSaving}
+              disabled
               maxLength={MAX_KEY_LENGTH}
             />
             {formErrors.key && (
               <p className="text-red-400 text-sm">{formErrors.key}</p>
             )}
             <p className="text-xs text-gray-400">
-              Must start with a letter and contain only uppercase letters,
-              numbers, and underscores
+              Renaming keys is not supported from edit mode.
             </p>
           </div>
 
@@ -370,17 +354,11 @@ export const EditEnvVarModal = ({
             <Checkbox
               id="edit-sensitive"
               checked={formData.sensitive}
-              onCheckedChange={(checked) =>
-                handleInputChange("sensitive", checked as boolean)
-              }
-              disabled={isSaving}
+              disabled
               className="border-gray-700"
             />
             <div className="flex-1">
-              <Label
-                htmlFor="edit-sensitive"
-                className="text-white flex items-center cursor-pointer"
-              >
+              <Label htmlFor="edit-sensitive" className="text-white flex items-center">
                 {formData.sensitive ? (
                   <Shield className="w-4 h-4 text-red-400 mr-2" />
                 ) : (
@@ -389,9 +367,7 @@ export const EditEnvVarModal = ({
                 Mark as sensitive (secret)
               </Label>
               <p className="text-xs text-gray-400 mt-1">
-                {formData.sensitive
-                  ? "This value will be encrypted and hidden by default"
-                  : "This value will be visible to team members with access"}
+                Secret/variable type cannot be changed from edit mode.
               </p>
             </div>
           </div>
@@ -403,22 +379,8 @@ export const EditEnvVarModal = ({
                 Pending Changes
               </h4>
               <div className="space-y-1 text-xs text-yellow-300">
-                {formData.key !== variable.key && (
-                  <div>
-                    • Key: {variable.key} → {formData.key}
-                  </div>
-                )}
                 {isValueModified && formData.value.trim() !== "" && (
                   <div>• Value: Updated</div>
-                )}
-                {formData.sensitive !== variable.sensitive && (
-                  <div>
-                    • Type: {variable.sensitive ? "Secret" : "Variable"} →{" "}
-                    {formData.sensitive ? "Secret" : "Variable"}
-                  </div>
-                )}
-                {formData.env_type_id !== variable.env_type_id && (
-                  <div>• Environment: Changed</div>
                 )}
               </div>
             </div>
@@ -529,7 +491,7 @@ export const EditEnvVarModal = ({
               isSaving ||
               !hasUnsavedChanges ||
               !formData.key ||
-              (!formData.value && (!variable.sensitive || isValueModified)) ||
+              (isValueModified && !formData.value.trim()) ||
               !formData.env_type_id
             }
           >

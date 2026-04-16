@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -30,10 +31,14 @@ import {
   Calendar,
   User,
   X,
+  Rows3,
+  Rows2,
+  CheckCircle2,
+  Plus,
 } from "lucide-react";
 import { EnvironmentVariable, EnvironmentType } from "@/constants";
 import { useCopy } from "@/hooks/useClipboard";
-import { getDefaultEnvironmentType } from "@/lib/utils";
+import { cn, getDefaultEnvironmentType } from "@/lib/utils";
 import { Count } from "../ui/count";
 
 interface EnvironmentVariablesTableProps {
@@ -45,6 +50,8 @@ interface EnvironmentVariablesTableProps {
   onEdit: (variable: EnvironmentVariable) => void;
   onDelete: (variable: EnvironmentVariable) => void;
   isSecrets?: boolean; // Optional prop to indicate if these are secrets
+  onPrimaryAction?: () => void;
+  primaryActionLabel?: string;
 }
 
 export const EnvironmentVariablesTable = ({
@@ -56,12 +63,22 @@ export const EnvironmentVariablesTable = ({
   onEdit,
   onDelete,
   isSecrets,
+  onPrimaryAction,
+  primaryActionLabel,
 }: EnvironmentVariablesTableProps) => {
-  const copy = useCopy();
+  const [lastCopiedValue, setLastCopiedValue] = useState<string | null>(null);
+  const copy = useCopy({
+    onSuccess: (value) => {
+      setLastCopiedValue(value);
+      window.setTimeout(() => setLastCopiedValue(null), 1500);
+    },
+  });
   const [searchQuery, setSearchQuery] = useState("");
   const [showSensitive, setShowSensitive] = useState<Record<string, boolean>>(
     {}
   );
+  const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({});
+  const [density, setDensity] = useState<"comfortable" | "compact">("comfortable");
 
   // Create environment types map
   const environmentTypesMap = useMemo(() => {
@@ -131,10 +148,26 @@ export const EnvironmentVariablesTable = ({
   const hasActiveFilters =
     searchQuery !== "" ||
     selectedEnvironment !== getDefaultEnvironmentType(environmentTypes);
+  const visibleSelectedCount = filteredVariables.filter((variable) => selectedRows[variable.id]).length;
+  const allVisibleSelected = filteredVariables.length > 0 && visibleSelectedCount === filteredVariables.length;
+
+  const toggleAllVisible = (checked: boolean) => {
+    setSelectedRows((prev) => {
+      const next = { ...prev };
+      filteredVariables.forEach((variable) => {
+        next[variable.id] = checked;
+      });
+      return next;
+    });
+  };
+
+  const toggleRow = (id: string, checked: boolean) => {
+    setSelectedRows((prev) => ({ ...prev, [id]: checked }));
+  };
 
   return (
     <Card className="bg-card text-card-foreground bg-gradient-to-br from-gray-900 to-gray-950 border-gray-800/80 shadow-xl rounded-xl">
-      <CardHeader>
+      <CardHeader className="space-y-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <CardTitle className="text-white flex items-center">
             {isSecrets ? (
@@ -150,33 +183,84 @@ export const EnvironmentVariablesTable = ({
               className="ml-2"
             />
           </CardTitle>
-
-          {/* Filters */}
-          <div className="flex items-center space-x-3">
-            {/* Search */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input
-                placeholder="Search variables..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 w-64 bg-gray-900 border-gray-800 text-white"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery("")}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className={cn(
+                "border-gray-700 text-gray-300 hover:bg-gray-800",
+                density === "comfortable" && "border-violet-500/30 text-violet-200"
               )}
-            </div>
-
-            {/* Environment Filter */}
-            <Select
-              value={selectedEnvironment}
-              onValueChange={setSelectedEnvironment}
+              onClick={() => setDensity("comfortable")}
             >
+              <Rows3 className="mr-2 size-4" />
+              Comfortable
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className={cn(
+                "border-gray-700 text-gray-300 hover:bg-gray-800",
+                density === "compact" && "border-violet-500/30 text-violet-200"
+              )}
+              onClick={() => setDensity("compact")}
+            >
+              <Rows2 className="mr-2 size-4" />
+              Compact
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {environmentTypes.map((envType) => {
+            const isActive = selectedEnvironment === envType.id;
+            return (
+              <Button
+                key={envType.id}
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedEnvironment(envType.id)}
+                className={cn(
+                  "rounded-full border px-3 text-sm transition-colors",
+                  isActive
+                    ? "border-white/20 bg-white/[0.08] text-white"
+                    : "border-white/10 bg-transparent text-gray-400 hover:bg-white/[0.04] hover:text-gray-200"
+                )}
+              >
+                <span
+                  className="mr-2 inline-block h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: envType.color }}
+                />
+                {envType.name}
+              </Button>
+            );
+          })}
+        </div>
+
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="relative w-full max-w-md">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <Input
+              placeholder={isSecrets ? "Search secrets…" : "Search variables…"}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 bg-gray-900 border-gray-800 text-white"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={selectedEnvironment} onValueChange={setSelectedEnvironment}>
               <SelectTrigger className="w-48 bg-gray-900 border-gray-800 text-white">
                 <Filter className="size-4 mr-2" />
                 <SelectValue />
@@ -199,10 +283,14 @@ export const EnvironmentVariablesTable = ({
                 ))}
               </SelectContent>
             </Select>
+            {visibleSelectedCount > 0 && (
+              <Badge variant="secondary" className="bg-violet-500/10 px-3 py-2 text-violet-200">
+                {visibleSelectedCount} selected
+              </Badge>
+            )}
           </div>
         </div>
 
-        {/* Active Filters */}
         {hasActiveFilters && (
           <div className="flex items-center space-x-2 pt-2">
             <span className="text-sm text-gray-400">Active filters:</span>
@@ -243,8 +331,10 @@ export const EnvironmentVariablesTable = ({
 
       <CardContent>
         {filteredVariables.length === 0 ? (
-          <div className="text-center py-12">
-            <Key className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+          <div className="py-14 text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/[0.04]">
+              <Key className="w-7 h-7 text-gray-500" />
+            </div>
             <h3 className="text-lg font-medium text-white mb-2">
               {hasActiveFilters
                 ? "No variables found"
@@ -255,26 +345,47 @@ export const EnvironmentVariablesTable = ({
                 ? "No variables match your current filters"
                 : "Add your first variable to get started"}
             </p>
-            {hasActiveFilters && (
-              <Button
-                onClick={() => {
-                  setSearchQuery("");
-                  setSelectedEnvironment(
-                    getDefaultEnvironmentType(environmentTypes)
-                  );
-                }}
-                variant="outline"
-                className="text-white border-gray-700 hover:bg-gray-800"
-              >
-                Clear Filters
-              </Button>
-            )}
+            <div className="flex flex-wrap justify-center gap-3">
+              {hasActiveFilters && (
+                <Button
+                  onClick={() => {
+                    setSearchQuery("");
+                    setSelectedEnvironment(
+                      getDefaultEnvironmentType(environmentTypes)
+                    );
+                  }}
+                  variant="outline"
+                  className="text-white border-gray-700 hover:bg-gray-800"
+                >
+                  Clear Filters
+                </Button>
+              )}
+              {onPrimaryAction && primaryActionLabel && (
+                <Button
+                  onClick={onPrimaryAction}
+                  className={cn(
+                    "text-white",
+                    isSecrets ? "bg-red-500 hover:bg-red-600" : "bg-violet-500 hover:bg-violet-600"
+                  )}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  {primaryActionLabel}
+                </Button>
+              )}
+            </div>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-800">
+                  <th className="py-3 px-4 text-left">
+                    <Checkbox
+                      checked={allVisibleSelected}
+                      onCheckedChange={(checked) => toggleAllVisible(Boolean(checked))}
+                      aria-label="Select all visible rows"
+                    />
+                  </th>
                   <th className="text-left py-3 px-4 text-gray-400 font-medium">
                     Key
                   </th>
@@ -301,13 +412,29 @@ export const EnvironmentVariablesTable = ({
                 {filteredVariables.map((variable) => (
                   <tr
                     key={variable.id}
-                    className="border-b border-gray-800 hover:bg-gray-800 transition-colors"
+                    className={cn(
+                      "border-b border-gray-800 transition-colors hover:bg-gray-800/80",
+                      selectedRows[variable.id] && "bg-violet-500/5",
+                      density === "compact" ? "text-sm" : ""
+                    )}
                   >
+                    <td className="px-4 py-4 align-top">
+                      <Checkbox
+                        checked={Boolean(selectedRows[variable.id])}
+                        onCheckedChange={(checked) => toggleRow(variable.id, Boolean(checked))}
+                        aria-label={`Select ${variable.key}`}
+                      />
+                    </td>
                     <td className="py-4 px-4">
-                      <div className="flex items-center space-x-2">
-                        <code className="text-sm font-mono text-violet-400 bg-gray-900 px-2 py-1 rounded">
-                          {variable.key}
-                        </code>
+                      <div className="flex items-start space-x-2">
+                        <div>
+                          <code className="text-sm font-mono text-violet-400 bg-gray-900 px-2 py-1 rounded">
+                            {variable.key}
+                          </code>
+                          <p className="mt-2 text-xs text-gray-500">
+                            {isSecrets ? "Encrypted secret entry" : "Runtime variable"}
+                          </p>
+                        </div>
                         <Button
                           size="sm"
                           variant="ghost"
@@ -316,6 +443,12 @@ export const EnvironmentVariablesTable = ({
                         >
                           <Copy className="h-3 w-3" />
                         </Button>
+                        {lastCopiedValue === variable.key && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-200">
+                            <CheckCircle2 className="h-3 w-3" />
+                            Copied
+                          </span>
+                        )}
                       </div>
                     </td>
 
@@ -335,7 +468,6 @@ export const EnvironmentVariablesTable = ({
                               onClick={() =>
                                 toggleSensitiveVisibility(variable.id)
                               }
-                              disabled={variable.sensitive}
                             >
                               {showSensitive[variable.id] ? (
                                 <EyeOff className="h-3 w-3" />
@@ -349,7 +481,6 @@ export const EnvironmentVariablesTable = ({
                                 variant="ghost"
                                 className="h-6 w-6 p-0 text-gray-400 hover:text-white"
                                 onClick={() => copy.mutate(variable.value)}
-                                disabled={variable.sensitive}
                               >
                                 <Copy className="h-3 w-3" />
                               </Button>
@@ -430,14 +561,14 @@ export const EnvironmentVariablesTable = ({
                               onClick={() => onEdit(variable)}
                             >
                               <Edit className="w-4 h-4 mr-2" />
-                              Edit Variable
+                              {isSecrets ? "Edit Secret" : "Edit Variable"}
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               className="text-red-400 hover:bg-gray-800 cursor-pointer"
                               onClick={() => onDelete(variable)}
                             >
                               <Trash2 className="w-4 h-4 mr-2" />
-                              Delete Variable
+                              {isSecrets ? "Delete Secret" : "Delete Variable"}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>

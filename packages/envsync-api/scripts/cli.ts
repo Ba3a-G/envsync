@@ -82,6 +82,34 @@ async function getAdminToken() {
 	return (await res.json()) as { access_token: string };
 }
 
+async function ensureKeycloakRealmSessionSettings(token: string) {
+	const base = `${getKeycloakBaseUrl()}/admin/realms/${getKeycloakRealm()}`;
+	const lookup = await fetch(base, {
+		headers: { Authorization: `Bearer ${token}` },
+	});
+	if (!lookup.ok) throw new Error(`Keycloak realm lookup failed: ${lookup.status} ${await lookup.text()}`);
+
+	const realm = await lookup.json() as Record<string, unknown>;
+	const updateRes = await fetch(base, {
+		method: "PUT",
+		headers: {
+			Authorization: `Bearer ${token}`,
+			"Content-Type": "application/json",
+		},
+		body: JSON.stringify({
+			...realm,
+			accessTokenLifespan: Number(config.KEYCLOAK_ACCESS_TOKEN_LIFESPAN_SECONDS),
+			ssoSessionIdleTimeout: Number(config.KEYCLOAK_SSO_SESSION_IDLE_TIMEOUT_SECONDS),
+			ssoSessionMaxLifespan: Number(config.KEYCLOAK_SSO_SESSION_MAX_LIFESPAN_SECONDS),
+			clientSessionIdleTimeout: Number(config.KEYCLOAK_CLIENT_SESSION_IDLE_TIMEOUT_SECONDS),
+			clientSessionMaxLifespan: Number(config.KEYCLOAK_CLIENT_SESSION_MAX_LIFESPAN_SECONDS),
+		}),
+	});
+	if (!updateRes.ok && updateRes.status !== 204) {
+		throw new Error(`Keycloak realm update failed: ${updateRes.status} ${await updateRes.text()}`);
+	}
+}
+
 function loadImportedRealmClients() {
 	if (!fs.existsSync(localRealmImportPath)) return null;
 
@@ -114,6 +142,7 @@ async function ensureKeycloakClient(
 		publicClient: boolean;
 		redirectUris: string[];
 		standardFlowEnabled: boolean;
+		directAccessGrantsEnabled?: boolean;
 		deviceGrant?: boolean;
 		webOrigins?: string[];
 		attributes?: Record<string, string>;
@@ -126,6 +155,31 @@ async function ensureKeycloakClient(
 	if (!lookup.ok) throw new Error(`Keycloak client lookup failed: ${lookup.status} ${await lookup.text()}`);
 	const existing = ((await lookup.json()) as Array<{ id: string }>)[0];
 	if (existing?.id) {
+		const updateRes = await fetch(`${base}/clients/${existing.id}`, {
+			method: "PUT",
+			headers: {
+				Authorization: `Bearer ${token}`,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				clientId,
+				name: clientId,
+				protocol: "openid-connect",
+				publicClient: opts.publicClient,
+				standardFlowEnabled: opts.standardFlowEnabled,
+				directAccessGrantsEnabled: opts.directAccessGrantsEnabled ?? false,
+				serviceAccountsEnabled: false,
+				redirectUris: opts.redirectUris,
+				webOrigins: opts.webOrigins ?? ["*"],
+				attributes: {
+					...(opts.attributes ?? {}),
+					...(opts.deviceGrant ? { "oauth2.device.authorization.grant.enabled": "true" } : {}),
+				},
+			}),
+		});
+		if (!updateRes.ok && updateRes.status !== 204) {
+			throw new Error(`Keycloak client update failed: ${updateRes.status} ${await updateRes.text()}`);
+		}
 		if (opts.publicClient) return { clientId, clientSecret: "" };
 		const secretRes = await fetch(`${base}/clients/${existing.id}/client-secret`, {
 			headers: { Authorization: `Bearer ${token}` },
@@ -146,7 +200,7 @@ async function ensureKeycloakClient(
 			protocol: "openid-connect",
 			publicClient: opts.publicClient,
 			standardFlowEnabled: opts.standardFlowEnabled,
-			directAccessGrantsEnabled: false,
+			directAccessGrantsEnabled: opts.directAccessGrantsEnabled ?? false,
 			serviceAccountsEnabled: false,
 			redirectUris: opts.redirectUris,
 			webOrigins: opts.webOrigins ?? ["*"],
@@ -170,11 +224,13 @@ async function initKeycloakClients() {
 
 	try {
 		const { access_token } = await getAdminToken();
+		await ensureKeycloakRealmSessionSettings(access_token);
 		const webCallbackOrigin = new URL(config.KEYCLOAK_WEB_CALLBACK_URL).origin;
 		web = await ensureKeycloakClient(access_token, config.KEYCLOAK_WEB_CLIENT_ID, {
 			publicClient: false,
 			redirectUris: [config.KEYCLOAK_WEB_REDIRECT_URI, config.KEYCLOAK_WEB_CALLBACK_URL, webCallbackOrigin],
 			standardFlowEnabled: true,
+			directAccessGrantsEnabled: true,
 			webOrigins: [webCallbackOrigin],
 			attributes: { "post.logout.redirect.uris": "+" },
 		});
@@ -220,21 +276,29 @@ const DEV_ORG_NAME = "EnvSync Dev";
 const DEV_ORG_SLUG = "envsync-dev";
 const DEV_USER_PASSWORD = "Test@1234";
 
-async function ensureDevOrg() {
+function isSeededVaultRepairFailure(error: unknown) {
+	return error instanceof Error && error.message.includes("Seed vault access still invalid after certificate/session repair");
+}
+
+function buildRecoveryOrgSlug(baseSlug: string) {
+	return `${baseSlug}-${Date.now().toString(36)}`;
+}
+
+async function ensureDevOrg(orgName = DEV_ORG_NAME, orgSlug = DEV_ORG_SLUG) {
 	const db = await DB.getInstance();
-	let org = await db.selectFrom("orgs").selectAll().where("slug", "=", DEV_ORG_SLUG).executeTakeFirst();
+	let org = await db.selectFrom("orgs").selectAll().where("slug", "=", orgSlug).executeTakeFirst();
 	if (!org) {
 		const id = randomUUID();
 		await db.insertInto("orgs").values({
 			id,
-			name: DEV_ORG_NAME,
-			slug: DEV_ORG_SLUG,
+			name: orgName,
+			slug: orgSlug,
 			metadata: { seeded_by: "cli" },
 			created_at: new Date(),
 			updated_at: new Date(),
 		}).execute();
 		org = await db.selectFrom("orgs").selectAll().where("id", "=", id).executeTakeFirstOrThrow();
-		console.log(`Created org "${DEV_ORG_NAME}" (${id})`);
+		console.log(`Created org "${orgName}" (${id})`);
 	}
 
 	return org;
@@ -258,8 +322,51 @@ async function ensureDefaultRoles(orgId: string) {
 		.selectFrom("org_role")
 		.selectAll()
 		.where("org_id", "=", orgId)
-		.where("is_master", "=", true)
-		.executeTakeFirstOrThrow();
+		.execute();
+}
+
+function getFlagValue(rawArgs: string[], flagName: string) {
+	const inlinePrefix = `--${flagName}=`;
+	for (let index = 0; index < rawArgs.length; index += 1) {
+		const arg = rawArgs[index];
+		if (arg.startsWith(inlinePrefix)) {
+			return arg.slice(inlinePrefix.length);
+		}
+		if (arg === `--${flagName}`) {
+			return rawArgs[index + 1];
+		}
+	}
+
+	return undefined;
+}
+
+function normalizeRoleName(value: string) {
+	return value.trim().toLowerCase().replace(/[\s_-]+/g, " ");
+}
+
+function resolveRequestedRole(
+	roles: Array<{ id: string; name: string; is_master: boolean }>,
+	requestedRole: string | undefined,
+) {
+	if (!requestedRole) {
+		return roles.find(role => role.is_master) ?? null;
+	}
+
+	const normalizedRequestedRole = normalizeRoleName(requestedRole);
+	const roleAliases = new Map<string, string>([
+		["master", "Org Admin"],
+		["org admin", "Org Admin"],
+		["admin", "Org Admin"],
+		["billing admin", "Billing Admin"],
+		["manager", "Manager"],
+		["editor", "Developer"],
+		["developer", "Developer"],
+		["viewer", "Viewer"],
+	]);
+	const resolvedRoleName = roleAliases.get(normalizedRequestedRole) ?? requestedRole;
+	const normalizedRoleName = normalizeRoleName(resolvedRoleName);
+
+	return roles.find(role => normalizeRoleName(role.name) === normalizedRoleName) ?? null;
 }
 
 async function ensureUserRoleAccess(userId: string, orgId: string, roleId: string) {
@@ -287,6 +394,76 @@ async function ensureOrgResourceAccess(orgId: string) {
 	console.log(`OpenFGA resource relations synced for ${apps.length} apps and ${envTypes.length} env types`);
 }
 
+function isMissingOrgCAError(error: unknown) {
+	return error instanceof Error && error.message.includes("org CA") && error.message.includes("not found");
+}
+
+async function repairSeededOrgCertificates(orgId: string) {
+	const { AuthorizationService } = await import("../src/services/authorization.service");
+	const { invalidateCache } = await import("../src/helpers/cache");
+	const { CacheKeys } = await import("../src/helpers/cache-keys");
+	const { KMSClient } = await import("../src/libs/kms/client");
+	const db = await DB.getInstance();
+
+	const certs = await db
+		.selectFrom("org_certificates")
+		.select(["id", "user_id"])
+		.where("org_id", "=", orgId)
+		.execute();
+
+	for (const cert of certs) {
+		await AuthorizationService.deleteResourceTuples("certificate", cert.id).catch(() => {});
+	}
+
+	await db.deleteFrom("org_certificates").where("org_id", "=", orgId).execute();
+	await invalidateCache(CacheKeys.certsByOrg(orgId));
+
+	const affectedUsers = [...new Set(certs.map(cert => cert.user_id))];
+	const { invalidateSessionToken } = await import("../src/libs/kms/session-manager");
+	const kms = await KMSClient.getInstance();
+	for (const affectedUserId of affectedUsers) {
+		await kms.revokeMemberSessions(affectedUserId, orgId).catch(() => 0);
+		invalidateSessionToken(affectedUserId, orgId);
+	}
+
+	console.log("Repaired stale organization certificate state after miniKMS reset");
+}
+
+async function refreshVaultSession(userId: string, orgId: string) {
+	const { KMSClient } = await import("../src/libs/kms/client");
+	const { getVaultSessionToken, invalidateSessionToken } = await import("../src/libs/kms/session-manager");
+
+	const kms = await KMSClient.getInstance();
+	await kms.revokeMemberSessions(userId, orgId).catch(() => 0);
+	invalidateSessionToken(userId, orgId);
+
+	const sessionToken = await getVaultSessionToken(userId, orgId);
+	const session = await kms.validateSession(sessionToken);
+
+	if (!session.valid) {
+		throw new Error(`Seed vault session invalid after refresh for user ${userId} in org ${orgId}`);
+	}
+
+	return sessionToken;
+}
+
+async function moveUserToOrg(userId: string, nextOrgId: string, roleId: string, previousOrgId?: string) {
+	const { invalidateSessionToken } = await import("../src/libs/kms/session-manager");
+	const db = await DB.getInstance();
+	if (previousOrgId) {
+		invalidateSessionToken(userId, previousOrgId);
+	}
+	invalidateSessionToken(userId, nextOrgId);
+	await db.updateTable("users")
+		.set({
+			org_id: nextOrgId,
+			role_id: roleId,
+			updated_at: new Date(),
+		})
+		.where("id", "=", userId)
+		.execute();
+}
+
 async function ensureOrgCertificates(orgId: string, orgName: string, userId: string, email: string) {
 	const { CertificateService } = await import("../src/services/certificate.service");
 	const { CertificateRoleMapper } = await import("../src/services/certificate-role.mapper");
@@ -295,7 +472,20 @@ async function ensureOrgCertificates(orgId: string, orgName: string, userId: str
 	const { RoleService } = await import("../src/services/role.service");
 	const db = await DB.getInstance();
 
-	const orgCA = await CertificateService.getOrgCA(orgId);
+	let orgCA: Awaited<ReturnType<typeof CertificateService.getOrgCA>> | null = await CertificateService.getOrgCA(orgId);
+	if (orgCA) {
+		try {
+			const kms = await KMSClient.getInstance();
+			await kms.getCRL(orgId, false);
+		} catch (error) {
+			if (!isMissingOrgCAError(error)) {
+				throw error;
+			}
+			await repairSeededOrgCertificates(orgId);
+			orgCA = null;
+		}
+	}
+
 	if (!orgCA) {
 		await CertificateService.initOrgCA(orgId, orgName, userId, "Seeded local development CA", {
 			seeded_by: "cli",
@@ -310,6 +500,7 @@ async function ensureOrgCertificates(orgId: string, orgName: string, userId: str
 		.where("user_id", "=", userId)
 		.where("cert_type", "=", "member")
 		.where("status", "=", "active")
+		.where("is_system_generated", "=", true)
 		.executeTakeFirst();
 
 	if (!memberCert) {
@@ -337,7 +528,7 @@ async function ensureOrgCertificates(orgId: string, orgName: string, userId: str
 
 	try {
 		const kms = await KMSClient.getInstance();
-		const sessionToken = await getVaultSessionToken(userId, orgId);
+		const sessionToken = await refreshVaultSession(userId, orgId);
 		const session = await kms.validateSession(sessionToken);
 		if (!session.scopes.includes("vault:write")) {
 			throw new Error(`Seed member session missing vault:write (${session.scopes.join(",")})`);
@@ -451,6 +642,7 @@ async function ensureSeededApps(orgId: string) {
 
 async function ensureSeededSecrets(orgId: string, userId: string, apps: Record<string, { id: string; envs: Record<string, { id: string }> }>) {
 	const { SecretService } = await import("../src/services/secret.service");
+	const { SecretStorePiTService } = await import("../src/services/secret_store_pit.service");
 
 	const secretDefinitions = [
 		{
@@ -509,7 +701,47 @@ async function ensureSeededSecrets(orgId: string, userId: string, apps: Record<s
 				org_id: orgId,
 				user_id: userId,
 			});
+			await SecretStorePiTService.createSecretStorePiT({
+				org_id: orgId,
+				app_id: app.id,
+				env_type_id: envType.id,
+				change_request_message: `Seeded local development secret ${definition.key}`,
+				user_id: userId,
+				envs: [
+					{
+						key: definition.key,
+						value: definition.value,
+						operation: "CREATE",
+					},
+				],
+			});
 			console.log(`Seeded secret ${definition.key} in ${definition.appName}/${definition.envName}`);
+			continue;
+		}
+
+		const history = await SecretStorePiTService.getSecretStorePiTsByVariable({
+			org_id: orgId,
+			app_id: app.id,
+			env_type_id: envType.id,
+			key: definition.key,
+		});
+
+		if (history.length === 0) {
+			await SecretStorePiTService.createSecretStorePiT({
+				org_id: orgId,
+				app_id: app.id,
+				env_type_id: envType.id,
+				change_request_message: `Backfilled seeded local development secret ${definition.key}`,
+				user_id: userId,
+				envs: [
+					{
+						key: definition.key,
+						value: existing.value,
+						operation: "CREATE",
+					},
+				],
+			});
+			console.log(`Backfilled PiT for seeded secret ${definition.key} in ${definition.appName}/${definition.envName}`);
 		}
 	}
 }
@@ -596,9 +828,90 @@ async function ensureSeededWebhook(orgId: string, userId: string, appId?: string
 	}
 }
 
+async function verifySeededVaultRoundTrip(
+	orgId: string,
+	userId: string,
+	appId: string,
+	envTypeId: string,
+) {
+	const { EnvService } = await import("../src/services/env.service");
+
+	const key = `__seed_vault_probe_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+	const value = `seed-probe-${Date.now()}`;
+
+	await EnvService.createEnv({
+		key,
+		value,
+		env_type_id: envTypeId,
+		app_id: appId,
+		org_id: orgId,
+		user_id: userId,
+	});
+
+	try {
+		const roundTrip = await EnvService.getEnv({
+			key,
+			env_type_id: envTypeId,
+			app_id: appId,
+			org_id: orgId,
+			user_id: userId,
+		});
+
+		if (!roundTrip || roundTrip.value !== value) {
+			throw new Error(`Seed vault round-trip returned ${roundTrip ? "unexpected value" : "no value"}`);
+		}
+	} finally {
+		await EnvService.deleteEnv({
+			key,
+			app_id: appId,
+			env_type_id: envTypeId,
+			org_id: orgId,
+			user_id: userId,
+		}).catch(() => {});
+	}
+}
+
+async function ensureSeededVaultAccess(
+	orgId: string,
+	orgName: string,
+	userId: string,
+	email: string,
+	apps: Record<string, { id: string; envs: Record<string, { id: string }> }>,
+) {
+	const probeApp = apps["Core Platform"] ?? Object.values(apps)[0];
+	const probeEnv = probeApp?.envs["Development"] ?? Object.values(probeApp?.envs ?? {})[0];
+
+	if (!probeApp || !probeEnv) {
+		return;
+	}
+
+	try {
+		await verifySeededVaultRoundTrip(orgId, userId, probeApp.id, probeEnv.id);
+	} catch (error) {
+		console.warn(
+			`Seed vault round-trip failed for org ${orgId}. Refreshing local certificate state.`,
+			error instanceof Error ? error.message : error,
+		);
+		await repairSeededOrgCertificates(orgId);
+		await ensureOrgCertificates(orgId, orgName, userId, email);
+		await refreshVaultSession(userId, orgId);
+		try {
+			await verifySeededVaultRoundTrip(orgId, userId, probeApp.id, probeEnv.id);
+		} catch (repairError) {
+			throw new Error(
+				`Seed vault access still invalid after certificate/session repair (org=${orgId}, user=${userId}, app=${probeApp.id}, envType=${probeEnv.id}): ${
+					repairError instanceof Error ? repairError.message : String(repairError)
+				}`,
+			);
+		}
+		console.log("Seeded vault access repaired");
+	}
+}
+
 async function seedDevWorkspace(orgId: string, orgName: string, userId: string, email: string) {
 	await ensureOrgCertificates(orgId, orgName, userId, email);
 	const apps = await ensureSeededApps(orgId);
+	await ensureSeededVaultAccess(orgId, orgName, userId, email, apps);
 	await ensureSeededSecrets(orgId, userId, apps);
 	await ensureSeededTeam(orgId, userId);
 	await ensureSeededApiKey(orgId, userId);
@@ -607,15 +920,30 @@ async function seedDevWorkspace(orgId: string, orgName: string, userId: string, 
 
 async function createDevUser() {
 	const rawArgs = process.argv.slice(3);
-	const positional = rawArgs.filter(arg => !arg.startsWith("--"));
+	const positional = rawArgs.filter((arg, index) => {
+		if (!arg.startsWith("--")) {
+			return index === 0 || rawArgs[index - 1] !== "--role";
+		}
+		return false;
+	});
 	const flags = new Set(rawArgs.filter(arg => arg.startsWith("--")));
+	const requestedRole = getFlagValue(rawArgs, "role");
+	const requestedOrgName = getFlagValue(rawArgs, "org-name") ?? DEV_ORG_NAME;
+	const requestedOrgSlug = getFlagValue(rawArgs, "org-slug") ?? DEV_ORG_SLUG;
 	const email = positional[0] ?? "dev@envsync.local";
 	const fullName = positional[1] ?? "EnvSync Dev";
 	const password = DEV_USER_PASSWORD;
 	const db = await DB.getInstance();
 
-	const org = await ensureDevOrg();
-	const role = await ensureDefaultRoles(org.id);
+	let org = await ensureDevOrg(requestedOrgName, requestedOrgSlug);
+	let roles = await ensureDefaultRoles(org.id);
+	let role = resolveRequestedRole(
+		roles.map(entry => ({ id: entry.id, name: entry.name, is_master: Boolean(entry.is_master) })),
+		requestedRole,
+	);
+	if (!role) {
+		throw new Error(`Requested role "${requestedRole ?? "master"}" does not exist in org ${org.id}`);
+	}
 
 	let user = await db.selectFrom("users").selectAll().where("email", "=", email).executeTakeFirst();
 
@@ -672,13 +1000,50 @@ async function createDevUser() {
 		}
 		await setKeycloakUserPassword(idpUser.id, password);
 		console.log(`Dev user login reset: ${email} / ${password}`);
+		if (user.org_id !== org.id) {
+			await moveUserToOrg(user.id, org.id, role.id, user.org_id);
+			user = await db.selectFrom("users").selectAll().where("id", "=", user.id).executeTakeFirstOrThrow();
+			console.log(`Moved dev user into org ${org.slug}`);
+		}
+		if (user.role_id !== role.id) {
+			const { UserService } = await import("../src/services/user.service");
+			await UserService.updateUser(user.id, { role_id: role.id });
+			user = await db.selectFrom("users").selectAll().where("id", "=", user.id).executeTakeFirstOrThrow();
+			console.log(`Updated dev user role to ${role.name}`);
+		}
 	}
 
 	await ensureUserRoleAccess(user.id, org.id, role.id);
 	console.log("Dev user permissions synced");
 
 	if (flags.has("--seed")) {
-		await seedDevWorkspace(org.id, org.name, user.id, email);
+		try {
+			await seedDevWorkspace(org.id, org.name, user.id, email);
+		} catch (error) {
+			if (!isSeededVaultRepairFailure(error) || requestedOrgSlug !== DEV_ORG_SLUG) {
+				throw error;
+			}
+
+			const recoveryOrgSlug = buildRecoveryOrgSlug(requestedOrgSlug);
+			console.warn(
+				`Local vault state for org ${requestedOrgSlug} remains invalid after repair. Creating replacement org ${recoveryOrgSlug}.`,
+			);
+			org = await ensureDevOrg(requestedOrgName, recoveryOrgSlug);
+			roles = await ensureDefaultRoles(org.id);
+			role = resolveRequestedRole(
+				roles.map(entry => ({ id: entry.id, name: entry.name, is_master: Boolean(entry.is_master) })),
+				requestedRole,
+			);
+			if (!role) {
+				throw new Error(`Requested role "${requestedRole ?? "master"}" does not exist in recovery org ${org.id}`);
+			}
+			await moveUserToOrg(user.id, org.id, role.id, user.org_id);
+			user = await db.selectFrom("users").selectAll().where("id", "=", user.id).executeTakeFirstOrThrow();
+			console.log(`Moved dev user into recovery org ${org.slug}`);
+			await ensureUserRoleAccess(user.id, org.id, role.id);
+			console.log("Dev user permissions synced in recovery org");
+			await seedDevWorkspace(org.id, org.name, user.id, email);
+		}
 		console.log("Seeded local development workspace");
 	}
 

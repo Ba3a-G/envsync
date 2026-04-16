@@ -58,6 +58,22 @@ const ALL_ORG_RELATIONS = [
 ] as const;
 
 export class AuthorizationService {
+	private static async writeMissingTuples(tuples: TupleKey[]): Promise<void> {
+		const fga = await FGAClient.getInstance();
+		const missing: TupleKey[] = [];
+
+		for (const tuple of tuples) {
+			const existing = await fga.readTuples(tuple);
+			if (existing.length === 0) {
+				missing.push(tuple);
+			}
+		}
+
+		if (missing.length > 0) {
+			await fga.writeTuples(missing);
+		}
+	}
+
 	// ─── Core checks ───────────────────────────────────────────────────
 
 	/**
@@ -198,8 +214,9 @@ export class AuthorizationService {
 	 * Called when an app is created.
 	 */
 	static async writeAppOrgRelation(appId: string, orgId: string): Promise<void> {
-		const fga = await FGAClient.getInstance();
-		await fga.writeTuples([{ user: `org:${orgId}`, relation: "org", object: `app:${appId}` }]);
+		await this.writeMissingTuples([
+			{ user: `org:${orgId}`, relation: "org", object: `app:${appId}` },
+		]);
 	}
 
 	/**
@@ -207,8 +224,7 @@ export class AuthorizationService {
 	 * Called when an env_type is created.
 	 */
 	static async writeEnvTypeRelations(envTypeId: string, appId: string, orgId: string): Promise<void> {
-		const fga = await FGAClient.getInstance();
-		await fga.writeTuples([
+		await this.writeMissingTuples([
 			{ user: `app:${appId}`, relation: "app", object: `env_type:${envTypeId}` },
 			{ user: `org:${orgId}`, relation: "org", object: `env_type:${envTypeId}` },
 		]);
@@ -309,8 +325,9 @@ export class AuthorizationService {
 	 * Write the structural tuple linking a team to its org.
 	 */
 	static async writeTeamOrgRelation(teamId: string, orgId: string): Promise<void> {
-		const fga = await FGAClient.getInstance();
-		await fga.writeTuples([{ user: `org:${orgId}`, relation: "org", object: `team:${teamId}` }]);
+		await this.writeMissingTuples([
+			{ user: `org:${orgId}`, relation: "org", object: `team:${teamId}` },
+		]);
 	}
 
 	// ─── GPG key relations ────────────────────────────────────────────
@@ -320,8 +337,7 @@ export class AuthorizationService {
 	 * Called when a GPG key is created.
 	 */
 	static async writeGpgKeyRelations(gpgKeyId: string, orgId: string, ownerId: string): Promise<void> {
-		const fga = await FGAClient.getInstance();
-		await fga.writeTuples([
+		await this.writeMissingTuples([
 			{ user: `org:${orgId}`, relation: "org", object: `gpg_key:${gpgKeyId}` },
 			{ user: `user:${ownerId}`, relation: "owner", object: `gpg_key:${gpgKeyId}` },
 		]);
@@ -362,8 +378,7 @@ export class AuthorizationService {
 	 * Called when a certificate is created (initOrgCA or issueMemberCert).
 	 */
 	static async writeCertificateRelations(certId: string, orgId: string, ownerId: string): Promise<void> {
-		const fga = await FGAClient.getInstance();
-		await fga.writeTuples([
+		await this.writeMissingTuples([
 			{ user: `org:${orgId}`, relation: "org", object: `certificate:${certId}` },
 			{ user: `user:${ownerId}`, relation: "owner", object: `certificate:${certId}` },
 		]);

@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
-import { useAuth } from "@/hooks/useAuth";
+import { sdk } from "@/api";
+import { useAuthContext } from "@/contexts/auth";
 import { API_KEYS } from "@/constants";
 import { trackAction } from "@/telemetry";
 
@@ -21,8 +22,9 @@ interface FormErrors {
 }
 
 export const useUsers = () => {
-  const { api } = useAuth();
+  const { isLoading: isAuthLoading, isAuthenticated } = useAuthContext();
   const queryClient = useQueryClient();
+  const authEnabled = !isAuthLoading && isAuthenticated;
 
   // State management
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -44,8 +46,8 @@ export const useUsers = () => {
     queryKey: [API_KEYS.USERS_PAGE],
     queryFn: async () => {
       const [usersData, rolesData] = await Promise.all([
-        api.users.getUsers(),
-        api.roles.getAllRoles(),
+        sdk.users.getUsers(),
+        sdk.roles.getAllRoles(),
       ]);
 
       const processedUsers = usersData.map((user) => ({
@@ -75,6 +77,7 @@ export const useUsers = () => {
       return { users: processedUsers, roles: processedRoles };
     },
     staleTime: 5 * 60 * 1000,
+    enabled: authEnabled,
     retry: 3,
   });
 
@@ -121,7 +124,7 @@ export const useUsers = () => {
       email: string;
       role_id: string;
     }) => {
-      return await api.onboarding.createUserInvite({ email, role_id });
+      return await sdk.onboarding.createUserInvite({ email, role_id });
     },
     onSuccess: (_, variables) => {
       Promise.all([
@@ -147,7 +150,7 @@ export const useUsers = () => {
   const deleteUserMutation = useMutation({
     mutationFn: async (userId: string) => {
       setActionLoading(userId, true);
-      return await api.users.deleteUser(userId);
+      return await sdk.users.deleteUser(userId);
     },
     onSuccess: (_, userId) => {
       Promise.all([
@@ -172,7 +175,7 @@ export const useUsers = () => {
       roleId: string;
     }) => {
       setActionLoading(userId, true);
-      return await api.users.updateRole(userId, { role_id: roleId });
+      return await sdk.users.updateRole(userId, { role_id: roleId });
     },
     onSuccess: (_, { userId }) => {
       Promise.all([

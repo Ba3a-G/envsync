@@ -3,13 +3,13 @@ import { Sidebar } from "@/components/Sidebar";
 import { CommandPalette } from "@/components/CommandPalette";
 import { KeyboardShortcutsDialog } from "@/components/KeyboardShortcutsDialog";
 import { NotificationCenter } from "@/components/NotificationCenter";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/contexts/auth";
 import { useSidebar } from "@/hooks/useSidebar";
 import { Outlet } from "react-router-dom";
 import { useEffect } from "react";
 
 export const RootLayout = () => {
-  const { user, isAuthenticated, isLoading, authError } = useAuth();
+  const { user, isAuthenticated, isLoading, authError } = useAuthContext();
   const { sidebarExpanded, toggleSidebar } = useSidebar();
 
   // Save sidebar state to localStorage whenever it changes
@@ -106,11 +106,11 @@ export const RootLayout = () => {
   }
 
   return (
-    <div className="h-screen bg-[#0a0f1a] text-white flex overflow-hidden">
-      {/* Ambient background gradient blobs */}
+    <div className="flex h-screen overflow-hidden bg-[#0a0f1a] text-white">
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute top-0 left-1/4 w-96 h-96 bg-violet-500/[0.03] rounded-full blur-3xl" />
         <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-indigo-500/[0.02] rounded-full blur-3xl" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.04),_transparent_45%)]" />
       </div>
 
       <div
@@ -127,18 +127,17 @@ export const RootLayout = () => {
           sidebarExpanded ? "ml-64" : "ml-16"
         }`}
       >
-        {/* Fixed Header */}
         <div className="flex-shrink-0">
           <Header />
         </div>
 
-        {/* Scrollable Content */}
-        <main className="flex-1 p-6 overflow-y-auto">
-          <Outlet />
+        <main className="flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-[1600px] px-5 py-6 md:px-6">
+            <Outlet />
+          </div>
         </main>
       </div>
 
-      {/* Global overlays */}
       <CommandPalette />
       <KeyboardShortcutsDialog />
       <NotificationCenter />
