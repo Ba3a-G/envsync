@@ -109,11 +109,46 @@ export class AppController {
 			},
 		});
 
-		// P4 perf fix (#55): env/secret counts require N Vault round-trips per app
-		// (getEnvCountByApp + getSecretCountByApp each call kvList per env_type).
-		// For 20 apps x 3 env_types = 120 Vault calls. Counts are now only
-		// computed on the single-app detail endpoint (getApp).
-		return c.json(apps);
+		const { envCounts, secretCounts } = await AppService.getConfigCountsByOrg({
+			org_id,
+		});
+
+		const user_id = c.get("user_id");
+		const appsWithCounts = await Promise.all(
+			apps.map(async app => {
+				const fastEnvCount = envCounts.get(app.id) ?? 0;
+				const fastSecretCount = secretCounts.get(app.id) ?? 0;
+
+				if (fastEnvCount > 0 || fastSecretCount > 0) {
+					return {
+						...app,
+						envCount: fastEnvCount,
+						secretCount: fastSecretCount,
+					};
+				}
+
+				const [envCount, secretCount] = await Promise.all([
+					AppService.getEnvCountByApp({
+						app_id: app.id,
+						org_id,
+						user_id,
+					}),
+					AppService.getSecretCountByApp({
+						app_id: app.id,
+						org_id,
+						user_id,
+					}),
+				]);
+
+				return {
+					...app,
+					envCount,
+					secretCount,
+				};
+			}),
+		);
+
+		return c.json(appsWithCounts);
 	};
 
 	public static readonly updateApp = async (c: Context) => {

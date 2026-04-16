@@ -23,11 +23,15 @@ export function ProjectsOverview({ projects }: ProjectsOverviewProps) {
   }
 
   return (
-    <div className="overflow-y-auto h-full space-y-1 pr-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+    <div
+      data-testid="dashboard-recent-projects"
+      className="overflow-y-auto h-full space-y-1 pr-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+    >
       {projects.map((project) => (
         <Link
           key={project.id}
           to={appDetailPath(project.id)}
+          data-testid={`dashboard-project-${project.id}`}
           className="flex items-center justify-between p-3 rounded-lg hover:bg-violet-500/5 hover:translate-x-0.5 transition-all group"
         >
           <div className="flex items-center space-x-3">
@@ -40,10 +44,17 @@ export function ProjectsOverview({ projects }: ProjectsOverviewProps) {
               <p className="text-sm font-medium text-gray-200 group-hover:text-white transition-colors">
                 {project.name}
               </p>
-              <p className="text-[11px] text-gray-500">
-                {project.env_count ?? 0} vars · {project.secret_count ?? 0}{" "}
-                secrets
-              </p>
+              {(() => {
+                const configItemCount = (project.env_count ?? 0) + (project.secret_count ?? 0);
+
+                return (
+                  <p className="text-[11px] text-gray-500">
+                    <span data-testid={`dashboard-project-${project.id}-count`}>
+                      {configItemCount} vars / secrets
+                    </span>
+                  </p>
+                );
+              })()}
             </div>
           </div>
           <span className="text-[11px] text-gray-500">

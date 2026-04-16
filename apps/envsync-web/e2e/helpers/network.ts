@@ -28,6 +28,18 @@ function parseJsonBody(rawBody: string | null): JsonValue | null {
 	}
 }
 
+function stringifyBody(body: JsonValue | null): string {
+	if (body === null) {
+		return "null";
+	}
+
+	try {
+		return JSON.stringify(body);
+	} catch {
+		return String(body);
+	}
+}
+
 function valueMatch(actual: JsonValue | null, expected: JsonValue): boolean {
 	if (typeof expected !== "object" || expected === null || Array.isArray(expected)) {
 		return actual === expected;
@@ -91,6 +103,7 @@ export async function waitForTrackedResponse(
 		expectedStatus: number;
 		expectedRequestBody?: ExpectedBodyMatch;
 		expectedResponseBody?: ExpectedBodyMatch;
+		failOnUnexpectedStatus?: boolean;
 		timeoutMs?: number;
 	},
 	): Promise<TrackedResponse> {
@@ -106,10 +119,6 @@ export async function waitForTrackedResponse(
 			}
 
 			if (!candidate.url().includes(options.pathFragment)) {
-				return false;
-			}
-
-			if (candidate.status() !== options.expectedStatus) {
 				return false;
 			}
 
@@ -131,6 +140,16 @@ export async function waitForTrackedResponse(
 			responseBody = await response.json() as JsonValue;
 		} catch {
 			responseBody = null;
+		}
+
+		if (response.status() !== options.expectedStatus) {
+			if (options.failOnUnexpectedStatus) {
+				throw new Error(
+					`Tracked response ${options.method} ${options.pathFragment} returned ${response.status()} instead of ${options.expectedStatus} ` +
+					`for ${response.url()} request=${stringifyBody(requestBody)} response=${stringifyBody(responseBody)}`,
+				);
+			}
+			continue;
 		}
 
 		if (options.expectedResponseBody && !valueMatch(responseBody, options.expectedResponseBody)) {

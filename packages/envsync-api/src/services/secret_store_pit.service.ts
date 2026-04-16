@@ -148,6 +148,60 @@ export class SecretStorePiTService {
 		return pits;
 	};
 
+	public static getCurrentSecretState = async ({
+		org_id,
+		app_id,
+		env_type_id,
+	}: {
+		org_id: string;
+		app_id: string;
+		env_type_id: string;
+	}) => {
+		const db = await DB.getInstance();
+
+		const allChanges = await db
+			.selectFrom("secret_store_pit")
+			.innerJoin(
+				"secret_store_pit_change_request",
+				"secret_store_pit.id",
+				"secret_store_pit_change_request.secret_store_pit_id",
+			)
+			.select([
+				"secret_store_pit_change_request.key",
+				"secret_store_pit_change_request.value",
+				"secret_store_pit_change_request.operation",
+				"secret_store_pit.created_at",
+			])
+			.where("secret_store_pit.org_id", "=", org_id)
+			.where("secret_store_pit.app_id", "=", app_id)
+			.where("secret_store_pit.env_type_id", "=", env_type_id)
+			.orderBy("secret_store_pit.created_at", "asc")
+			.orderBy("secret_store_pit_change_request.created_at", "asc")
+			.execute();
+
+		const secretState = new Map<string, { key: string; value: string; last_updated: Date }>();
+
+		for (const change of allChanges) {
+			const operation = change.operation || "UPDATE";
+
+			switch (operation) {
+				case "CREATE":
+				case "UPDATE":
+					secretState.set(change.key, {
+						key: change.key,
+						value: change.value,
+						last_updated: change.created_at,
+					});
+					break;
+				case "DELETE":
+					secretState.delete(change.key);
+					break;
+			}
+		}
+
+		return Array.from(secretState.values());
+	};
+
 	// Get environment state at a specific point in time
 	//
 	// TODO(perf #56): This method replays ALL change-request rows from epoch up to

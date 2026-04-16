@@ -1,5 +1,6 @@
 import { test, expect } from "../../fixtures/test";
 import { waitForTrackedResponse } from "../../helpers/network";
+import { switchTeamsTab, switchUsersTab } from "../../helpers/project-flows";
 
 test.describe("admin surfaces", () => {
 	test("creates an API key", async ({ page, makeName }) => {
@@ -39,13 +40,15 @@ test.describe("admin surfaces", () => {
 	test("covers teams and users management surfaces", async ({ page }) => {
 		await page.goto("/teams", { waitUntil: "domcontentloaded" });
 		await expect(page.getByRole("heading", { name: "Teams" }).first()).toBeVisible();
-		await page.getByRole("button", { name: "New Team" }).click();
+		await switchTeamsTab(page, "directory");
+		await page.getByTestId("teams-create").click();
 		await expect(page.getByRole("heading", { name: /Create Team|Edit Team/i }).first()).toBeVisible();
 		await page.keyboard.press("Escape");
 
 		await page.goto("/users", { waitUntil: "domcontentloaded" });
-		await expect(page.getByRole("button", { name: "Invite Member" })).toBeVisible();
-		await page.getByRole("button", { name: "Invite Member" }).click();
+		await switchUsersTab(page, "members");
+		await expect(page.getByTestId("users-invite-member")).toBeVisible();
+		await page.getByTestId("users-invite-member").click();
 		await expect(page.getByRole("dialog")).toBeVisible();
 		await page.keyboard.press("Escape");
 	});

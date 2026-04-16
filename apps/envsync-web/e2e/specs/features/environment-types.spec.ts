@@ -11,12 +11,13 @@ test.describe("feature: environment types", () => {
 		const project = await createProject(page, makeName("UI_FEATURE_ENV_APP"));
 		const envName = makeName("Sandbox");
 
-		await createEnvironmentType(page, project.appId, envName);
-		await setEnvironmentProtected(page, project.appId, "Production", true);
-		await deleteEnvironmentType(page, project.appId, envName);
+	await createEnvironmentType(page, project.appId, envName);
+	await setEnvironmentProtected(page, project.appId, "Production", true);
+	await deleteEnvironmentType(page, project.appId, envName);
 
-		await page.goto(`/applications/${project.appId}/manage-environments`, { waitUntil: "domcontentloaded" });
-		await expect(page.getByText("Production").first()).toBeVisible();
+	await page.goto(`/applications/${project.appId}/manage-environments`, { waitUntil: "domcontentloaded" });
+	await expect(page.getByTestId("manage-env-stat-types")).toBeVisible();
+	await expect(page.getByTestId("manage-env-stat-protected")).toHaveText("1");
+	await expect(page.getByText("Production").first()).toBeVisible();
 	});
 });
-

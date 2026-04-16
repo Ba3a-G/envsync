@@ -282,6 +282,8 @@ export const ProjectEnvironments = () => {
         onEdit={handleEditClick}
         onDelete={handleDeleteClick}
         canEdit={user.role.can_edit}
+        onPrimaryAction={() => setShowAddModal(true)}
+        primaryActionLabel="Add Variable"
       />
 
       {/* Add Variable Modal */}

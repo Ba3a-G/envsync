@@ -7,7 +7,7 @@ import { acceptUserInvite, clickStartWorking } from "../../helpers/landing";
 import { mailpit } from "../../helpers/mailpit";
 import { waitForTrackedResponse } from "../../helpers/network";
 import { compareFirstTwoPits, expectPitHistory, gotoPit, rollbackCurrentPit } from "../../helpers/pit";
-import { createProject, createVariable, setEnvironmentProtected, updateVariable } from "../../helpers/project-flows";
+import { createProject, createVariable, grantTeamProjectAccess, setEnvironmentProtected, switchTeamsTab, switchUsersTab, updateVariable } from "../../helpers/project-flows";
 
 test.describe("collaboration protected environment journey", () => {
 	test("covers invite onboarding, team access, change requests, and PiT flow", async ({ page, browser, credentialFactory }) => {
@@ -18,7 +18,8 @@ test.describe("collaboration protected environment journey", () => {
 		await setEnvironmentProtected(page, project.appId, "Production", true);
 
 		await page.goto("/users", { waitUntil: "domcontentloaded" });
-		await page.getByRole("button", { name: "Invite Member" }).click();
+		await switchUsersTab(page, "members");
+		await page.getByTestId("users-invite-member").click();
 		const inviteDialog = page.getByRole("dialog");
 		await inviteDialog.locator("#invite-email").fill(state.member.email);
 		await inviteDialog.getByRole("combobox").click();
@@ -70,20 +71,19 @@ test.describe("collaboration protected environment journey", () => {
 		}
 
 		await ensureAuthenticatedPage(page, "master");
-		const teamName = "Platform";
+		const resolvedTeamName = state.project.teamName;
 		await page.goto("/teams", { waitUntil: "domcontentloaded" });
-		let teamRow = page.locator("tr").filter({ hasText: teamName }).first();
-		if (!await teamRow.isVisible().catch(() => false)) {
-			const fallbackTeam = state.project.teamName;
-			await page.getByRole("button", { name: "New Team" }).click();
-			const teamDialog = page.getByRole("dialog");
-			await teamDialog.locator("input").first().fill(fallbackTeam);
-			await teamDialog.locator("textarea").first().fill("Journey collaboration team");
-			await teamDialog.getByRole("button", { name: "Save" }).click();
-			teamRow = page.locator("tr").filter({ hasText: fallbackTeam }).first();
-		}
+		await switchTeamsTab(page, "directory");
+		await page.getByTestId("teams-create").click();
+		const teamDialog = page.getByRole("dialog");
+		await teamDialog.locator("input").first().fill(resolvedTeamName);
+		await teamDialog.locator("textarea").first().fill("Journey collaboration team");
+		await teamDialog.getByRole("button", { name: "Save" }).click();
+		const teamRow = page.getByTestId("teams-directory-list").locator("tr").filter({ hasText: resolvedTeamName }).first();
 		await expect(teamRow).toBeVisible();
 		await teamRow.click();
+		await switchTeamsTab(page, "detail");
+		await expect(page.getByTestId("teams-detail-panel")).toContainText(resolvedTeamName);
 
 		const addMemberSelect = page.getByRole("combobox").filter({ hasText: /Select user/i }).first();
 		await addMemberSelect.click();
@@ -100,31 +100,24 @@ test.describe("collaboration protected environment journey", () => {
 					await availableOptions.first().click();
 				}
 			}
+			const addMemberResponse = waitForTrackedResponse(page, {
+				method: "POST",
+				pathFragment: "/api/team/",
+				expectedStatus: 201,
+				failOnUnexpectedStatus: true,
+			});
 			await page.getByRole("button", { name: "Add" }).first().click();
+			await addMemberResponse;
 		} else {
 			await page.keyboard.press("Escape");
 		}
 
 		await ensureAuthenticatedPage(page, "master");
-		await page.goto(`/applications/${project.appId}/access`, { waitUntil: "domcontentloaded" });
-		const accessCombos = page.getByRole("combobox");
-		await accessCombos.nth(0).click();
-		await page.getByRole("option", { name: "Team" }).click();
-		await accessCombos.nth(1).click();
-		if (await page.getByRole("option", { name: teamName }).first().isVisible().catch(() => false)) {
-			await page.getByRole("option", { name: teamName }).first().click();
-		} else {
-			await page.getByRole("option", { name: state.project.teamName }).first().click();
-		}
-		await accessCombos.nth(2).click();
-		await page.getByRole("option", { name: "Editor" }).click();
-		await page.getByRole("button", { name: /Grant access/i }).click();
-		const directTeamRow = page.locator("tr").filter({ hasText: teamName }).first();
-		if (await directTeamRow.isVisible().catch(() => false)) {
-			await expect(directTeamRow).toBeVisible();
-		} else {
-			await expect(page.locator("tr").filter({ hasText: state.project.teamName }).first()).toBeVisible();
-		}
+		await grantTeamProjectAccess(page, {
+			appId: project.appId,
+			teamName: resolvedTeamName,
+			relation: "editor",
+		});
 
 		const memberContext = await credentialFactory(memberActor.storageKey, {
 			email: memberActor.email,
@@ -140,7 +133,7 @@ test.describe("collaboration protected environment journey", () => {
 			expect(productionEnv).toBeTruthy();
 
 			await memberPage.goto(`/applications/${project.appId}?selected=${productionEnv!.id}`, { waitUntil: "domcontentloaded" });
-			await memberPage.getByRole("button", { name: "Add Variable" }).click();
+			await memberPage.getByTestId("project-variables-primary-action").click();
 			const blockedDialog = memberPage.getByRole("dialog");
 			await blockedDialog.getByRole("combobox").click();
 			await memberPage.getByRole("option", { name: /Production/i }).first().click();

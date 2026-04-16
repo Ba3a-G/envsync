@@ -243,6 +243,8 @@ export const ProjectEnvironments = () => {
         onDelete={handleDeleteClick}
         canEdit={user.role.can_edit}
         isSecrets={true}
+        onPrimaryAction={() => setShowAddModal(true)}
+        primaryActionLabel="Add Secret"
       />
 
       {/* Add Variable Modal */}

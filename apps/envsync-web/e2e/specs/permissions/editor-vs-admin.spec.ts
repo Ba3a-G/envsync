@@ -13,7 +13,7 @@ test.describe("permissions: editor vs admin", () => {
 
 			await adminPage.goto("/teams", { waitUntil: "domcontentloaded" });
 			await expect(adminPage.getByRole("heading", { name: "Teams" }).first()).toBeVisible();
-			await expect(adminPage.getByRole("button", { name: "New Team" })).toBeVisible();
+			await expect(adminPage.getByTestId("teams-create")).toBeVisible();
 
 			await adminPage.goto("/organisation", { waitUntil: "domcontentloaded" });
 			await expect(adminPage.getByText(/Organization Settings|Organisation Settings/i)).toBeVisible();

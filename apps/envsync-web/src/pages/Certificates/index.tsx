@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner";
 
 import { api } from "@/api";
+import { PageShell } from "@/components/PageShell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -149,27 +150,27 @@ const Certificates = () => {
   }
 
   const hasCA = orgCA && !("error" in orgCA);
+  const certificateRows = certificates || [];
+  const activeCertificates = certificateRows.filter((cert) => cert.status === "active").length;
+  const revokedCertificates = certificateRows.filter((cert) => cert.status === "revoked").length;
+  const memberCertificates = certificateRows.filter((cert) => cert.cert_type !== "org_ca").length;
 
   return (
     <div className="animate-page-enter space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <div className="p-2 bg-violet-500/10 rounded-lg ring-1 ring-violet-500/20">
-            <ShieldCheck className="size-5 text-violet-400" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold text-gray-100 tracking-tight">Certificates</h1>
-            <p className="text-sm text-gray-400 mt-0.5">
-              PKI certificate management for your organization
-            </p>
-          </div>
-        </div>
-        <div className="flex gap-2">
+      <PageShell
+        title="Certificates"
+        description="Operate the organization CA and member certificate lifecycle from a clearer, trust-focused surface."
+        icon={ShieldCheck}
+        stats={[
+          { label: "Active", value: activeCertificates, hint: "Currently valid certificates", tone: activeCertificates > 0 ? "success" : "default" },
+          { label: "Revoked", value: revokedCertificates, hint: "Certificates taken out of service", tone: revokedCertificates > 0 ? "warning" : "default" },
+          { label: "Member Certs", value: memberCertificates, hint: "User-scoped certificates issued" },
+        ]}
+        actions={<div className="flex gap-2">
           {hasCA && (
             <Dialog open={isIssueOpen} onOpenChange={(open) => { setIsIssueOpen(open); if (!open) setIssuedCert(null); }}>
               <DialogTrigger asChild>
-                <Button className="bg-violet-500 hover:bg-violet-600">
+                <Button className="bg-violet-500 hover:bg-violet-600" data-testid="certificate-issue-button">
                   <Plus className="w-4 h-4 mr-2" /> Issue Certificate
                 </Button>
               </DialogTrigger>
@@ -295,8 +296,8 @@ const Certificates = () => {
               </DialogContent>
             </Dialog>
           )}
-        </div>
-      </div>
+        </div>}
+      >
 
       {/* CA Status Card */}
       <Card className="bg-card text-card-foreground bg-gradient-to-br from-gray-900 to-gray-950 border-gray-800/80 shadow-xl rounded-xl">
@@ -421,6 +422,7 @@ const Certificates = () => {
                               variant="ghost"
                               size="sm"
                               className="text-blue-400 hover:text-blue-300"
+                              data-testid="certificate-renew-button"
                               onClick={() => renewCert.mutate({ id: cert.id, revoke_previous: true })}
                               title="Renew"
                             >
@@ -432,6 +434,7 @@ const Certificates = () => {
                               variant="ghost"
                               size="sm"
                               className="text-cyan-400 hover:text-cyan-300"
+                              data-testid="certificate-rotate-button"
                               onClick={() => rotateCert.mutate({ id: cert.id, revoke_previous: true, reason: 4 })}
                               title="Rotate"
                             >
@@ -443,6 +446,7 @@ const Certificates = () => {
                               variant="ghost"
                               size="sm"
                               className="text-red-400 hover:text-red-300"
+                              data-testid="certificate-revoke-button"
                               onClick={() => {
                                 setRevokeSerial(cert.serial_hex);
                                 setIsRevokeOpen(true);
@@ -495,6 +499,7 @@ const Certificates = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </PageShell>
     </div>
   );
 };

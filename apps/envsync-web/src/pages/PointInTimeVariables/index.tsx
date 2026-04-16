@@ -1,5 +1,7 @@
 import { useParams, useSearchParams } from "react-router-dom";
 import { PointInTimeHeader } from "@/components/env-vars/PointInTimeHeader";
+import { sdk } from "@/api";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
   ArrowRight,
@@ -80,6 +82,15 @@ const PointInTime = () => {
   );
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(20);
+  const { data: users = [] } = useQuery({
+    queryKey: ["pit-users"],
+    queryFn: async () => sdk.users.getUsers(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const usersMap = useMemo(
+    () => new Map(users.map((entry) => [entry.id, entry])),
+    [users]
+  );
 
   // Get project and environment data
   const {
@@ -265,7 +276,13 @@ const PointInTime = () => {
   };
 
   const getUserDisplayName = (userId: string) => {
-    // Extract email or name from user_id
+    const matchingUser = usersMap.get(userId);
+    if (matchingUser?.full_name?.trim()) {
+      return matchingUser.full_name;
+    }
+    if (matchingUser?.email?.trim()) {
+      return matchingUser.email;
+    }
     if (userId.includes("@")) {
       return userId.split("@")[0];
     }

@@ -10,6 +10,7 @@ interface CachedSession {
 }
 
 const sessionCache = new Map<string, CachedSession>();
+const pendingSessionCreates = new Map<string, Promise<CachedSession>>();
 
 function hashScopes(scopes: string[]): string {
 	return scopes.slice().sort().join(",");
@@ -17,6 +18,49 @@ function hashScopes(scopes: string[]): string {
 
 function cacheKey(memberId: string, orgId: string, certSerial: string, scopes: string[]): string {
 	return `${memberId}:${orgId}:${certSerial}:${hashScopes(scopes)}`;
+}
+
+function isSessionNearExpiry(session: CachedSession) {
+	return session.expiresAt - Date.now() > 60_000;
+}
+
+function isActiveSessionLimitError(error: unknown) {
+	return error instanceof Error && error.message.includes("maximum number of active sessions");
+}
+
+async function createManagedSessionWithRecovery(
+	kms: KMSClient,
+	memberId: string,
+	orgId: string,
+	certSerial: string,
+	scopes: string[],
+) {
+	try {
+		return await kms.createSessionManaged({
+			memberId,
+			orgId,
+			certSerial,
+			scopes,
+		});
+	} catch (error) {
+		if (!isActiveSessionLimitError(error)) {
+			throw error;
+		}
+
+		const revokedCount = await kms.revokeMemberSessions(memberId, orgId);
+		infoLogs(
+			`Revoked ${revokedCount} stale vault sessions for member ${memberId} in org ${orgId} after hitting the active-session limit`,
+			LogTypes.LOGS,
+			"SessionManager",
+		);
+
+		return await kms.createSessionManaged({
+			memberId,
+			orgId,
+			certSerial,
+			scopes,
+		});
+	}
 }
 
 function getRequiredScopes(permissions: Awaited<ReturnType<typeof AuthorizationService.getUserOrgPermissions>>) {
@@ -73,40 +117,61 @@ export async function getVaultSessionToken(memberId: string, orgId: string): Pro
 
 	const key = cacheKey(memberId, orgId, cert.serial_hex, scopes);
 	const cached = sessionCache.get(key);
-	if (cached && cached.expiresAt - Date.now() > 60_000) {
+	if (cached && isSessionNearExpiry(cached)) {
 		return cached.token;
 	}
 
-	const kms = await KMSClient.getInstance();
-	const result = await kms.createSessionManaged({
-		memberId,
-		orgId,
-		certSerial: cert.serial_hex,
-		scopes,
-	});
-
-	const missingScopes = scopes.filter(scope => !result.scopes.includes(scope));
-	if (missingScopes.length > 0) {
-		throw new BusinessRuleError(
-			`Managed vault session missing required scopes: ${missingScopes.join(", ")}`,
-			403,
-			"VAULT_SESSION_SCOPE_INSUFFICIENT",
-		);
+	const pending = pendingSessionCreates.get(key);
+	if (pending) {
+		const session = await pending;
+		if (isSessionNearExpiry(session)) {
+			return session.token;
+		}
 	}
 
-	const expiresAt = result.expiresAt
-		? Number(result.expiresAt) * 1000
-		: Date.now() + 3600_000;
+	const kms = await KMSClient.getInstance();
+	const createPromise = (async () => {
+		const result = await createManagedSessionWithRecovery(
+			kms,
+			memberId,
+			orgId,
+			cert.serial_hex,
+			scopes,
+		);
 
-	sessionCache.set(key, { token: result.sessionToken, expiresAt });
+		const missingScopes = scopes.filter(scope => !result.scopes.includes(scope));
+		if (missingScopes.length > 0) {
+			throw new BusinessRuleError(
+				`Managed vault session missing required scopes: ${missingScopes.join(", ")}`,
+				403,
+				"VAULT_SESSION_SCOPE_INSUFFICIENT",
+			);
+		}
 
-	infoLogs(
-		`Vault session created for member ${memberId} in org ${orgId}`,
-		LogTypes.LOGS,
-		"SessionManager",
-	);
+		const expiresAt = result.expiresAt
+			? Number(result.expiresAt) * 1000
+			: Date.now() + 3600_000;
+		const session = { token: result.sessionToken, expiresAt };
 
-	return result.sessionToken;
+		sessionCache.set(key, session);
+
+		infoLogs(
+			`Vault session created for member ${memberId} in org ${orgId}`,
+			LogTypes.LOGS,
+			"SessionManager",
+		);
+
+		return session;
+	})();
+
+	pendingSessionCreates.set(key, createPromise);
+
+	try {
+		const session = await createPromise;
+		return session.token;
+	} finally {
+		pendingSessionCreates.delete(key);
+	}
 }
 
 /**
@@ -116,6 +181,11 @@ export function invalidateSessionToken(memberId: string, orgId: string): void {
 	for (const key of sessionCache.keys()) {
 		if (key.startsWith(`${memberId}:${orgId}:`)) {
 			sessionCache.delete(key);
+		}
+	}
+	for (const key of pendingSessionCreates.keys()) {
+		if (key.startsWith(`${memberId}:${orgId}:`)) {
+			pendingSessionCreates.delete(key);
 		}
 	}
 }

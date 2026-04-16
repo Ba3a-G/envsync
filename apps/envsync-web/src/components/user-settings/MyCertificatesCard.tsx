@@ -1,10 +1,14 @@
-import { Copy, Download, KeyRound, Loader2, ShieldCheck } from "lucide-react";
+import { useMemo, useState } from "react";
+import { AlertTriangle, Copy, Download, Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 import { api } from "@/api";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 function copyToClipboard(value: string, label: string) {
   navigator.clipboard.writeText(value);
@@ -21,8 +25,35 @@ function downloadText(filename: string, value: string) {
   URL.revokeObjectURL(url);
 }
 
+function getStatusTone(status?: string) {
+  return status?.toLowerCase() === "active"
+    ? "bg-emerald-500/10 text-emerald-200 ring-1 ring-emerald-500/20"
+    : "bg-white/[0.06] text-gray-200 ring-1 ring-white/10";
+}
+
+function getSerialPreview(serial?: string) {
+  if (!serial) return "Unavailable";
+  if (serial.length <= 18) return serial;
+  return `${serial.slice(0, 10)}...${serial.slice(-8)}`;
+}
+
 export const MyCertificatesCard = () => {
   const { data, isLoading, error } = api.certificates.getMyCertificateBundle();
+  const [isPrivateKeyVisible, setIsPrivateKeyVisible] = useState(false);
+
+  const bundleText = useMemo(() => {
+    if (!data) return "";
+
+    return [
+      "# EnvSync certificate bundle",
+      "",
+      data.root_ca_pem,
+      "",
+      data.member_certificate.cert_pem ?? "",
+      "",
+      data.member_certificate.key_pem,
+    ].join("\n");
+  }, [data]);
 
   return (
     <Card className="border-gray-800 bg-gray-900/70">
@@ -33,13 +64,8 @@ export const MyCertificatesCard = () => {
           </div>
           <div>
             <CardTitle className="text-base text-gray-100">My Certificates</CardTitle>
-            <p className="text-sm text-gray-400">
-              System-generated EnvSync certificates for managed vault and PKI flows.
-            </p>
+            <p className="text-sm text-gray-400">Managed certificate bundle.</p>
           </div>
-        </div>
-        <div className="rounded-lg border border-gray-800 bg-gray-950/70 px-3 py-2 text-sm text-gray-400">
-          These certificates are separate from the normal certificate manager and cannot be modified there.
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -50,68 +76,161 @@ export const MyCertificatesCard = () => {
           </div>
         ) : error || !data ? (
           <div className="rounded-lg border border-amber-700/40 bg-amber-950/30 px-3 py-2 text-sm text-amber-300">
-            Certificate bundle unavailable right now. Sign in again or ask an org admin to re-provision system certificates.
+            Certificate bundle unavailable right now.
           </div>
         ) : (
           <>
-            <div className="rounded-lg border border-gray-800 bg-gray-950/70 px-3 py-2 text-sm text-gray-300">
-              <div>Serial: {data.member_certificate.serial_hex}</div>
-              <div>Status: {data.member_certificate.status}</div>
-              <div>Role: {data.member_certificate.metadata?.role_name ?? "System member"}</div>
-              <div className="flex items-center gap-2 text-violet-300">
-                <KeyRound className="size-4" />
-                <span>System-generated certificate</span>
+            <div className="space-y-3 rounded-2xl border border-gray-800 bg-gray-950/70 p-4">
+              <div data-testid="my-certs-status-row" className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge className={cn("border-0 px-2.5 py-1 font-medium", getStatusTone(data.member_certificate.status))}>
+                    {data.member_certificate.status}
+                  </Badge>
+                  <Badge variant="secondary" className="bg-violet-500/10 px-2.5 py-1 text-violet-200">
+                    {data.member_certificate.metadata?.role_name ?? "System"}
+                  </Badge>
+                </div>
+                <div className="text-sm text-gray-400">{getSerialPreview(data.member_certificate.serial_hex)}</div>
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                <Button
+                  data-testid="my-certs-copy-bundle"
+                  variant="outline"
+                  className="justify-start border-gray-700 text-gray-200 hover:bg-gray-800"
+                  onClick={() => copyToClipboard(bundleText, "Certificate bundle")}
+                >
+                  <Copy className="mr-2 size-4" />
+                  Copy bundle
+                </Button>
+                <Button
+                  data-testid="my-certs-download-bundle"
+                  variant="outline"
+                  className="justify-start border-gray-700 text-gray-200 hover:bg-gray-800"
+                  onClick={() => downloadText("envsync-certificate-bundle.pem", bundleText)}
+                >
+                  <Download className="mr-2 size-4" />
+                  Download bundle
+                </Button>
+                <Button
+                  variant="outline"
+                  className="justify-start border-gray-700 text-gray-200 hover:bg-gray-800"
+                  onClick={() => copyToClipboard(data.member_certificate.cert_pem ?? "", "Member certificate")}
+                >
+                  <Copy className="mr-2 size-4" />
+                  Copy cert
+                </Button>
+                <Button
+                  variant="outline"
+                  className="justify-start border-gray-700 text-gray-200 hover:bg-gray-800"
+                  onClick={() => downloadText("envsync-root-ca.pem", data.root_ca_pem)}
+                >
+                  <Download className="mr-2 size-4" />
+                  Download CA
+                </Button>
+              </div>
+
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="size-4 text-amber-300" />
+                  <span>Private key stays hidden until revealed.</span>
+                </div>
               </div>
             </div>
 
-            {[
-              {
-                label: "Root CA PEM",
-                value: data.root_ca_pem,
-                filename: "envsync-root-ca.pem",
-              },
-              {
-                label: "Member Certificate PEM",
-                value: data.member_certificate.cert_pem ?? "",
-                filename: "envsync-member-cert.pem",
-              },
-              {
-                label: "Private Key PEM",
-                value: data.member_certificate.key_pem,
-                filename: "envsync-member-key.pem",
-              },
-            ].map((entry) => (
-              <div key={entry.label} className="space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-medium text-gray-200">{entry.label}</p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="border-gray-700 text-gray-300 hover:bg-gray-800"
-                      onClick={() => copyToClipboard(entry.value, entry.label)}
-                    >
-                      <Copy className="mr-2 size-3" />
-                      Copy
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="border-gray-700 text-gray-300 hover:bg-gray-800"
-                      onClick={() => downloadText(entry.filename, entry.value)}
-                    >
-                      <Download className="mr-2 size-3" />
-                      Download
-                    </Button>
-                  </div>
-                </div>
-                <Textarea
-                  readOnly
-                  value={entry.value}
-                  className="min-h-[120px] border-gray-800 bg-gray-950 font-mono text-xs text-gray-300"
-                />
-              </div>
-            ))}
+            <Accordion type="multiple" className="space-y-3">
+              {[
+                { label: "Root CA", value: data.root_ca_pem, filename: "envsync-root-ca.pem" },
+                { label: "Member Cert", value: data.member_certificate.cert_pem ?? "", filename: "envsync-member-cert.pem" },
+                { label: "Private Key", value: data.member_certificate.key_pem, filename: "envsync-member-key.pem", isSensitive: true },
+              ].map((entry) => {
+                const isHiddenSensitiveSection = entry.isSensitive && !isPrivateKeyVisible;
+
+                return (
+                  <AccordionItem
+                    key={entry.label}
+                    value={entry.label}
+                    data-testid={
+                      entry.label === "Root CA"
+                        ? "my-certs-section-root-ca"
+                        : entry.label === "Member Cert"
+                          ? "my-certs-section-member-cert"
+                          : "my-certs-section-private-key"
+                    }
+                    className={cn(
+                      "overflow-hidden rounded-2xl border bg-gray-950/70 px-4",
+                      entry.isSensitive ? "border-amber-500/20" : "border-gray-800"
+                    )}
+                  >
+                    <AccordionTrigger className="py-4 text-left hover:no-underline">
+                      <div className="flex min-w-0 items-center gap-2 pr-4">
+                        <p className="text-sm font-semibold text-gray-100">{entry.label}</p>
+                        {entry.isSensitive ? (
+                          <Badge className="bg-amber-500/10 text-amber-200 ring-1 ring-amber-500/20">Sensitive</Badge>
+                        ) : null}
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="space-y-3">
+                      <div className="flex flex-wrap gap-2">
+                        {entry.isSensitive ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="border-amber-500/30 text-amber-100 hover:bg-amber-500/10"
+                            onClick={() => setIsPrivateKeyVisible((visible) => !visible)}
+                          >
+                            {isPrivateKeyVisible ? (
+                              <>
+                                <EyeOff className="mr-2 size-3.5" />
+                                Hide
+                              </>
+                            ) : (
+                              <>
+                                <Eye className="mr-2 size-3.5" />
+                                Reveal
+                              </>
+                            )}
+                          </Button>
+                        ) : null}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="border-gray-700 text-gray-300 hover:bg-gray-800"
+                          onClick={() => copyToClipboard(entry.value, entry.label)}
+                        >
+                          <Copy className="mr-2 size-3" />
+                          Copy
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="border-gray-700 text-gray-300 hover:bg-gray-800"
+                          onClick={() => downloadText(entry.filename, entry.value)}
+                        >
+                          <Download className="mr-2 size-3" />
+                          Download
+                        </Button>
+                      </div>
+
+                      {isHiddenSensitiveSection ? (
+                        <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-3 text-sm text-amber-100">
+                          Reveal on trusted devices only.
+                        </div>
+                      ) : (
+                        <Textarea
+                          readOnly
+                          value={entry.value}
+                          className={cn(
+                            "min-h-[140px] font-mono text-xs text-gray-300",
+                            entry.isSensitive ? "border-amber-500/20 bg-black/80" : "border-gray-800 bg-gray-950"
+                          )}
+                        />
+                      )}
+                    </AccordionContent>
+                  </AccordionItem>
+                );
+              })}
+            </Accordion>
           </>
         )}
       </CardContent>

@@ -140,11 +140,10 @@ export class EnvTypeService {
 	) => {
 		const db = await DB.getInstance();
 
-		// Fetch env_type to get org_id for invalidation
 		const envType = await orNotFound(
 			db
 				.selectFrom("env_type")
-				.select("org_id")
+				.select(["id", "org_id"])
 				.where("id", "=", id)
 				.executeTakeFirstOrThrow(),
 			"EnvType",
@@ -160,7 +159,34 @@ export class EnvTypeService {
 			.where("id", "=", id)
 			.execute();
 
-		await invalidateCache(CacheKeys.envType(id), CacheKeys.envTypesByOrg(envType.org_id));
+		const updatedEnvType = await orNotFound(
+			db
+				.selectFrom("env_type")
+				.select([
+					"id",
+					"name",
+					"org_id",
+					"app_id",
+					"color",
+					"is_default",
+					"is_protected",
+					"created_at",
+					"updated_at",
+				])
+				.where("id", "=", envType.id)
+				.executeTakeFirstOrThrow(),
+			"EnvType",
+			id,
+		);
+
+		await invalidateCache(
+			CacheKeys.envType(id),
+			CacheKeys.envTypesByOrg(envType.org_id),
+			CacheKeys.app(updatedEnvType.app_id),
+			CacheKeys.appsByOrg(envType.org_id),
+		);
+
+		return updatedEnvType;
 	};
 
 	public static deleteEnvType = async (id: string) => {

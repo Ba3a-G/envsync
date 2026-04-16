@@ -16,7 +16,7 @@ test.describe("route surface", () => {
 			{ path: `/applications/${seededApp!.id}/access`, heading: "Project Access" },
 			{ path: `/applications/pit/${seededApp!.id}`, heading: /Point/i },
 			{ path: "/roles", heading: "Roles" },
-			{ path: "/users", heading: "Team" },
+			{ path: "/users", heading: "Users" },
 			{ path: "/teams", heading: "Teams" },
 			{ path: "/change-requests", heading: "Change Requests" },
 			{ path: "/settings", heading: "Account Settings" },

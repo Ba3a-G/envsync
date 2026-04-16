@@ -56,14 +56,16 @@ export class EnvTypeController {
 
 	public static readonly updateEnvType = async (c: Context) => {
 		const org_id = c.get("org_id");
+		const routeId = c.req.param("id");
 		const { id, name, color, is_default, is_protected } = await c.req.json();
+		const envTypeId = routeId || id;
 
-		if (!id || !name) {
+		if (!envTypeId || !name) {
 			return c.json({ error: "ID and Name are required." }, 400);
 		}
 
 		// check existance and ownership
-		const envType = await EnvTypeService.getEnvType(id);
+		const envType = await EnvTypeService.getEnvType(envTypeId);
 
 		if (!envType) {
 			return c.json({ error: "Env type not found." }, 404);
@@ -72,21 +74,26 @@ export class EnvTypeController {
 			return c.json({ error: "You do not have permission to update this env type." }, 403);
 		}
 
-		await EnvTypeService.updateEnvType(id, { name, color, is_default, is_protected });
+		const updatedEnvType = await EnvTypeService.updateEnvType(envTypeId, {
+			name,
+			color,
+			is_default,
+			is_protected,
+		});
 
 		// Log the update of the environment type
 		await AuditLogService.notifyAuditSystem({
 			action: "env_type_updated",
 			org_id,
 			user_id: c.get("user_id"),
-			message: `Environment type ${name} updated.`,
+			message: `Environment type ${updatedEnvType.name} updated.`,
 			details: {
-				env_type_id: id,
-				name,
+				env_type_id: envTypeId,
+				name: updatedEnvType.name,
 			},
 		});
 
-		return c.json({ message: "Env type updated successfully." });
+		return c.json(updatedEnvType);
 	};
 
 	public static readonly deleteEnvType = async (c: Context) => {

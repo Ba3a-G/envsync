@@ -10,14 +10,26 @@ export interface IAuthContext {
   authError: string | null;
 }
 
-export const AuthContext = createContext<IAuthContext | null>(null);
+const FALLBACK_AUTH_CONTEXT: IAuthContext = {
+  user: null,
+  isLoading: false,
+  isAuthenticated: false,
+  token: null,
+  allowedScopes: [],
+  authError: "Auth context unavailable",
+};
+
+let hasWarnedMissingProvider = false;
+
+export const AuthContext = createContext<IAuthContext>(FALLBACK_AUTH_CONTEXT);
 export const useAuthContext = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error(
-      "useAuthContext must be used within an AuthContextProvider"
-    );
+
+  if (context === FALLBACK_AUTH_CONTEXT && !hasWarnedMissingProvider) {
+    hasWarnedMissingProvider = true;
+    console.warn("useAuthContext was called without an AuthContextProvider");
   }
+
   return context;
 };
 

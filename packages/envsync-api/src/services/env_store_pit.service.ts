@@ -145,6 +145,60 @@ export class EnvStorePiTService {
 		return pits;
 	};
 
+	public static getCurrentEnvState = async ({
+		org_id,
+		app_id,
+		env_type_id,
+	}: {
+		org_id: string;
+		app_id: string;
+		env_type_id: string;
+	}) => {
+		const db = await DB.getInstance();
+
+		const allChanges = await db
+			.selectFrom("env_store_pit")
+			.innerJoin(
+				"env_store_pit_change_request",
+				"env_store_pit.id",
+				"env_store_pit_change_request.env_store_pit_id",
+			)
+			.select([
+				"env_store_pit_change_request.key",
+				"env_store_pit_change_request.value",
+				"env_store_pit_change_request.operation",
+				"env_store_pit.created_at",
+			])
+			.where("env_store_pit.org_id", "=", org_id)
+			.where("env_store_pit.app_id", "=", app_id)
+			.where("env_store_pit.env_type_id", "=", env_type_id)
+			.orderBy("env_store_pit.created_at", "asc")
+			.orderBy("env_store_pit_change_request.created_at", "asc")
+			.execute();
+
+		const envState = new Map<string, { key: string; value: string; last_updated: Date }>();
+
+		for (const change of allChanges) {
+			const operation = change.operation || "UPDATE";
+
+			switch (operation) {
+				case "CREATE":
+				case "UPDATE":
+					envState.set(change.key, {
+						key: change.key,
+						value: change.value,
+						last_updated: change.created_at,
+					});
+					break;
+				case "DELETE":
+					envState.delete(change.key);
+					break;
+			}
+		}
+
+		return Array.from(envState.values());
+	};
+
 	// Enhanced function to get environment state at a specific point in time
 	//
 	// TODO(perf #56): This method replays ALL change-request rows from epoch up to

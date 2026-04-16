@@ -115,7 +115,7 @@ describe("GET /api/env_type/:id", () => {
 });
 
 describe("PATCH /api/env_type/:id", () => {
-	test("updates env type name and color", async () => {
+	test("updates env type name, color, and protection state", async () => {
 		const createRes = await testRequest("/api/env_type", {
 			method: "POST",
 			token: seed.masterUser.token,
@@ -136,12 +136,21 @@ describe("PATCH /api/env_type/:id", () => {
 				id,
 				name: "development",
 				color: "#00FFFF",
+				is_protected: true,
 			},
 		});
 		expect(res.status).toBe(200);
 
-		const body = await res.json<{ message: string }>();
-		expect(body.message).toBe("Env type updated successfully.");
+		const body = await res.json<{
+			id: string;
+			name: string;
+			color: string;
+			is_protected: boolean;
+		}>();
+		expect(body.id).toBe(id);
+		expect(body.name).toBe("development");
+		expect(body.color).toBe("#00FFFF");
+		expect(body.is_protected).toBe(true);
 	});
 });
 

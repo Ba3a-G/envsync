@@ -1,14 +1,15 @@
 import { expect, test } from "../../fixtures/test";
 import { waitForTrackedResponse } from "../../helpers/network";
+import { switchUsersTab } from "../../helpers/project-flows";
 
 test.describe("feature: users and invitations", () => {
 	test("invites a member and manages pending invitation", async ({ page, makeName }) => {
 		const email = `${makeName("ui-invite").toLowerCase()}@envsync.local`;
 
 		await page.goto("/users", { waitUntil: "domcontentloaded" });
-		await expect(page.getByRole("button", { name: "Invite Member" })).toBeVisible();
+		await expect(page.getByTestId("users-invite-member")).toBeVisible();
 
-		await page.getByRole("button", { name: "Invite Member" }).click();
+		await page.getByTestId("users-invite-member").click();
 		const inviteDialog = page.getByRole("dialog");
 		await inviteDialog.locator("#invite-email").fill(email);
 		await inviteDialog.getByRole("combobox").click();
@@ -31,9 +32,8 @@ test.describe("feature: users and invitations", () => {
 			await page.keyboard.press("Escape");
 		}
 
-		await page.getByRole("button", { name: "Manage Invitations" }).click();
-		const modal = page.getByRole("dialog");
-		await expect(modal.getByText("Manage Invitations")).toBeVisible();
-		await expect(modal.getByText(email).first()).toBeVisible();
+		await switchUsersTab(page, "invitations");
+		await expect(page.getByTestId("users-invitations-panel")).toBeVisible();
+		await expect(page.getByText(email).first()).toBeVisible();
 	});
 });

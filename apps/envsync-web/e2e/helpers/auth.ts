@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync } from "node:fs";
-import type { Browser, BrowserContext, Page } from "playwright";
+import type { Browser, BrowserContext, Cookie, Page } from "playwright";
 import { chromium } from "playwright";
 
 import { getStorageStatePath, getUiHarnessConfig, type RoleCredential, type UiRole, VIEWPORT } from "./config";
@@ -7,6 +7,18 @@ import { getStorageStatePath, getUiHarnessConfig, type RoleCredential, type UiRo
 export interface AuthCredential {
 	email: string;
 	password: string;
+}
+
+interface SessionStatus {
+	authenticated: boolean;
+	authStatus: number | null;
+	hasAccessToken: boolean;
+	hasCsrfToken: boolean;
+	cookieNames: string[];
+	currentUrl: string;
+	onAppOrigin: boolean;
+	onAuthOrigin: boolean;
+	onCallbackUrl: boolean;
 }
 
 function ensureParentDir(filePath: string) {
@@ -47,26 +59,68 @@ export async function waitForUiServices() {
 	await waitForService(config.baseUrl, "Web app");
 }
 
-export async function isAuthenticated(page: Page) {
+export function getSessionCookieInspectionUrls(
+	baseUrl = getUiHarnessConfig().baseUrl,
+	apiBaseUrl = getUiHarnessConfig().apiBaseUrl,
+) {
+	return [baseUrl, `${apiBaseUrl}/api/auth/me`];
+}
+
+function cookieDomainMatches(cookieDomain: string, hostname: string) {
+	const normalizedCookieDomain = cookieDomain.replace(/^\./, "");
+	return hostname === normalizedCookieDomain || hostname.endsWith(`.${normalizedCookieDomain}`);
+}
+
+export function hasAccessTokenCookie(
+	cookies: Array<Pick<Cookie, "name" | "domain" | "path">>,
+	apiBaseUrl = getUiHarnessConfig().apiBaseUrl,
+) {
+	const apiHostname = new URL(apiBaseUrl).hostname;
+	return cookies.some(cookie =>
+		cookie.name === "access_token"
+		&& cookieDomainMatches(cookie.domain, apiHostname)
+		&& cookie.path.startsWith("/api"),
+	);
+}
+
+export function hasCsrfCookie(
+	cookies: Array<Pick<Cookie, "name" | "domain" | "path">>,
+	baseUrl = getUiHarnessConfig().baseUrl,
+) {
+	const baseHostname = new URL(baseUrl).hostname;
+	return cookies.some(cookie =>
+		cookie.name === "envsync_csrf"
+		&& cookieDomainMatches(cookie.domain, baseHostname),
+	);
+}
+
+async function getSessionCookies(context: BrowserContext) {
+	const config = getUiHarnessConfig();
+	return await context.cookies(getSessionCookieInspectionUrls(config.baseUrl, config.apiBaseUrl));
+}
+
+async function getAuthStatus(page: Page) {
 	const { apiBaseUrl } = getUiHarnessConfig();
 	try {
-		return await page.evaluate(async currentApiBaseUrl => {
-			try {
-				const response = await fetch(`${currentApiBaseUrl}/api/auth/me`, {
-					credentials: "include",
-				});
-				return response.ok;
-			} catch {
-				return false;
-			}
-		}, apiBaseUrl);
+		const response = await page.context().request.get(`${apiBaseUrl}/api/auth/me`, {
+			failOnStatusCode: false,
+		});
+		return response.status();
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
-		if (message.includes("Execution context was destroyed") || message.includes("Target page, context or browser has been closed")) {
-			return false;
+		if (
+			message.includes("Execution context was destroyed")
+			|| message.includes("Target page, context or browser has been closed")
+			|| message.includes("net::ERR_ABORTED")
+		) {
+			return null;
 		}
 		throw error;
 	}
+}
+
+export async function isAuthenticated(page: Page) {
+	return (await getAuthStatus(page)) === 200;
 }
 
 function isOnAuthOrigin(page: Page) {
@@ -98,24 +152,66 @@ function isOnCallbackUrl(page: Page) {
 
 async function hasRequiredSessionCookies(context: BrowserContext) {
 	const config = getUiHarnessConfig();
-	const cookies = await context.cookies([config.baseUrl, config.apiBaseUrl]);
-	const hasAccessToken = cookies.some(cookie => cookie.name === "access_token");
-	const hasCsrfToken = cookies.some(cookie => cookie.name === "envsync_csrf");
-	return hasAccessToken && hasCsrfToken;
+	const cookies = await getSessionCookies(context);
+	return hasAccessTokenCookie(cookies, config.apiBaseUrl) && hasCsrfCookie(cookies, config.baseUrl);
+}
+
+function getCurrentUrl(page: Page) {
+	try {
+		return page.url();
+	} catch {
+		return "";
+	}
+}
+
+async function getSessionStatus(page: Page): Promise<SessionStatus> {
+	const config = getUiHarnessConfig();
+	const cookies = await getSessionCookies(page.context());
+	const authStatus = await getAuthStatus(page);
+	const currentUrl = getCurrentUrl(page);
+	const hasAccessToken = hasAccessTokenCookie(cookies, config.apiBaseUrl);
+	const hasCsrfToken = hasCsrfCookie(cookies, config.baseUrl);
+
+	return {
+		authenticated: authStatus === 200,
+		authStatus,
+		hasAccessToken,
+		hasCsrfToken,
+		cookieNames: [...new Set(cookies.map(cookie => cookie.name))].sort(),
+		currentUrl,
+		onAppOrigin: Boolean(currentUrl) && isOnOrigin(currentUrl, config.baseUrl),
+		onAuthOrigin: isOnAuthOrigin(page),
+		onCallbackUrl: isOnCallbackUrl(page),
+	};
+}
+
+function formatSessionStatus(status: SessionStatus) {
+	return [
+		`url=${status.currentUrl || "(blank)"}`,
+		`access_token=${status.hasAccessToken}`,
+		`envsync_csrf=${status.hasCsrfToken}`,
+		`auth_status=${status.authStatus ?? "unavailable"}`,
+		`on_app_origin=${status.onAppOrigin}`,
+		`on_auth_origin=${status.onAuthOrigin}`,
+		`on_callback=${status.onCallbackUrl}`,
+		`cookies=${status.cookieNames.join(",") || "(none)"}`,
+	].join(" ");
 }
 
 async function isSessionReady(page: Page) {
-	return await isAuthenticated(page) && await hasRequiredSessionCookies(page.context());
+	const status = await getSessionStatus(page);
+	return status.authenticated && status.hasAccessToken && status.hasCsrfToken;
 }
 
 async function settleAuthenticatedPage(page: Page) {
 	const config = getUiHarnessConfig();
 	const deadline = Date.now() + 15_000;
+	let lastStatus = await getSessionStatus(page);
 
 	while (Date.now() < deadline) {
-		if (await isSessionReady(page)) {
-			const currentUrl = page.url();
-			if (currentUrl && isOnOrigin(currentUrl, config.baseUrl) && !isOnCallbackUrl(page)) {
+		lastStatus = await getSessionStatus(page);
+		if (lastStatus.authenticated && lastStatus.hasAccessToken && lastStatus.hasCsrfToken) {
+			if (lastStatus.onAppOrigin && !lastStatus.onCallbackUrl) {
 				return;
 			}
 
@@ -128,16 +224,25 @@ async function settleAuthenticatedPage(page: Page) {
 
 		await page.waitForTimeout(500);
 	}
+
+	throw new Error(`Authenticated session did not settle on the app origin within 15000ms (${formatSessionStatus(lastStatus)})`);
 }
 
 async function recoverSessionIntoApp(page: Page) {
 	const config = getUiHarnessConfig();
-	if (!await hasRequiredSessionCookies(page.context())) {
+	const status = await getSessionStatus(page);
+	if (!status.hasAccessToken || !status.hasCsrfToken) {
 		return false;
 	}
 
 	try {
 		await page.goto(config.baseUrl, { waitUntil: "domcontentloaded" });
+	} catch {
+		return false;
+	}
+
+	try {
+		await settleAuthenticatedPage(page);
 	} catch {
 		return false;
 	}
@@ -165,6 +270,10 @@ async function startWebLogin(page: Page) {
 
 async function startLocalDevSession(page: Page, credential: AuthCredential) {
 	const config = getUiHarnessConfig();
+	let navigationError = "";
+	let responseStatus: number | null = null;
+	let responseBody = "";
+
 	try {
 		const params = new URLSearchParams({
 			email: credential.email,
@@ -173,28 +282,36 @@ async function startLocalDevSession(page: Page, credential: AuthCredential) {
 		const response = await page.goto(`${config.apiBaseUrl}/api/access/web/dev-session?${params.toString()}`, {
 			waitUntil: "commit",
 		});
-		if (!response) {
-			console.warn("[ui-login] dev session bootstrap returned no navigation response");
-			return false;
+		if (response) {
+			responseStatus = response.status();
+			if (!response.ok()) {
+				responseBody = await response.text().catch(() => "");
+			}
 		}
-		const result = {
-			ok: response.ok(),
-			status: response.status(),
-			body: response.ok() ? "" : await response.text().catch(() => ""),
-		};
-		if (!result.ok) {
-			console.warn(`[ui-login] dev session bootstrap failed (${result.status}): ${result.body}`);
-		}
-		return result.ok;
 	} catch (error) {
-		const message = error instanceof Error ? error.message : String(error);
-		if (await hasRequiredSessionCookies(page.context())) {
-			console.warn(`[ui-login] dev session bootstrap navigation aborted after cookies were set: ${message}`);
-			return true;
-		}
-		console.warn(`[ui-login] dev session bootstrap threw: ${message}`);
-		return false;
+		navigationError = error instanceof Error ? error.message : String(error);
 	}
+
+	const status = await getSessionStatus(page);
+	const diagnostic = [
+		`status=${responseStatus ?? "null"}`,
+		`url=${status.currentUrl || "(blank)"}`,
+		`cookies=${status.cookieNames.join(",") || "(none)"}`,
+		`auth_status=${status.authStatus ?? "unavailable"}`,
+		navigationError ? `error=${navigationError}` : "",
+		responseBody ? `body=${responseBody}` : "",
+	].filter(Boolean).join(" ");
+
+	if (status.authenticated && status.hasAccessToken && status.hasCsrfToken) {
+		console.warn(`[ui-login] dev session bootstrap recovered ${diagnostic}`);
+		return true;
+	}
+
+	if (responseStatus !== null || navigationError || responseBody) {
+		console.warn(`[ui-login] dev session bootstrap incomplete ${diagnostic}`);
+	}
+
+	return false;
 }
 
 async function attemptLocalAutologin(page: Page, role: UiRole) {
@@ -241,11 +358,27 @@ async function attemptLocalAutologinWithCredential(page: Page, credential: AuthC
 	return true;
 }
 
-async function saveStorageState(context: BrowserContext, role: UiRole) {
-	const storageStatePath = getStorageStatePath(role);
+async function saveStorageState(context: BrowserContext, storageKey: string) {
+	const storageStatePath = getStorageStatePath(storageKey);
 	ensureParentDir(storageStatePath);
 	await context.storageState({ path: storageStatePath });
 	return storageStatePath;
+}
+
+function buildAuthTimeoutError(credential: AuthCredential, timeoutMs: number, status: SessionStatus) {
+	return new Error(`Timed out waiting for login for ${credential.email} after ${timeoutMs}ms (${formatSessionStatus(status)})`);
+}
+
+async function finalizeAuthenticatedSession(page: Page, storageKey: string) {
+	const status = await getSessionStatus(page);
+	if (!status.authenticated || !status.hasAccessToken || !status.hasCsrfToken) {
+		return false;
+	}
+
+	await settleAuthenticatedPage(page);
+	await page.goto(getUiHarnessConfig().baseUrl, { waitUntil: "domcontentloaded" });
+	await saveStorageState(page.context(), storageKey);
+	return true;
 }
 
 async function ensureFreshCredentialContext(
@@ -258,37 +391,40 @@ async function ensureFreshCredentialContext(
 	const page = await context.newPage();
 	page.setDefaultTimeout(config.actionTimeoutMs);
 	await page.goto(config.baseUrl, { waitUntil: "domcontentloaded" });
-	let lastLoginStartAt = 0;
+	if (await finalizeAuthenticatedSession(page, storageKey)) {
+		return { context, page };
+	}
+
+	await startLocalDevSession(page, credential);
+	if (await finalizeAuthenticatedSession(page, storageKey)) {
+		return { context, page };
+	}
+
+	await startWebLogin(page);
 
 	const startedAt = Date.now();
+	let lastStatus = await getSessionStatus(page);
 	while (Date.now() - startedAt < config.loginTimeoutMs) {
-		if (await isSessionReady(page)) {
-			await settleAuthenticatedPage(page);
-			await page.goto(config.baseUrl, { waitUntil: "domcontentloaded" });
-			await saveStorageState(context, storageKey);
+		if (await finalizeAuthenticatedSession(page, storageKey)) {
 			return { context, page };
 		}
 
-		if (await recoverSessionIntoApp(page)) {
-			await saveStorageState(context, storageKey);
+		lastStatus = await getSessionStatus(page);
+		if (lastStatus.onAuthOrigin) {
+			await attemptLocalAutologinWithCredential(page, credential);
+		} else if (lastStatus.hasAccessToken && lastStatus.hasCsrfToken) {
+			await recoverSessionIntoApp(page);
+		}
+
+		lastStatus = await getSessionStatus(page);
+		if (lastStatus.authenticated && lastStatus.hasAccessToken && lastStatus.hasCsrfToken && await finalizeAuthenticatedSession(page, storageKey)) {
 			return { context, page };
 		}
 
-		if (!isOnAuthOrigin(page) && Date.now() - lastLoginStartAt > 10_000) {
-			if (await startLocalDevSession(page, credential)) {
-				await settleAuthenticatedPage(page);
-				await page.goto(config.baseUrl, { waitUntil: "domcontentloaded" });
-			} else {
-				await startWebLogin(page);
-			}
-			lastLoginStartAt = Date.now();
-		}
-
-		await attemptLocalAutologinWithCredential(page, credential);
 		await page.waitForTimeout(1_000);
 	}
 
-	throw new Error(`Timed out waiting for login for ${credential.email} after ${config.loginTimeoutMs}ms`);
+	throw buildAuthTimeoutError(credential, config.loginTimeoutMs, lastStatus);
 }
 
 async function ensureFreshRoleContext(browser: Browser, role: UiRole) {
@@ -368,39 +504,41 @@ export async function ensureAuthenticatedPageWithCredential(
 	const config = getUiHarnessConfig();
 	page.setDefaultTimeout(config.actionTimeoutMs);
 	await page.goto(config.baseUrl, { waitUntil: "domcontentloaded" });
-	if (await isAuthenticated(page)) {
+	if (await finalizeAuthenticatedSession(page, storageKey)) {
 		return;
 	}
 
-	let lastLoginStartAt = 0;
 	const startedAt = Date.now();
+	let lastStatus = await getSessionStatus(page);
+
+	await startLocalDevSession(page, credential);
+	if (await finalizeAuthenticatedSession(page, storageKey)) {
+		return;
+	}
+
+	await startWebLogin(page);
+
 	while (Date.now() - startedAt < config.loginTimeoutMs) {
-		if (await isSessionReady(page)) {
-			await settleAuthenticatedPage(page);
-			await saveStorageState(page.context(), storageKey);
+		if (await finalizeAuthenticatedSession(page, storageKey)) {
 			return;
 		}
 
-		if (await recoverSessionIntoApp(page)) {
-			await saveStorageState(page.context(), storageKey);
+		lastStatus = await getSessionStatus(page);
+		if (lastStatus.onAuthOrigin) {
+			await attemptLocalAutologinWithCredential(page, credential);
+		} else if (lastStatus.hasAccessToken && lastStatus.hasCsrfToken) {
+			await recoverSessionIntoApp(page);
+		}
+
+		lastStatus = await getSessionStatus(page);
+		if (lastStatus.authenticated && lastStatus.hasAccessToken && lastStatus.hasCsrfToken && await finalizeAuthenticatedSession(page, storageKey)) {
 			return;
 		}
 
-		if (!isOnAuthOrigin(page) && Date.now() - lastLoginStartAt > 10_000) {
-			if (await startLocalDevSession(page, credential)) {
-				await settleAuthenticatedPage(page);
-				await page.goto(config.baseUrl, { waitUntil: "domcontentloaded" });
-			} else {
-				await startWebLogin(page);
-			}
-			lastLoginStartAt = Date.now();
-		}
-
-		await attemptLocalAutologinWithCredential(page, credential);
 		await page.waitForTimeout(1_000);
 	}
 
-	throw new Error("Authenticated Playwright session is missing and local auto-login could not restore it.");
+	throw buildAuthTimeoutError(credential, config.loginTimeoutMs, lastStatus);
 }
 
 export function getSeededCredential(role: UiRole): RoleCredential {

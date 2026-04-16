@@ -11,6 +11,11 @@
   "verifyEmail": false,
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
+  "accessTokenLifespan": 3600,
+  "ssoSessionIdleTimeout": 604800,
+  "ssoSessionMaxLifespan": 604800,
+  "clientSessionIdleTimeout": 604800,
+  "clientSessionMaxLifespan": 604800,
   "clients": [
     {
       "clientId": "envsync-web",

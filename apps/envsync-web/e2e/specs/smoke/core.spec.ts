@@ -15,6 +15,7 @@ test.describe("UI smoke", () => {
 		await page.goto("/dashboard", { waitUntil: "domcontentloaded" });
 		await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
 		await expect(page.getByText("Quick Actions")).toBeVisible();
+		await expect(page.getByTestId("dashboard-stat-config-items")).toBeVisible();
 
 		const projectName = makeName("UI_SMOKE_APP");
 		const { appId } = await createProject(page, projectName);
@@ -38,6 +39,7 @@ test.describe("UI smoke", () => {
 
 		await page.goto("/settings", { waitUntil: "domcontentloaded" });
 		await expect(page.getByRole("heading", { name: "Account Settings" }).first()).toBeVisible();
+		await expect(page.getByTestId("my-certs-status-row")).toBeVisible();
 
 		await page.goto("/organisation", { waitUntil: "domcontentloaded" });
 		await expect(page.getByText("Organization Settings").or(page.getByText("Organisation Settings"))).toBeVisible();

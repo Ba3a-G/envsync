@@ -29,6 +29,15 @@ export const useProjectEnvironments = (appId?: string) => {
   const { isLoading: isAuthLoading, isAuthenticated } = useAuthContext();
   const queryClient = useQueryClient();
   const authEnabled = !isAuthLoading && isAuthenticated;
+  const refetchProjectEnvironments = async () => {
+    await queryClient.invalidateQueries({
+      queryKey: ["project-environments", appId],
+    });
+    await queryClient.refetchQueries({
+      queryKey: ["project-environments", appId],
+      type: "active",
+    });
+  };
 
   const {
     data: projectData,
@@ -133,10 +142,8 @@ export const useProjectEnvironments = (appId?: string) => {
         app_id: appId,
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["project-environments", appId],
-      });
+    onSuccess: async () => {
+      await refetchProjectEnvironments();
       toast.success("Variable created successfully");
     },
     onError: (error) => {
@@ -155,10 +162,8 @@ export const useProjectEnvironments = (appId?: string) => {
         app_id: appId,
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["project-environments", appId],
-      });
+    onSuccess: async () => {
+      await refetchProjectEnvironments();
       toast.success("Variable updated successfully");
     },
     onError: (error) => {
@@ -184,10 +189,8 @@ export const useProjectEnvironments = (appId?: string) => {
         key,
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["project-environments", appId],
-      });
+    onSuccess: async () => {
+      await refetchProjectEnvironments();
       toast.success("Variable deleted successfully");
     },
     onError: (error) => {
@@ -209,10 +212,8 @@ export const useProjectEnvironments = (appId?: string) => {
         })),
       });
     },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ["project-environments", appId],
-      });
+    onSuccess: async (_, variables) => {
+      await refetchProjectEnvironments();
       toast.success(
         `Successfully imported ${variables.variables.length} variables`
       );
@@ -234,10 +235,8 @@ export const useProjectEnvironments = (appId?: string) => {
         app_id: appId,
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["project-environments", appId],
-      });
+    onSuccess: async () => {
+      await refetchProjectEnvironments();
       toast.success("Secret created successfully");
     },
     onError: (error) => {
@@ -256,10 +255,8 @@ export const useProjectEnvironments = (appId?: string) => {
         app_id: appId,
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["project-environments", appId],
-      });
+    onSuccess: async () => {
+      await refetchProjectEnvironments();
       toast.success("Secret updated successfully");
     },
     onError: (error) => {
@@ -285,10 +282,8 @@ export const useProjectEnvironments = (appId?: string) => {
         key,
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["project-environments", appId],
-      });
+    onSuccess: async () => {
+      await refetchProjectEnvironments();
       toast.success("Secret deleted successfully");
     },
     onError: (error) => {
@@ -310,10 +305,8 @@ export const useProjectEnvironments = (appId?: string) => {
         })),
       });
     },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: ["project-environments", appId],
-      });
+    onSuccess: async (_, variables) => {
+      await refetchProjectEnvironments();
       toast.success(
         `Successfully imported ${variables.variables.length} secrets`
       );

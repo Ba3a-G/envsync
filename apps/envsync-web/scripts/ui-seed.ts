@@ -5,6 +5,8 @@ import { getUiHarnessConfig, type UiRole } from "../e2e/helpers/config";
 const repoRoot = path.resolve(import.meta.dir, "..", "..", "..");
 const apiCliPath = path.resolve(repoRoot, "packages/envsync-api/scripts/cli.ts");
 const roleOrder: UiRole[] = ["master", "admin", "editor", "viewer"];
+const seededOrgSlug = process.env.ENVSYNC_UI_ORG_SLUG ?? `envsync-ui-${Date.now()}`;
+const seededOrgName = process.env.ENVSYNC_UI_ORG_NAME ?? `EnvSync UI ${seededOrgSlug.slice("envsync-ui-".length)}`;
 
 function runSeedCommand(args: string[]) {
 	const proc = Bun.spawnSync({
@@ -27,6 +29,10 @@ for (const role of roleOrder) {
 		credential.fullName,
 		"--role",
 		credential.seedRole,
+		"--org-slug",
+		seededOrgSlug,
+		"--org-name",
+		seededOrgName,
 	];
 	if (role === "master") {
 		args.push("--seed");

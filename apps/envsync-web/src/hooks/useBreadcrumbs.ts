@@ -15,7 +15,7 @@ const ROUTE_LABELS: Record<string, string> = {
   "manage-environments": "Environments",
   pit: "Point-in-Time",
   roles: "Roles",
-  users: "Team",
+  users: "Users",
   settings: "Account",
   organisation: "Organisation",
   audit: "Activity",

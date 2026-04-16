@@ -38,22 +38,30 @@ export const Sidebar = ({ expanded, onToggle }: SidebarProps) => {
   return (
     <div
       className={cn(
-        "h-full bg-gradient-to-b from-gray-900 via-gray-900 to-gray-950 border-r border-gray-800/50 flex flex-col transition-all duration-300 ease-in-out relative overflow-hidden",
+        "relative flex h-full flex-col overflow-hidden border-r border-white/10 bg-gradient-to-b from-[#0b1017] via-[#0d1219] to-[#090d13] transition-all duration-300 ease-in-out",
         expanded ? "w-64" : "w-16"
       )}
     >
-      {/* Top accent glow */}
-      <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-violet-500/5 to-transparent pointer-events-none" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-violet-500/10 via-sky-500/5 to-transparent" />
 
-      {/* Logo area */}
-      <div className="px-4 py-5 flex-shrink-0 border-b border-gray-800/50">
+      <div className="flex-shrink-0 border-b border-white/10 px-4 py-5">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <img src="/EnvSync.svg" alt="EnvSync" className="size-10" />
+          <div className={cn("flex items-center", expanded ? "gap-3" : "justify-center")}>
+            <div className="flex size-10 items-center justify-center rounded-2xl border border-violet-500/20 bg-violet-500/10 shadow-lg shadow-violet-500/10">
+              <img src="/EnvSync.svg" alt="EnvSync" className="size-8" />
+            </div>
+            {expanded && (
+              <div className="min-w-0">
+                <p className="text-sm font-semibold tracking-wide text-gray-100">EnvSync</p>
+                <p className="text-[11px] uppercase tracking-[0.22em] text-gray-500">
+                  Operator Console
+                </p>
+              </div>
+            )}
           </div>
           <button
             onClick={onToggle}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-violet-500/10 transition-colors"
+            className="rounded-xl p-1.5 text-gray-400 transition-colors hover:bg-violet-500/10 hover:text-white"
             title={expanded ? "Collapse sidebar" : "Expand sidebar"}
           >
             {expanded ? (
@@ -65,24 +73,22 @@ export const Sidebar = ({ expanded, onToggle }: SidebarProps) => {
         </div>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 px-2 py-3 overflow-y-auto overflow-x-clip space-y-4">
+      <nav className="flex-1 space-y-5 overflow-y-auto overflow-x-clip px-2 py-4">
         {authorizedGroups.map((group, groupIdx) => (
           <div key={group.label}>
-            {/* Section label (visible when expanded) */}
             {expanded ? (
-              <div className="px-3 mb-1.5">
-                <span className="text-[11px] font-medium uppercase tracking-wider text-gray-500">
+              <div className="mb-2 px-3">
+                <span className="text-[11px] font-medium uppercase tracking-[0.22em] text-gray-500">
                   {group.label}
                 </span>
               </div>
             ) : (
               groupIdx > 0 && (
-                <div className="mx-3 mb-2 border-t border-gray-800" />
+                <div className="mx-3 mb-2 border-t border-white/10" />
               )
             )}
 
-            <div className="space-y-0.5">
+            <div className="space-y-1">
               {group.items.map((item) => {
                 const Icon = item.icon;
                 const isActive = item.href === "/"
@@ -94,27 +100,42 @@ export const Sidebar = ({ expanded, onToggle }: SidebarProps) => {
                     <Link
                       to={item.href}
                       className={cn(
-                        "w-full flex items-center rounded-lg text-left transition-all duration-200 text-sm font-medium relative",
+                        "relative flex w-full items-center rounded-2xl text-left text-sm font-medium transition-all duration-200",
                         expanded
-                          ? "px-3 py-2 space-x-3"
-                          : "px-2 py-2 justify-center",
+                          ? "gap-3 px-3 py-2.5"
+                          : "justify-center px-2 py-2.5",
                         isActive
-                          ? "bg-violet-500/10 text-white border-l-2 border-violet-500 shadow-glow-sm"
-                          : "text-gray-400 hover:bg-violet-500/5 hover:text-gray-200 hover:border-violet-500/30 border-l-2 border-transparent"
+                          ? "border border-violet-500/20 bg-violet-500/12 text-white shadow-lg shadow-violet-500/10"
+                          : "border border-transparent text-gray-400 hover:border-white/10 hover:bg-white/[0.04] hover:text-gray-200"
                       )}
                       title={!expanded ? item.name : undefined}
                     >
-                      <Icon className="size-[18px] flex-shrink-0" />
+                      <span
+                        className={cn(
+                          "flex size-9 shrink-0 items-center justify-center rounded-xl transition-colors",
+                          isActive
+                            ? "bg-violet-500/18 text-violet-100"
+                            : "bg-white/[0.04] text-gray-400 group-hover:text-gray-100"
+                        )}
+                      >
+                        <Icon className="size-[18px]" />
+                      </span>
                       {expanded && (
-                        <span className="transition-opacity duration-200">
-                          {item.name}
-                        </span>
+                        <div className="min-w-0">
+                          <span className="block truncate transition-opacity duration-200">
+                            {item.name}
+                          </span>
+                          {isActive && (
+                            <span className="text-[11px] text-violet-200/80">
+                              Active
+                            </span>
+                          )}
+                        </div>
                       )}
                     </Link>
 
-                    {/* Tooltip for collapsed state */}
                     {!expanded && (
-                      <div className="absolute left-full ml-2 px-2.5 py-1.5 bg-gray-800/95 backdrop-blur-sm text-white text-xs rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 whitespace-nowrap z-50 top-1/2 -translate-y-1/2 border border-violet-500/20 shadow-glow-sm">
+                      <div className="absolute left-full top-1/2 z-50 ml-2 -translate-y-1/2 whitespace-nowrap rounded-md border border-violet-500/20 bg-gray-800/95 px-2.5 py-1.5 text-xs text-white opacity-0 invisible shadow-glow-sm backdrop-blur-sm transition-all duration-150 group-hover:visible group-hover:opacity-100">
                         {item.name}
                       </div>
                     )}
@@ -126,14 +147,13 @@ export const Sidebar = ({ expanded, onToggle }: SidebarProps) => {
         ))}
       </nav>
 
-      {/* Help button */}
       {expanded && (
         <div className="px-4 pb-2">
           <button
             onClick={() => {
               window.dispatchEvent(new CustomEvent("open-shortcuts-dialog"));
             }}
-            className="w-full flex items-center space-x-2 px-3 py-2 text-gray-500 hover:text-violet-300 hover:bg-violet-500/5 rounded-lg transition-colors text-xs"
+            className="flex w-full items-center space-x-2 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-gray-500 transition-colors hover:bg-violet-500/5 hover:text-violet-300"
           >
             <Keyboard className="size-3.5" />
             <span>Keyboard shortcuts</span>
@@ -144,9 +164,8 @@ export const Sidebar = ({ expanded, onToggle }: SidebarProps) => {
         </div>
       )}
 
-      {/* User profile section */}
       {user && (
-        <div className="p-3 border-t border-gray-800/50 flex-shrink-0">
+        <div className="flex-shrink-0 border-t border-white/10 p-3">
           <div
             className={cn(
               "flex items-center transition-all duration-300",
@@ -154,7 +173,7 @@ export const Sidebar = ({ expanded, onToggle }: SidebarProps) => {
             )}
           >
             <div className="relative flex-shrink-0">
-              <div className="w-8 h-8 bg-gray-800 rounded-full flex items-center justify-center">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-700 bg-gray-800">
                 {user.user.profile_picture_url ? (
                   <img
                     src={user.user.profile_picture_url}
@@ -167,8 +186,7 @@ export const Sidebar = ({ expanded, onToggle }: SidebarProps) => {
                   </span>
                 )}
               </div>
-              {/* Online indicator */}
-              <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-gray-900 animate-pulse" />
+              <div className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-gray-900 bg-emerald-500 animate-pulse" />
             </div>
 
             {expanded && (
@@ -192,7 +210,7 @@ export const Sidebar = ({ expanded, onToggle }: SidebarProps) => {
               <div className="relative group">
                 <button
                   onClick={handleLogout}
-                  className="p-1.5 text-gray-500 hover:text-gray-300 hover:bg-gray-800 rounded-lg transition-colors"
+                  className="rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-800 hover:text-gray-300"
                   title="Logout"
                 >
                   <LogOut className="w-4 h-4" />

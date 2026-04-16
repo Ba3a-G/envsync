@@ -182,6 +182,22 @@ describe("POST /api/certificate/issue", () => {
 		memberSerialHex = body.serial_hex;
 	});
 
+	test("duplicate active manual member cert returns 409", async () => {
+		const res = await testRequest("/api/certificate/issue", {
+			method: "POST",
+			token: seed.masterUser.token,
+			body: {
+				member_email: memberEmail,
+				role: "developer",
+			},
+		});
+		expect(res.status).toBe(409);
+
+		const body = await res.json<{ error: string; code: string }>();
+		expect(body.code).toBe("ACTIVE_MEMBER_CERT_EXISTS");
+		expect(body.error).toContain(memberEmail);
+	});
+
 	test("viewer denied issue (403)", async () => {
 		const res = await testRequest("/api/certificate/issue", {
 			method: "POST",
