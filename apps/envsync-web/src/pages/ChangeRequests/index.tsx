@@ -28,7 +28,7 @@ type ActiveView = "requests" | "create";
 const getStatusClass = (status: string) => {
   if (status === "approved") return "bg-emerald-500/10 text-emerald-200";
   if (status === "rejected") return "bg-red-500/10 text-red-200";
-  if (status === "cancelled") return "bg-gray-700 text-gray-200";
+  if (status === "cancelled") return "bg-zinc-700 text-zinc-200";
   return "bg-amber-500/10 text-amber-200";
 };
 
@@ -243,14 +243,14 @@ const ChangeRequests = () => {
               <TabsTrigger
                 data-testid="change-requests-tab-list"
                 value="requests"
-                className="rounded-xl data-[state=active]:bg-violet-500/18 data-[state=active]:text-white"
+                className="rounded-xl data-[state=active]:bg-emerald-500/18 data-[state=active]:text-white"
               >
                 Requests
               </TabsTrigger>
               <TabsTrigger
                 data-testid="change-requests-tab-create"
                 value="create"
-                className="rounded-xl data-[state=active]:bg-violet-500/18 data-[state=active]:text-white"
+                className="rounded-xl data-[state=active]:bg-emerald-500/18 data-[state=active]:text-white"
               >
                 Create Request
               </TabsTrigger>
@@ -264,7 +264,7 @@ const ChangeRequests = () => {
           className="space-y-6"
         >
           <TabsContent value="create" className="mt-0">
-            <Card data-testid="change-requests-create-panel" className="border-gray-800 bg-gray-950/70">
+            <Card data-testid="change-requests-create-panel" className="border-zinc-800 bg-zinc-950/70">
               <CardHeader>
                 <CardTitle className="text-white">Create Request</CardTitle>
               </CardHeader>
@@ -278,11 +278,11 @@ const ChangeRequests = () => {
                     >
                       <SelectTrigger
                         data-testid="change-request-mode-select"
-                        className="border-gray-700 bg-gray-950 text-white"
+                        className="border-zinc-700 bg-zinc-950 text-white"
                       >
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent className="border-gray-700 bg-gray-900">
+                      <SelectContent className="border-zinc-700 bg-zinc-900">
                         <SelectItem value="direct" className="text-white">
                           Direct protected change
                         </SelectItem>
@@ -297,11 +297,11 @@ const ChangeRequests = () => {
                     <Select value={selectedAppId} onValueChange={setSelectedAppId}>
                       <SelectTrigger
                         data-testid="change-request-project-select"
-                        className="border-gray-700 bg-gray-950 text-white"
+                        className="border-zinc-700 bg-zinc-950 text-white"
                       >
                         <SelectValue placeholder="Select project" />
                       </SelectTrigger>
-                      <SelectContent className="border-gray-700 bg-gray-900">
+                      <SelectContent className="border-zinc-700 bg-zinc-900">
                         {apps.map((app) => (
                           <SelectItem key={app.id} value={app.id} className="text-white">
                             {app.name}
@@ -319,11 +319,11 @@ const ChangeRequests = () => {
                       data-testid="change-request-title-input"
                       value={title}
                       onChange={(event) => setTitle(event.target.value)}
-                      className="border-gray-700 bg-gray-950 text-white"
+                      className="border-zinc-700 bg-zinc-950 text-white"
                     />
                   </div>
-                  <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4 text-sm text-gray-400">
-                    <p className="font-medium text-gray-200">Request summary</p>
+                  <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4 text-sm text-zinc-400">
+                    <p className="font-medium text-zinc-200">Request summary</p>
                     <p className="mt-2">
                       {mode === "promotion"
                         ? "Promote values from a lower environment into a protected target."
@@ -338,7 +338,7 @@ const ChangeRequests = () => {
                     data-testid="change-request-message-input"
                     value={message}
                     onChange={(event) => setMessage(event.target.value)}
-                    className="border-gray-700 bg-gray-950 text-white"
+                    className="border-zinc-700 bg-zinc-950 text-white"
                   />
                 </div>
 
@@ -352,11 +352,11 @@ const ChangeRequests = () => {
                       >
                         <SelectTrigger
                           data-testid="change-request-source-env-select"
-                          className="border-gray-700 bg-gray-950 text-white"
+                          className="border-zinc-700 bg-zinc-950 text-white"
                         >
                           <SelectValue placeholder="Select source" />
                         </SelectTrigger>
-                        <SelectContent className="border-gray-700 bg-gray-900">
+                        <SelectContent className="border-zinc-700 bg-zinc-900">
                           {envTypes.map((envType) => (
                             <SelectItem
                               key={envType.id}
@@ -379,11 +379,11 @@ const ChangeRequests = () => {
                     >
                       <SelectTrigger
                         data-testid="change-request-target-env-select"
-                        className="border-gray-700 bg-gray-950 text-white"
+                        className="border-zinc-700 bg-zinc-950 text-white"
                       >
                         <SelectValue placeholder="Select target" />
                       </SelectTrigger>
-                      <SelectContent className="border-gray-700 bg-gray-900">
+                      <SelectContent className="border-zinc-700 bg-zinc-900">
                         {envTypes.map((envType) => (
                           <SelectItem
                             key={envType.id}
@@ -408,14 +408,14 @@ const ChangeRequests = () => {
                         value={envKey}
                         onChange={(event) => setEnvKey(event.target.value)}
                         placeholder="DATABASE_URL"
-                        className="border-gray-700 bg-gray-950 text-white"
+                        className="border-zinc-700 bg-zinc-950 text-white"
                       />
                       <Textarea
                         data-testid="change-request-env-value-input"
                         value={envValue}
                         onChange={(event) => setEnvValue(event.target.value)}
                         placeholder="postgres://..."
-                        className="border-gray-700 bg-gray-950 text-white"
+                        className="border-zinc-700 bg-zinc-950 text-white"
                       />
                     </div>
                     <div className="space-y-2">
@@ -425,25 +425,25 @@ const ChangeRequests = () => {
                         value={secretKey}
                         onChange={(event) => setSecretKey(event.target.value)}
                         placeholder="API_TOKEN"
-                        className="border-gray-700 bg-gray-950 text-white"
+                        className="border-zinc-700 bg-zinc-950 text-white"
                       />
                       <Textarea
                         data-testid="change-request-secret-value-input"
                         value={secretValue}
                         onChange={(event) => setSecretValue(event.target.value)}
                         placeholder="secret value"
-                        className="border-gray-700 bg-gray-950 text-white"
+                        className="border-zinc-700 bg-zinc-950 text-white"
                       />
                     </div>
                   </div>
                 )}
 
-                <div className="rounded-lg border border-gray-800 bg-gray-900/60 p-4 text-sm text-gray-400">
+                <div className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4 text-sm text-zinc-400">
                   Requesters can propose the change. Reviewers with protected-environment authority approve or reject it.
                 </div>
 
                 <Button
-                  className="bg-violet-500 hover:bg-violet-600"
+                  className="bg-emerald-500 hover:bg-emerald-600"
                   onClick={submit}
                   data-testid="change-request-submit-button"
                 >
@@ -454,28 +454,28 @@ const ChangeRequests = () => {
           </TabsContent>
 
           <TabsContent value="requests" className="mt-0">
-            <Card data-testid="change-requests-list" className="border-gray-800 bg-gray-950/70">
+            <Card data-testid="change-requests-list" className="border-zinc-800 bg-zinc-950/70">
               <CardHeader>
                 <CardTitle className="text-white">Open and Recent Requests</CardTitle>
               </CardHeader>
               <CardContent>
                 <Table>
                   <TableHeader>
-                    <TableRow className="border-gray-800 hover:bg-transparent">
-                      <TableHead className="text-gray-400">Title</TableHead>
-                      <TableHead className="text-gray-400">Project</TableHead>
-                      <TableHead className="text-gray-400">Type</TableHead>
-                      <TableHead className="text-gray-400">Status</TableHead>
-                      <TableHead className="text-gray-400">Items</TableHead>
-                      <TableHead className="text-right text-gray-400">Actions</TableHead>
+                    <TableRow className="border-zinc-800 hover:bg-transparent">
+                      <TableHead className="text-zinc-400">Title</TableHead>
+                      <TableHead className="text-zinc-400">Project</TableHead>
+                      <TableHead className="text-zinc-400">Type</TableHead>
+                      <TableHead className="text-zinc-400">Status</TableHead>
+                      <TableHead className="text-zinc-400">Items</TableHead>
+                      <TableHead className="text-right text-zinc-400">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {requestRows.map((request) => (
-                      <TableRow key={request.id} className="border-gray-800">
+                      <TableRow key={request.id} className="border-zinc-800">
                         <TableCell className="text-white">{request.title}</TableCell>
-                        <TableCell className="text-gray-300">{request.appName}</TableCell>
-                        <TableCell className="text-gray-300 capitalize">
+                        <TableCell className="text-zinc-300">{request.appName}</TableCell>
+                        <TableCell className="text-zinc-300 capitalize">
                           {request.request_kind}
                         </TableCell>
                         <TableCell>
@@ -483,14 +483,14 @@ const ChangeRequests = () => {
                             {request.status}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-gray-300">
+                        <TableCell className="text-zinc-300">
                           {request.env_item_count} env / {request.secret_item_count} secret
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
                             <Button
                               variant="ghost"
-                              className="text-gray-200"
+                              className="text-zinc-200"
                               data-testid="change-request-view-button"
                               onClick={() => setSelectedRequestId(request.id)}
                             >
@@ -518,7 +518,7 @@ const ChangeRequests = () => {
                               request.requested_by_user_id === user?.user.id && (
                                 <Button
                                   variant="ghost"
-                                  className="text-gray-300 hover:bg-gray-800"
+                                  className="text-zinc-300 hover:bg-zinc-800"
                                   data-testid="change-request-cancel-button"
                                   onClick={() =>
                                     cancel.mutate({
@@ -547,7 +547,7 @@ const ChangeRequests = () => {
         open={Boolean(selectedRequestId)}
         onOpenChange={(open) => !open && setSelectedRequestId(null)}
       >
-        <DialogContent data-testid="change-request-detail-dialog" className="flex max-h-[85vh] max-w-3xl flex-col border-gray-800 bg-gray-900">
+        <DialogContent data-testid="change-request-detail-dialog" className="flex max-h-[85vh] max-w-3xl flex-col border-zinc-800 bg-zinc-900">
           <DialogHeader className="shrink-0">
             <DialogTitle className="pr-8 text-white">
               {selectedRequest?.title || "Change request"}
@@ -557,52 +557,52 @@ const ChangeRequests = () => {
             <div className="min-h-0 flex-1 overflow-y-auto pr-1">
               <div className="space-y-5">
               <div className="grid gap-4 md:grid-cols-4">
-                <div className="rounded-lg border border-gray-800 bg-gray-950/70 p-3">
-                  <p className="text-xs uppercase tracking-wide text-gray-500">Type</p>
+                <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-3">
+                  <p className="text-xs uppercase tracking-wide text-zinc-500">Type</p>
                   <p className="mt-1 text-sm capitalize text-white">
                     {selectedRequest.request_kind}
                   </p>
                 </div>
-                <div className="rounded-lg border border-gray-800 bg-gray-950/70 p-3">
-                  <p className="text-xs uppercase tracking-wide text-gray-500">Status</p>
+                <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-3">
+                  <p className="text-xs uppercase tracking-wide text-zinc-500">Status</p>
                   <p className="mt-1 text-sm capitalize text-white">
                     {selectedRequest.status}
                   </p>
                 </div>
-                <div className="rounded-lg border border-gray-800 bg-gray-950/70 p-3">
-                  <p className="text-xs uppercase tracking-wide text-gray-500">Env changes</p>
+                <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-3">
+                  <p className="text-xs uppercase tracking-wide text-zinc-500">Env changes</p>
                   <p className="mt-1 text-sm text-white">
                     {selectedRequest.env_item_count}
                   </p>
                 </div>
-                <div className="rounded-lg border border-gray-800 bg-gray-950/70 p-3">
-                  <p className="text-xs uppercase tracking-wide text-gray-500">Secret changes</p>
+                <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-3">
+                  <p className="text-xs uppercase tracking-wide text-zinc-500">Secret changes</p>
                   <p className="mt-1 text-sm text-white">
                     {selectedRequest.secret_item_count}
                   </p>
                 </div>
               </div>
 
-              <div className="rounded-lg border border-gray-800 bg-gray-950/70 p-4 text-sm text-gray-300">
+              <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-4 text-sm text-zinc-300">
                 {selectedRequest.message}
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
-                <div data-testid="change-request-detail-env-items" className="rounded-lg border border-gray-800 bg-gray-950/70 p-4">
+                <div data-testid="change-request-detail-env-items" className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-4">
                   <h3 className="mb-3 font-medium text-white">Environment Items</h3>
                   <div className="space-y-2">
                     {selectedRequest.env_items.map((item) => (
                       <div
                         key={item.id}
-                        className="rounded border border-gray-800 bg-gray-900/70 p-3 text-sm"
+                        className="rounded border border-zinc-800 bg-zinc-900/70 p-3 text-sm"
                       >
                         <div className="flex items-center justify-between">
                           <span className="font-mono text-white">{item.key}</span>
-                          <Badge className="bg-violet-500/10 text-violet-300">
+                          <Badge className="bg-emerald-500/10 text-emerald-300">
                             {item.operation}
                           </Badge>
                         </div>
-                        <p className="mt-2 text-gray-400">
+                        <p className="mt-2 text-zinc-400">
                           {item.previous_value || "empty"} →{" "}
                           {item.proposed_value || "deleted"}
                         </p>
@@ -610,13 +610,13 @@ const ChangeRequests = () => {
                     ))}
                   </div>
                 </div>
-                <div data-testid="change-request-detail-secret-items" className="rounded-lg border border-gray-800 bg-gray-950/70 p-4">
+                <div data-testid="change-request-detail-secret-items" className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-4">
                   <h3 className="mb-3 font-medium text-white">Secret Items</h3>
                   <div className="space-y-2">
                     {selectedRequest.secret_items.map((item) => (
                       <div
                         key={item.id}
-                        className="rounded border border-gray-800 bg-gray-900/70 p-3 text-sm"
+                        className="rounded border border-zinc-800 bg-zinc-900/70 p-3 text-sm"
                       >
                         <div className="flex items-center justify-between">
                           <span className="font-mono text-white">{item.key}</span>
@@ -624,7 +624,7 @@ const ChangeRequests = () => {
                             {item.operation}
                           </Badge>
                         </div>
-                        <p className="mt-2 text-gray-400">
+                        <p className="mt-2 text-zinc-400">
                           {item.previous_value || "empty"} →{" "}
                           {item.proposed_value || "deleted"}
                         </p>
@@ -646,7 +646,7 @@ const ChangeRequests = () => {
                       value={rejectReason}
                       onChange={(event) => setRejectReason(event.target.value)}
                       placeholder="Optional rejection reason"
-                      className="border-gray-700 bg-gray-950 text-white"
+                      className="border-zinc-700 bg-zinc-950 text-white"
                     />
                     <div className="mt-3 flex gap-2">
                       <Button
@@ -687,7 +687,7 @@ const ChangeRequests = () => {
           <DialogFooter className="shrink-0">
             <Button
               variant="outline"
-              className="border-gray-700 text-gray-200"
+              className="border-zinc-700 text-zinc-200"
               onClick={() => setSelectedRequestId(null)}
             >
               Close

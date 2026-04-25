@@ -114,14 +114,14 @@ export const ProjectEnvironmentsHeader = ({
           onClick={onBack}
           variant="ghost"
           size="sm"
-          className="text-gray-400 hover:text-white hover:bg-gray-800"
+          className="text-zinc-400 hover:text-white hover:bg-zinc-800"
         >
           <ArrowLeft className="size-4 mr-1" />
           Back to Projects
         </Button>
-        <span className="text-gray-500">/</span>
-        <span className="text-gray-300">{projectName}</span>
-        <span className="text-gray-500">/</span>
+        <span className="text-zinc-500">/</span>
+        <span className="text-zinc-300">{projectName}</span>
+        <span className="text-zinc-500">/</span>
         <span className="flex items-center px-3 py-2 font-medium text-white">
           <FolderKanban className="mr-2 w-4 h-4" />
           {currentSection}
@@ -134,18 +134,18 @@ export const ProjectEnvironmentsHeader = ({
             <div className="space-y-4">
               <div>
                 <div className="mb-3 flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-500/10 ring-1 ring-violet-500/20">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500/10 ring-1 ring-emerald-500/20">
                     {isSecretsPage ? (
                       <Shield className="w-5 h-5 text-red-300" />
                     ) : (
-                      <Database className="w-5 h-5 text-violet-300" />
+                      <Database className="w-5 h-5 text-emerald-300" />
                     )}
                   </div>
                   <div>
                     <h1 className="text-3xl font-semibold tracking-tight text-white">
                       {projectName}
                     </h1>
-                    <p className="mt-1 text-sm text-gray-400">
+                    <p className="mt-1 text-sm text-zinc-400">
                       {isSecretsPage
                         ? "Manage encrypted runtime credentials, rotate values safely, and keep secret operations visible."
                         : "Operate variables by environment, compare changes, and move faster without losing context."}
@@ -155,10 +155,10 @@ export const ProjectEnvironmentsHeader = ({
               </div>
 
               <div className="flex flex-wrap gap-3">
-                <Badge variant="secondary" className="bg-white/[0.05] px-3 py-1.5 text-gray-200">
+                <Badge variant="secondary" className="bg-white/[0.05] px-3 py-1.5 text-zinc-200">
                   {environmentName || "Environment"} selected
                 </Badge>
-                <Badge variant="secondary" className="bg-white/[0.05] px-3 py-1.5 text-gray-200">
+                <Badge variant="secondary" className="bg-white/[0.05] px-3 py-1.5 text-zinc-200">
                   {environmentTypes} environments
                 </Badge>
                 <Badge
@@ -167,7 +167,7 @@ export const ProjectEnvironmentsHeader = ({
                     "px-3 py-1.5",
                     isSecretsPage
                       ? "bg-red-500/10 text-red-200"
-                      : "bg-violet-500/10 text-violet-200"
+                      : "bg-emerald-500/10 text-emerald-200"
                   )}
                 >
                   {isSecretsPage ? `${totalSecrets} secrets` : `${totalVariables} variables`}
@@ -183,7 +183,7 @@ export const ProjectEnvironmentsHeader = ({
             <div className="flex flex-wrap items-center gap-3">
               <Button
                 variant="outline"
-                className="text-white border-gray-700 hover:bg-gray-800"
+                className="text-white border-zinc-700 hover:bg-zinc-800"
                 onClick={() => navigate(appAccessPath(appId ?? ""))}
               >
                 <LockKeyhole className="w-4 h-4 mr-2" />
@@ -191,7 +191,7 @@ export const ProjectEnvironmentsHeader = ({
               </Button>
               <Button
                 variant="outline"
-                className="text-white border-gray-700 hover:bg-gray-800"
+                className="text-white border-zinc-700 hover:bg-zinc-800"
                 onClick={() => navigate("/change-requests")}
               >
                 <GitPullRequest className="w-4 h-4 mr-2" />
@@ -202,19 +202,19 @@ export const ProjectEnvironmentsHeader = ({
                   <Button
                     variant="outline"
                     size="sm"
-                    className="text-gray-300 border-gray-700 hover:bg-gray-800"
+                    className="text-zinc-300 border-zinc-700 hover:bg-zinc-800"
                   >
                     <MoreVertical className="w-4 h-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
-                  className="bg-gray-900 border-gray-800 min-w-[180px]"
+                  className="bg-zinc-900 border-zinc-800 min-w-[180px]"
                   align="end"
                 >
                   <DropdownMenuItem
                     onClick={onRefresh}
                     disabled={isRefetching}
-                    className="text-white hover:bg-gray-800 cursor-pointer"
+                    className="text-white hover:bg-zinc-800 cursor-pointer"
                   >
                     <RefreshCw
                       className={`w-4 h-4 mr-2 ${
@@ -225,24 +225,22 @@ export const ProjectEnvironmentsHeader = ({
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={onExport}
-                    className="text-white hover:bg-gray-800 cursor-pointer"
+                    className="text-white hover:bg-zinc-800 cursor-pointer"
                   >
                     <Download className="w-4 h-4 mr-2" />
                     Export
                   </DropdownMenuItem>
-                  {!isSecretsPage && (
-                    <DropdownMenuItem
-                      onClick={onRollback}
-                      className="text-white hover:bg-gray-800 cursor-pointer"
-                    >
-                      <History className="w-4 h-4 mr-2" />
-                      Recovery
-                    </DropdownMenuItem>
-                  )}
+                  <DropdownMenuItem
+                    onClick={onRollback}
+                    className="text-white hover:bg-zinc-800 cursor-pointer"
+                  >
+                    <History className="w-4 h-4 mr-2" />
+                    Recovery
+                  </DropdownMenuItem>
                   {canEdit && (
                     <DropdownMenuItem
                       onClick={onManageEnvironments}
-                      className="text-white hover:bg-gray-800 cursor-pointer"
+                      className="text-white hover:bg-zinc-800 cursor-pointer"
                     >
                       <Settings className="w-4 h-4 mr-2" />
                       Manage environments
@@ -303,8 +301,8 @@ export const ProjectEnvironmentsHeader = ({
                     className={cn(
                       "rounded-xl px-4 text-sm",
                       item.active
-                        ? "bg-violet-500/12 text-white hover:bg-violet-500/18"
-                        : "text-gray-400 hover:bg-white/[0.04] hover:text-gray-200"
+                        ? "bg-emerald-500/12 text-white hover:bg-emerald-500/18"
+                        : "text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-200"
                     )}
                   >
                     <Icon className="w-4 h-4 mr-2" />
@@ -315,17 +313,17 @@ export const ProjectEnvironmentsHeader = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 lg:sticky lg:top-4">
-            <div className="flex items-center gap-2 text-sm text-gray-400">
+            <div className="flex items-center gap-2 text-sm text-zinc-400">
               <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/[0.04]">
                 {isSecretsPage ? (
                   <Shield className="w-4 h-4 text-red-300" />
                 ) : (
-                  <Database className="w-4 h-4 text-violet-300" />
+                  <Database className="w-4 h-4 text-emerald-300" />
                 )}
               </div>
               <div>
-                <p className="font-medium text-gray-200">{environmentName || "Choose environment"}</p>
-                <p className="text-xs text-gray-500">Current working context</p>
+                <p className="font-medium text-zinc-200">{environmentName || "Choose environment"}</p>
+                <p className="text-xs text-zinc-500">Current working context</p>
               </div>
             </div>
 
@@ -335,7 +333,7 @@ export const ProjectEnvironmentsHeader = ({
                   <Button
                     onClick={onBulkImport}
                     variant="outline"
-                    className="text-white border-gray-700 hover:bg-gray-800"
+                    className="text-white border-zinc-700 hover:bg-zinc-800"
                   >
                     <Upload className="w-4 h-4 mr-2" />
                     Bulk Import
@@ -347,7 +345,7 @@ export const ProjectEnvironmentsHeader = ({
                       "text-white",
                       isSecretsPage
                         ? "bg-red-500 hover:bg-red-600"
-                        : "bg-violet-500 hover:bg-violet-600"
+                        : "bg-emerald-500 hover:bg-emerald-600"
                     )}
                   >
                     {isSecretsPage ? (

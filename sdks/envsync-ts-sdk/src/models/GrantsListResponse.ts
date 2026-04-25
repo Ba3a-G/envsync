@@ -2,8 +2,5 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-export type GrantsListResponse = Array<{
-    subject_id: string;
-    subject_type: 'user' | 'team';
-    relation: 'admin' | 'editor' | 'viewer';
-}>;
+import type { GrantEntry } from './GrantEntry';
+export type GrantsListResponse = Array<GrantEntry>;

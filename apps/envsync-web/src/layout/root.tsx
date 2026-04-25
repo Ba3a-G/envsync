@@ -53,7 +53,7 @@ export const RootLayout = () => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-[#0a0f1a]">
+      <div className="flex h-screen items-center justify-center bg-zinc-950">
         <div className="flex flex-col items-center space-y-4">
           <div className="relative">
             <img
@@ -62,7 +62,7 @@ export const RootLayout = () => {
               className="size-16 animate-pulse"
             />
           </div>
-          <p className="text-gray-400 text-sm">Loading your workspace...</p>
+          <p className="text-zinc-400 text-sm">Loading your workspace...</p>
         </div>
       </div>
     );
@@ -70,21 +70,21 @@ export const RootLayout = () => {
 
   if (!isAuthenticated || !user) {
     return (
-      <div className="min-h-screen bg-[#0a0f1a] flex flex-col items-center justify-center px-4">
+      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center px-4">
         <div className="max-w-md w-full space-y-6 text-center">
           <div className="mx-auto mb-6">
             <img src="/EnvSync.svg" alt="EnvSync" className="w-20 h-20 mx-auto" />
           </div>
-          <h2 className="text-2xl font-semibold text-gray-100">
+          <h2 className="text-2xl font-semibold text-zinc-100">
             Authentication Required
           </h2>
-          <p className="text-gray-400">
+          <p className="text-zinc-400">
             {authError ?? "You need to be signed in to access EnvSync."}
           </p>
           <div className="pt-4">
             <button
               onClick={() => window.location.reload()}
-              className="px-6 py-2.5 bg-violet-500 hover:bg-violet-600 text-white font-medium rounded-lg transition-colors"
+              className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-lg transition-colors"
             >
               Sign In
             </button>
@@ -106,10 +106,10 @@ export const RootLayout = () => {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#0a0f1a] text-white">
+    <div className="flex h-screen overflow-hidden bg-zinc-950 text-white">
       <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-violet-500/[0.03] rounded-full blur-3xl" />
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-indigo-500/[0.02] rounded-full blur-3xl" />
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-emerald-500/[0.035] rounded-full blur-3xl" />
+        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-teal-500/[0.025] rounded-full blur-3xl" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.04),_transparent_45%)]" />
       </div>
 

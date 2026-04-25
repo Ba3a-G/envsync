@@ -167,12 +167,12 @@ export const InvitationsModal: React.FC<InvitationsModalProps> = ({
   if (isLoading) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-4xl bg-gray-900 border-gray-700">
+        <DialogContent className="max-w-4xl bg-zinc-900 border-zinc-700">
           <DialogHeader>
             <DialogTitle className="text-white">Manage Invitations</DialogTitle>
           </DialogHeader>
           <div className="flex items-center justify-center py-8">
-            <div className="text-gray-400">Loading invitations...</div>
+            <div className="text-zinc-400">Loading invitations...</div>
           </div>
         </DialogContent>
       </Dialog>
@@ -182,7 +182,7 @@ export const InvitationsModal: React.FC<InvitationsModalProps> = ({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-4xl bg-gray-900 border-gray-700">
+        <DialogContent className="max-w-4xl bg-zinc-900 border-zinc-700">
           <DialogHeader>
             <DialogTitle className="text-white">Manage Invitations</DialogTitle>
           </DialogHeader>
@@ -190,31 +190,31 @@ export const InvitationsModal: React.FC<InvitationsModalProps> = ({
           <div className="space-y-4">
             {invitations.length === 0 ? (
               <div className="text-center py-8">
-                <Mail className="mx-auto h-12 w-12 text-gray-500 mb-4" />
+                <Mail className="mx-auto h-12 w-12 text-zinc-500 mb-4" />
                 <h3 className="text-lg font-medium text-white mb-2">No invitations</h3>
-                <p className="text-gray-400">There are no pending invitations at the moment.</p>
+                <p className="text-zinc-400">There are no pending invitations at the moment.</p>
               </div>
             ) : (
-              <div className="border border-gray-700 rounded-lg overflow-hidden">
+              <div className="border border-zinc-700 rounded-lg overflow-hidden">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-gray-800 hover:bg-gray-800">
-                      <TableHead className="text-gray-300">Email</TableHead>
-                      <TableHead className="text-gray-300">Role</TableHead>
-                      <TableHead className="text-gray-300">Status</TableHead>
-                      <TableHead className="text-gray-300">Created</TableHead>
-                      <TableHead className="text-gray-300">Actions</TableHead>
+                    <TableRow className="bg-zinc-800 hover:bg-zinc-800">
+                      <TableHead className="text-zinc-300">Email</TableHead>
+                      <TableHead className="text-zinc-300">Role</TableHead>
+                      <TableHead className="text-zinc-300">Status</TableHead>
+                      <TableHead className="text-zinc-300">Created</TableHead>
+                      <TableHead className="text-zinc-300">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {invitations.map((invitation) => (
-                      <TableRow key={invitation.id} className="border-gray-700 hover:bg-gray-800/50">
+                      <TableRow key={invitation.id} className="border-zinc-700 hover:bg-zinc-800/50">
                         <TableCell className="text-white">
                           <span className="hdx-mask">{invitation.email}</span>
                         </TableCell>
-                        <TableCell className="text-gray-300">{invitation.roleName}</TableCell>
+                        <TableCell className="text-zinc-300">{invitation.roleName}</TableCell>
                         <TableCell>{getStatusBadge(invitation)}</TableCell>
-                        <TableCell className="text-gray-400">{invitation.createdAt}</TableCell>
+                        <TableCell className="text-zinc-400">{invitation.createdAt}</TableCell>
                         <TableCell>
                           <div className="flex items-center space-x-2">
                             {!invitation.isAccepted && (
@@ -223,7 +223,7 @@ export const InvitationsModal: React.FC<InvitationsModalProps> = ({
                                 variant="outline"
                                 onClick={() => handleOpenEditDialog(invitation)}
                                 disabled={actionLoadingStates[invitation.id]}
-                                className="border-gray-600 text-gray-300 hover:bg-gray-700"
+                                className="border-zinc-600 text-zinc-300 hover:bg-zinc-700"
                               >
                                 <Edit3 className="w-3 h-3 mr-1" />
                                 Edit Role
@@ -253,10 +253,10 @@ export const InvitationsModal: React.FC<InvitationsModalProps> = ({
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent className="bg-gray-900 border-gray-700">
+        <AlertDialogContent className="bg-zinc-900 border-zinc-700">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-white">Delete Invitation</AlertDialogTitle>
-            <AlertDialogDescription className="text-gray-300">
+            <AlertDialogDescription className="text-zinc-300">
               Are you sure you want to delete the invitation for{" "}
               <span className="hdx-mask font-semibold text-white">{selectedInviteEmail}</span>?
               This action cannot be undone.
@@ -265,7 +265,7 @@ export const InvitationsModal: React.FC<InvitationsModalProps> = ({
           <AlertDialogFooter>
             <AlertDialogCancel
               onClick={handleCloseDeleteDialog}
-              className="bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600"
+              className="bg-zinc-700 border-zinc-600 text-zinc-300 hover:bg-zinc-600"
             >
               Cancel
             </AlertDialogCancel>
@@ -282,26 +282,26 @@ export const InvitationsModal: React.FC<InvitationsModalProps> = ({
 
       {/* Edit Role Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="bg-gray-900 border-gray-700">
+        <DialogContent className="bg-zinc-900 border-zinc-700">
           <DialogHeader>
             <DialogTitle className="text-white">Change Role</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <p className="text-gray-300 mb-4">
+              <p className="text-zinc-300 mb-4">
                 Change role for{" "}
                 <span className="hdx-mask font-semibold text-white">{selectedInviteEmail}</span>
               </p>
               <Select value={selectedRoleId} onValueChange={setSelectedRoleId}>
-                <SelectTrigger className="bg-gray-800 border-gray-600 text-white">
+                <SelectTrigger className="bg-zinc-800 border-zinc-600 text-white">
                   <SelectValue placeholder="Select a role" />
                 </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-600">
+                <SelectContent className="bg-zinc-800 border-zinc-600">
                   {roles.map((role) => (
                     <SelectItem
                       key={role.id}
                       value={role.id}
-                      className="text-white hover:bg-gray-700"
+                      className="text-white hover:bg-zinc-700"
                     >
                       {role.name}
                     </SelectItem>
@@ -317,14 +317,14 @@ export const InvitationsModal: React.FC<InvitationsModalProps> = ({
             <Button
               variant="outline"
               onClick={handleCloseEditDialog}
-              className="border-gray-600 text-gray-300 hover:bg-gray-700"
+              className="border-zinc-600 text-zinc-300 hover:bg-zinc-700"
             >
               Cancel
             </Button>
             <Button
               onClick={handleUpdateRole}
               disabled={updateInvitationRoleMutation.isPending}
-              className="bg-violet-500 hover:bg-violet-600 text-white"
+              className="bg-emerald-500 hover:bg-emerald-600 text-white"
             >
               {updateInvitationRoleMutation.isPending ? "Updating..." : "Update Role"}
             </Button>

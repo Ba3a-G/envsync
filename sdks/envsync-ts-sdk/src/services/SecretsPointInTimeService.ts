@@ -8,6 +8,7 @@ import type { SecretHistoryRequest } from '../models/SecretHistoryRequest';
 import type { SecretHistoryResponse } from '../models/SecretHistoryResponse';
 import type { SecretPitRequest } from '../models/SecretPitRequest';
 import type { SecretPitStateResponse } from '../models/SecretPitStateResponse';
+import type { SecretTimestampRangeDiffRequest } from '../models/SecretTimestampRangeDiffRequest';
 import type { SecretTimestampRequest } from '../models/SecretTimestampRequest';
 import type { SecretVariableTimelineRequest } from '../models/SecretVariableTimelineRequest';
 import type { SecretVariableTimelineResponse } from '../models/SecretVariableTimelineResponse';
@@ -88,6 +89,26 @@ export class SecretsPointInTimeService {
         return this.httpRequest.request({
             method: 'POST',
             url: '/api/secret/diff',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                500: `Internal server error`,
+            },
+        });
+    }
+    /**
+     * Get Secrets Diff By Timestamp Range
+     * Compare secrets between two timestamps
+     * @param requestBody
+     * @returns SecretDiffResponse Secrets timestamp-range diff retrieved successfully
+     * @throws ApiError
+     */
+    public getSecretDiffByTimestampRange(
+        requestBody?: SecretTimestampRangeDiffRequest,
+    ): CancelablePromise<SecretDiffResponse> {
+        return this.httpRequest.request({
+            method: 'POST',
+            url: '/api/secret/diff/timestamp-range',
             body: requestBody,
             mediaType: 'application/json',
             errors: {

@@ -1,53 +1,73 @@
 import { expect, type Page } from "@playwright/test";
 
-export async function gotoPit(page: Page, appId: string, envName = "production") {
-	await page.goto(`/applications/pit/${appId}?env=${encodeURIComponent(envName.toLowerCase())}`, {
+export async function gotoPit(
+	page: Page,
+	appId: string,
+	envName = "production",
+	kind: "variables" | "secrets" = "variables"
+) {
+	const basePath = kind === "secrets"
+		? `/applications/pit/${appId}/secrets`
+		: `/applications/pit/${appId}`;
+	await page.goto(`${basePath}?env=${encodeURIComponent(envName.toLowerCase())}`, {
 		waitUntil: "domcontentloaded",
 	});
-	await expect(page.getByText("Point-in-Time History")).toBeVisible();
+	await expect(page.getByText("Point in Time", { exact: false })).toBeVisible();
 }
 
 export async function expectPitHistory(page: Page) {
-	await expect(page.locator("code").filter({ hasText: /.+/ }).first()).toBeVisible();
+	await expect(page.getByRole("heading", { name: /snapshot history/i })).toBeVisible();
 }
 
 export async function compareFirstTwoPits(page: Page) {
-	await page.getByRole("button", { name: "Compare Changes" }).first().click();
-	const dialog = page.getByRole("dialog");
-	await expect(dialog.getByText("Compare Point-in-Time Snapshots")).toBeVisible();
+	await page.getByRole("button", { name: "Preview comparison" }).click();
+	await expect(page.getByRole("heading", { name: /snapshot diff/i })).toBeVisible();
+	await expect(
+		page.getByText(/Added:|Modified:|Deleted:|No net changes were found/i).first()
+	).toBeVisible();
+}
 
-	const triggers = dialog.getByRole("combobox");
-	const triggerCount = await triggers.count();
-	if (triggerCount < 2) {
-		throw new Error("PiT compare dialog did not render both PIT selectors");
-	}
+export async function openTimeRangeMode(page: Page) {
+	await page.getByRole("button", { name: "Time Range" }).click();
+	await expect(page.getByRole("heading", { name: "Snapshots in selected range" })).toBeVisible();
+}
 
-	await triggers.nth(1).click();
-	const options = page.locator('[role="option"]');
-	if (await options.count() === 0) {
-		throw new Error("PiT compare dialog did not render any PIT options");
-	}
-	await options.first().click();
-	await dialog.getByRole("button", { name: "Compare PITs" }).click();
-	await expect(dialog.getByText(/Change Summary|No changes found|Added Variables/i)).toBeVisible();
+export async function switchPitKind(page: Page, kind: "variables" | "secrets") {
+	await page.getByRole("button", { name: kind === "secrets" ? "Secrets" : "Variables" }).click();
+	await expect(page).toHaveURL(kind === "secrets" ? /\/applications\/pit\/.+\/secrets\?env=/ : /\/applications\/pit\/[^/]+\?env=/);
+}
+
+export async function previewTimeRangeDiff(page: Page) {
+	await page.getByRole("button", { name: "Preview range diff" }).click();
+	await expect(page.getByRole("heading", { name: /time-range net diff/i })).toBeVisible();
+	await expect(
+		page.getByText(/Added:|Modified:|Deleted:|No net changes were found/i).first()
+	).toBeVisible();
 }
 
 export async function rollbackCurrentPit(page: Page) {
-	page.once("dialog", dialog => dialog.accept());
-	const primaryRollback = page.getByRole("button", { name: /Rollback to this PIT/i }).first();
-	if (await primaryRollback.isVisible().catch(() => false)) {
-		await primaryRollback.click();
-		await page.waitForTimeout(1000);
-		return true;
+	const rows = page.locator("tbody tr");
+	const rowCount = await rows.count();
+	if (rowCount === 0) {
+		return false;
 	}
 
-	const rowActions = page.locator("button").filter({ has: page.locator("svg.lucide-more-vertical") }).first();
-	if (await rowActions.isVisible().catch(() => false)) {
-		await rowActions.click();
-		await page.getByRole("menuitem", { name: /Rollback to this PIT/i }).first().click();
-		await page.waitForTimeout(1000);
-		return true;
+	const firstDataRow = rows.first();
+	await firstDataRow.click();
+	const rollbackButton = firstDataRow.getByRole("button", { name: /Rollback/i });
+	await expect(rollbackButton).toBeEnabled();
+	await rollbackButton.click();
+	const dialog = page.getByRole("dialog").last();
+	await expect(dialog.getByText("Type the exact PIT ID")).toBeVisible();
+	const pitIdBadge = dialog.getByText(/^[0-9a-f-]{36}$/).first();
+	const pitId = (await pitIdBadge.textContent())?.trim();
+	if (!pitId) {
+		throw new Error("Expected rollback dialog to render the PIT ID");
 	}
-
-	return false;
+	await expect(dialog.getByRole("button", { name: /Rollback/i })).toBeDisabled();
+	await dialog.locator("#pit-rollback-confirm-id").fill(pitId);
+	await expect(dialog.getByRole("button", { name: /Rollback/i })).toBeEnabled();
+	await dialog.getByRole("button", { name: /Rollback/i }).click();
+	await page.waitForTimeout(1000);
+	return true;
 }

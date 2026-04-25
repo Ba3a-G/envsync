@@ -12,15 +12,15 @@ export const EmptyApiKeys = ({
   setIsCreateModalOpen,
 }: EmptyApiKeysProps) => (
   <div className="text-center py-12">
-    <Key className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+    <Key className="w-16 h-16 text-zinc-600 mx-auto mb-4" />
     <h3 className="text-xl font-medium text-white mb-2">No API Keys</h3>
-    <p className="text-gray-400 mb-6 max-w-md mx-auto">
+    <p className="text-zinc-400 mb-6 max-w-md mx-auto">
       Create your first API key to start using EnvSync services. API keys allow
       you to authenticate and access our APIs programmatically.
     </p>
     <Button
       onClick={() => setIsCreateModalOpen(true)}
-      className="bg-violet-500 hover:bg-violet-600 text-white"
+      className="bg-emerald-500 hover:bg-emerald-600 text-white"
       disabled={isCreatingApiKey}
     >
       <Plus className="w-4 h-4 mr-2" />

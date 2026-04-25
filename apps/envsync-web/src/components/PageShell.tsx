@@ -49,24 +49,24 @@ export function PageShell({
         <div className="space-y-4 rounded-3xl border border-white/10 bg-white/[0.03] p-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Skeleton className="h-12 w-12 rounded-2xl bg-gray-800" />
+              <Skeleton className="h-12 w-12 rounded-2xl bg-zinc-800" />
               <div className="space-y-2">
-                <Skeleton className="h-8 w-48 bg-gray-800" />
-                <Skeleton className="h-4 w-72 bg-gray-800" />
+                <Skeleton className="h-8 w-48 bg-zinc-800" />
+                <Skeleton className="h-4 w-72 bg-zinc-800" />
               </div>
             </div>
-            <Skeleton className="h-9 w-32 bg-gray-800" />
+            <Skeleton className="h-9 w-32 bg-zinc-800" />
           </div>
           <div className="grid gap-3 md:grid-cols-3">
             {Array.from({ length: 3 }).map((_, index) => (
-              <Skeleton key={index} className="h-20 rounded-2xl bg-gray-800" />
+              <Skeleton key={index} className="h-20 rounded-2xl bg-zinc-800" />
             ))}
           </div>
         </div>
         <div className="grid gap-4">
-          <Skeleton className="h-14 w-full rounded-2xl bg-gray-800" />
+          <Skeleton className="h-14 w-full rounded-2xl bg-zinc-800" />
           <div className="space-y-2">
-            <Skeleton className="h-64 w-full rounded-3xl bg-gray-800" />
+            <Skeleton className="h-64 w-full rounded-3xl bg-zinc-800" />
           </div>
         </div>
       </div>
@@ -77,21 +77,21 @@ export function PageShell({
     <div className="animate-page-enter space-y-6">
       <section className="overflow-hidden rounded-[28px] border border-white/10 bg-gradient-to-br from-[#10131d] via-[#0d1119] to-[#0a0f17] shadow-2xl shadow-black/20">
         <div className="relative">
-          <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-r from-violet-500/12 via-sky-500/8 to-transparent pointer-events-none" />
+          <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-r from-emerald-500/12 via-cyan-500/8 to-transparent pointer-events-none" />
           <div className="relative space-y-5 p-6 md:p-7">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
               <div className="flex items-start gap-4">
                 {Icon && (
-                  <div className="flex size-12 items-center justify-center rounded-2xl border border-violet-500/20 bg-violet-500/10 shadow-lg shadow-violet-500/10">
-                    <Icon className="size-5 text-violet-300" />
+                  <div className="flex size-12 items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10 shadow-lg shadow-emerald-500/10">
+                    <Icon className="size-5 text-emerald-300" />
                   </div>
                 )}
                 <div className="space-y-2">
-                  <h1 className="text-2xl font-semibold tracking-tight text-gray-50 md:text-[1.9rem]">
+                  <h1 className="text-2xl font-semibold tracking-tight text-zinc-50 md:text-[1.9rem]">
                     {title}
                   </h1>
                   {description && (
-                    <p className="max-w-2xl text-sm leading-6 text-gray-400 md:text-[15px]">
+                    <p className="max-w-2xl text-sm leading-6 text-zinc-400 md:text-[15px]">
                       {description}
                     </p>
                   )}
@@ -120,14 +120,14 @@ export function PageShell({
                       toneClasses[stat.tone ?? "default"]
                     )}
                   >
-                    <p className="text-xs uppercase tracking-[0.22em] text-gray-400">
+                    <p className="text-xs uppercase tracking-[0.22em] text-zinc-400">
                       {stat.label}
                     </p>
                     <div className="mt-2 text-2xl font-semibold tracking-tight">
                       {stat.value}
                     </div>
                     {stat.hint && (
-                      <p className="mt-2 text-sm text-gray-400">{stat.hint}</p>
+                      <p className="mt-2 text-sm text-zinc-400">{stat.hint}</p>
                     )}
                   </div>
                 ))}
@@ -135,7 +135,7 @@ export function PageShell({
             )}
 
             {statusBanner && (
-              <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm text-gray-300">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm text-zinc-300">
                 {statusBanner}
               </div>
             )}

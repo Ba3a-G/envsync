@@ -70,7 +70,7 @@ export default function Dashboard() {
               <span>Recent Projects</span>
               <Link
                 to="/applications"
-                className="text-xs text-violet-400 hover:text-violet-300 transition-colors font-normal"
+                className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors font-normal"
               >
                 View All
               </Link>

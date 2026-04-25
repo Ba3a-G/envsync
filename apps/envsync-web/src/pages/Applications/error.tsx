@@ -21,7 +21,7 @@ export const ApplicationsErrorPage = ({
       <Button
         onClick={onCreateProject}
         variant="outline"
-        className="text-white border-gray-700 hover:bg-gray-800"
+        className="text-white border-zinc-700 hover:bg-zinc-800"
       >
         <Plus className="w-4 h-4 mr-2" />
         Create Project

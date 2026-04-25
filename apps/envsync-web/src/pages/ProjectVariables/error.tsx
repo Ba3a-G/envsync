@@ -21,7 +21,7 @@ export const ProjectEnvironmentsErrorPage = ({
       <Button
         onClick={onBack}
         variant="outline"
-        className="text-white border-gray-700 hover:bg-gray-800"
+        className="text-white border-zinc-700 hover:bg-zinc-800"
       >
         <ArrowLeft className="w-4 h-4 mr-2" />
         Back to Projects

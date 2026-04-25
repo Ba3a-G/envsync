@@ -76,17 +76,17 @@ export const UserRow = ({
     } else if (roleLower.includes("billing")) {
       return "bg-yellow-900 text-yellow-300 border-yellow-800 hover:bg-yellow-700 hover:text-yellow-100 hover:border-yellow-500 select-all";
     } else if (roleLower.includes("admin")) {
-      return "bg-indigo-900 text-indigo-300 border-indigo-800 hover:bg-indigo-700 hover:text-indigo-100 hover:border-indigo-500 select-all";
+      return "bg-teal-900 text-teal-300 border-teal-800 hover:bg-teal-700 hover:text-teal-100 hover:border-teal-500 select-all";
     } else if (
       roleLower.includes("developer") ||
       roleLower.includes("dev") ||
       roleLower.includes("engineer")
     ) {
-      return "bg-indigo-900 text-indigo-300 border-indigo-800 hover:bg-indigo-700 hover:text-indigo-100 hover:border-indigo-500 select-all";
+      return "bg-teal-900 text-teal-300 border-teal-800 hover:bg-teal-700 hover:text-teal-100 hover:border-teal-500 select-all";
     } else if (roleLower.includes("manager") || roleLower.includes("lead")) {
       return "bg-green-900 text-green-300 border-green-800 hover:bg-green-700 hover:text-green-100 hover:border-green-500 select-all";
     } else {
-      return "bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600 hover:text-gray-100 hover:border-gray-500 select-all";
+      return "bg-zinc-700 text-zinc-300 border-zinc-600 hover:bg-zinc-600 hover:text-zinc-100 hover:border-zinc-500 select-all";
     }
   };
 
@@ -97,17 +97,17 @@ export const UserRow = ({
       case "pending":
         return "bg-yellow-900 text-yellow-300 border-yellow-800 hover:bg-yellow-700 hover:text-yellow-100 hover:border-yellow-600";
       case "inactive":
-        return "bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600 hover:text-gray-100 hover:border-gray-500";
+        return "bg-zinc-700 text-zinc-300 border-zinc-600 hover:bg-zinc-600 hover:text-zinc-100 hover:border-zinc-500";
       default:
-        return "bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600 hover:text-gray-100 hover:border-gray-500";
+        return "bg-zinc-700 text-zinc-300 border-zinc-600 hover:bg-zinc-600 hover:text-zinc-100 hover:border-zinc-500";
     }
   };
 
   return (
-    <tr className="border-b rounded-xl border-gray-800 hover:bg-gray-800/50 transition-colors">
+    <tr className="border-b rounded-xl border-zinc-800 hover:bg-zinc-800/50 transition-colors">
       <td className="py-4 px-4">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-gray-700 rounded-lg flex items-center justify-center overflow-hidden">
+          <div className="w-10 h-10 bg-zinc-700 rounded-lg flex items-center justify-center overflow-hidden">
             {user.avatar ? (
               <Avatar className="w-full h-full rounded-none overflow-hidden">
                 <AvatarImage
@@ -135,7 +135,7 @@ export const UserRow = ({
           </div>
           <div>
             <h3 className="font-medium text-white">{user.name}</h3>
-            <div className="flex items-center space-x-1 text-sm text-gray-400">
+            <div className="flex items-center space-x-1 text-sm text-zinc-400">
               <Mail className="w-3 h-3" />
               <span className="hdx-mask">{user.email}</span>
             </div>
@@ -154,10 +154,10 @@ export const UserRow = ({
         </Badge>
       </td>
       <td className="py-4 px-4">
-        <span className="text-sm text-gray-400">
+        <span className="text-sm text-zinc-400">
           {formatLastUsed(user.lastSeen)}
         </span>
-        <span className="text-xs text-gray-500 block">
+        <span className="text-xs text-zinc-500 block">
           {formatDate(user.lastSeen)}
         </span>
       </td>
@@ -168,26 +168,26 @@ export const UserRow = ({
               <Button
                 variant="ghost"
                 size="icon"
-                className="text-gray-400 hover:text-white hover:bg-gray-700"
+                className="text-zinc-400 hover:text-white hover:bg-zinc-700"
                 disabled={isLoading}
               >
                 {isLoading ? (
-                  <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                  <div className="w-4 h-4 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" />
                 ) : (
                   <MoreHorizontal className="w-4 h-4" />
                 )}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="bg-gray-800 border-gray-700">
+            <DropdownMenuContent className="bg-zinc-800 border-zinc-700">
               <DropdownMenuItem
-                className="text-white hover:bg-gray-700 cursor-pointer"
+                className="text-white hover:bg-zinc-700 cursor-pointer"
                 onClick={() => onEditRole(user)}
               >
                 <Shield className="w-4 h-4 mr-2" />
                 Edit Role
               </DropdownMenuItem>
               <DropdownMenuItem
-                className="text-red-400 hover:bg-gray-700 cursor-pointer"
+                className="text-red-400 hover:bg-zinc-700 cursor-pointer"
                 onClick={() => onDeleteUser(user)}
               >
                 <AlertTriangle className="w-4 h-4 mr-2" />
@@ -202,29 +202,29 @@ export const UserRow = ({
 };
 
 export const UserRowSkeleton = () => (
-  <tr className="border-b border-gray-800">
+  <tr className="border-b border-zinc-800">
     <td className="py-3 px-4">
       <div className="flex items-center space-x-3">
-        <Skeleton className="h-9 w-9 rounded-full bg-gray-700" />
+        <Skeleton className="h-9 w-9 rounded-full bg-zinc-700" />
         <div className="space-y-2">
-          <Skeleton className="h-4 w-28 bg-gray-700" />
-          <Skeleton className="h-3 w-36 bg-gray-700/70" />
+          <Skeleton className="h-4 w-28 bg-zinc-700" />
+          <Skeleton className="h-3 w-36 bg-zinc-700/70" />
         </div>
       </div>
     </td>
     <td className="py-3 px-4">
-      <Skeleton className="h-6 w-24 bg-gray-700" />
+      <Skeleton className="h-6 w-24 bg-zinc-700" />
     </td>
     <td className="py-3 px-4">
-      <Skeleton className="h-6 w-20 bg-gray-700 rounded-full" />
+      <Skeleton className="h-6 w-20 bg-zinc-700 rounded-full" />
     </td>
     <td className="py-3 px-4">
-      <Skeleton className="h-4 w-24 bg-gray-700" />
+      <Skeleton className="h-4 w-24 bg-zinc-700" />
     </td>
     <td className="py-3 px-4 text-right">
       <div className="flex justify-end gap-2">
-        <Skeleton className="h-8 w-8 bg-gray-700 rounded-md" />
-        <Skeleton className="h-8 w-8 bg-gray-700 rounded-md" />
+        <Skeleton className="h-8 w-8 bg-zinc-700 rounded-md" />
+        <Skeleton className="h-8 w-8 bg-zinc-700 rounded-md" />
       </div>
     </td>
   </tr>

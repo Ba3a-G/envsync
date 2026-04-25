@@ -2,10 +2,5 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-export type EffectiveAccessResponse = Array<{
-    user_id: string;
-    email: string;
-    relation: 'admin' | 'editor' | 'viewer';
-    source: 'direct' | 'team' | 'both';
-    teams: Array<string>;
-}>;
+import type { EffectiveAccessEntry } from './EffectiveAccessEntry';
+export type EffectiveAccessResponse = Array<EffectiveAccessEntry>;

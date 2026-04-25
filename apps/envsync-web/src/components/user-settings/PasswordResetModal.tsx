@@ -26,13 +26,13 @@ export const PasswordResetModal = ({
 }: PasswordResetModalProps) => {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-gray-800 border-gray-700">
+      <DialogContent className="bg-zinc-800 border-zinc-700">
         <DialogHeader>
           <DialogTitle className="text-white flex items-center">
-            <Key className="w-5 h-5 text-violet-500 mr-2" />
+            <Key className="w-5 h-5 text-emerald-500 mr-2" />
             Reset Password
           </DialogTitle>
-          <DialogDescription className="text-gray-400">
+          <DialogDescription className="text-zinc-400">
             A password reset link will be sent to your email address. You'll
             need to check your email and follow the instructions to set a new
             password.
@@ -40,12 +40,12 @@ export const PasswordResetModal = ({
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="bg-violet-900/20 border border-violet-800 rounded-lg p-4">
+          <div className="bg-emerald-900/20 border border-emerald-800 rounded-lg p-4">
             <div className="flex items-start space-x-3">
-              <Key className="w-5 h-5 text-violet-400 mt-0.5 flex-shrink-0" />
-              <div className="text-sm text-violet-200">
+              <Key className="w-5 h-5 text-emerald-400 mt-0.5 flex-shrink-0" />
+              <div className="text-sm text-emerald-200">
                 <p className="font-medium mb-1">What happens next:</p>
-                <ul className="list-disc list-inside space-y-1 text-violet-300">
+                <ul className="list-disc list-inside space-y-1 text-emerald-300">
                   <li>
                     Password reset email sent to: <strong>{userEmail}</strong>
                   </li>
@@ -62,14 +62,14 @@ export const PasswordResetModal = ({
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
-            className="text-white border-gray-600 hover:bg-gray-700"
+            className="text-white border-zinc-600 hover:bg-zinc-700"
             disabled={isLoading}
           >
             Cancel
           </Button>
           <Button
             onClick={onResetPassword}
-            className="bg-violet-500 hover:bg-violet-600 text-white"
+            className="bg-emerald-500 hover:bg-emerald-600 text-white"
             disabled={isLoading}
           >
             {isLoading ? (

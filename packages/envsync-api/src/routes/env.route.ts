@@ -20,6 +20,7 @@ import {
 	envPitRequestSchema,
 	envTimestampRequestSchema,
 	envDiffRequestSchema,
+	envTimestampRangeDiffRequestSchema,
 	variableTimelineRequestSchema,
 	rollbackToPitRequestSchema,
 	rollbackToTimestampRequestSchema,
@@ -437,6 +438,36 @@ app.post(
 	}),
 	zValidator("json", envDiffRequestSchema),
 	EnvController.getEnvDiff,
+);
+
+app.post(
+	"/diff/timestamp-range",
+	describeRoute({
+		operationId: "getEnvDiffByTimestampRange",
+		summary: "Get Environment Variables Diff By Timestamp Range",
+		description: "Compare environment variables between two timestamps",
+		tags: ["Environment Variables - Point in Time"],
+		responses: {
+			200: {
+				description: "Environment variables timestamp-range diff retrieved successfully",
+				content: {
+					"application/json": {
+						schema: resolver(envDiffResponseSchema),
+					},
+				},
+			},
+			500: {
+				description: "Internal server error",
+				content: {
+					"application/json": {
+						schema: resolver(errorResponseSchema),
+					},
+				},
+			},
+		},
+	}),
+	zValidator("json", envTimestampRangeDiffRequestSchema),
+	EnvController.getEnvDiffByTimestampRange,
 );
 
 app.post(

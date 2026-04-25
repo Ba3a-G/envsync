@@ -41,38 +41,38 @@ export function OnboardingBanner({
   };
 
   return (
-    <div className="relative rounded-xl border border-violet-500/20 bg-gradient-to-r from-violet-500/5 via-violet-500/5 to-violet-500/5 p-5 shadow-glow-sm">
+    <div className="relative rounded-xl border border-emerald-500/20 bg-gradient-to-r from-emerald-500/5 via-emerald-500/5 to-emerald-500/5 p-5 shadow-glow-sm">
       <button
         onClick={handleDismiss}
-        className="absolute top-3 right-3 p-1 text-gray-500 hover:text-gray-300 transition-colors"
+        className="absolute top-3 right-3 p-1 text-zinc-500 hover:text-zinc-300 transition-colors"
       >
         <X className="size-4" />
       </button>
 
       <div className="space-y-4">
         <div>
-          <h3 className="text-sm font-semibold text-gray-100">
+          <h3 className="text-sm font-semibold text-zinc-100">
             Get started with EnvSync
           </h3>
-          <p className="text-xs text-gray-400 mt-1">
+          <p className="text-xs text-zinc-400 mt-1">
             Complete these steps to set up your workspace
           </p>
         </div>
 
-        <Progress value={progress} className="h-1.5 bg-gray-800" />
+        <Progress value={progress} className="h-1.5 bg-zinc-800" />
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {steps.map((step, idx) => (
             <Link
               key={idx}
               to={step.href}
-              className="flex items-center space-x-2 p-2.5 rounded-lg bg-gray-900/50 hover:bg-violet-500/5 border border-gray-800 hover:border-violet-500/20 transition-all"
+              className="flex items-center space-x-2 p-2.5 rounded-lg bg-zinc-900/50 hover:bg-emerald-500/5 border border-zinc-800 hover:border-emerald-500/20 transition-all"
             >
               <div
                 className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${
                   step.done
                     ? "bg-green-500/20 text-green-400"
-                    : "bg-gray-800 text-gray-500"
+                    : "bg-zinc-800 text-zinc-500"
                 }`}
               >
                 {step.done ? (
@@ -83,7 +83,7 @@ export function OnboardingBanner({
               </div>
               <span
                 className={`text-xs ${
-                  step.done ? "text-gray-500 line-through" : "text-gray-300"
+                  step.done ? "text-zinc-500 line-through" : "text-zinc-300"
                 }`}
               >
                 {step.label}

@@ -8,6 +8,7 @@ import type { EnvHistoryRequest } from '../models/EnvHistoryRequest';
 import type { EnvHistoryResponse } from '../models/EnvHistoryResponse';
 import type { EnvPitRequest } from '../models/EnvPitRequest';
 import type { EnvPitStateResponse } from '../models/EnvPitStateResponse';
+import type { EnvTimestampRangeDiffRequest } from '../models/EnvTimestampRangeDiffRequest';
 import type { EnvTimestampRequest } from '../models/EnvTimestampRequest';
 import type { VariableTimelineRequest } from '../models/VariableTimelineRequest';
 import type { VariableTimelineResponse } from '../models/VariableTimelineResponse';
@@ -88,6 +89,26 @@ export class EnvironmentVariablesPointInTimeService {
         return this.httpRequest.request({
             method: 'POST',
             url: '/api/env/diff',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                500: `Internal server error`,
+            },
+        });
+    }
+    /**
+     * Get Environment Variables Diff By Timestamp Range
+     * Compare environment variables between two timestamps
+     * @param requestBody
+     * @returns EnvDiffResponse Environment variables timestamp-range diff retrieved successfully
+     * @throws ApiError
+     */
+    public getEnvDiffByTimestampRange(
+        requestBody?: EnvTimestampRangeDiffRequest,
+    ): CancelablePromise<EnvDiffResponse> {
+        return this.httpRequest.request({
+            method: 'POST',
+            url: '/api/env/diff/timestamp-range',
             body: requestBody,
             mediaType: 'application/json',
             errors: {

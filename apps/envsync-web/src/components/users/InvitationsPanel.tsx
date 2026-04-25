@@ -111,11 +111,11 @@ export const InvitationsPanel = () => {
 
   return (
     <>
-      <Card data-testid="users-invitations-panel" className="border-gray-800 bg-gradient-to-br from-gray-900 to-gray-950">
+      <Card data-testid="users-invitations-panel" className="border-zinc-800 bg-gradient-to-br from-zinc-900 to-zinc-950">
         <CardHeader className="flex flex-row items-center justify-between gap-4">
           <div>
             <CardTitle className="text-white">Invitations</CardTitle>
-            <p className="mt-1 text-sm text-gray-400">
+            <p className="mt-1 text-sm text-zinc-400">
               Pending invites stay visible here so role changes and cleanup do not disappear into modals.
             </p>
           </div>
@@ -125,14 +125,14 @@ export const InvitationsPanel = () => {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="py-12 text-center text-gray-400">Loading invitations…</div>
+            <div className="py-12 text-center text-zinc-400">Loading invitations…</div>
           ) : invitations.length === 0 ? (
             <div className="py-12 text-center">
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/[0.04]">
-                <Mail className="h-7 w-7 text-gray-500" />
+                <Mail className="h-7 w-7 text-zinc-500" />
               </div>
               <h3 className="text-lg font-medium text-white">No invitations</h3>
-              <p className="mt-2 text-gray-400">
+              <p className="mt-2 text-zinc-400">
                 When you invite a teammate, the request and assigned role will appear here until it is accepted.
               </p>
             </div>
@@ -140,21 +140,21 @@ export const InvitationsPanel = () => {
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="border-gray-800 hover:bg-transparent">
-                    <TableHead className="text-gray-400">Email</TableHead>
-                    <TableHead className="text-gray-400">Role</TableHead>
-                    <TableHead className="text-gray-400">Status</TableHead>
-                    <TableHead className="text-gray-400">Created</TableHead>
-                    <TableHead className="text-right text-gray-400">Actions</TableHead>
+                  <TableRow className="border-zinc-800 hover:bg-transparent">
+                    <TableHead className="text-zinc-400">Email</TableHead>
+                    <TableHead className="text-zinc-400">Role</TableHead>
+                    <TableHead className="text-zinc-400">Status</TableHead>
+                    <TableHead className="text-zinc-400">Created</TableHead>
+                    <TableHead className="text-right text-zinc-400">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {invitations.map((invitation) => (
-                    <TableRow key={invitation.id} className="border-gray-800">
+                    <TableRow key={invitation.id} className="border-zinc-800">
                       <TableCell className="text-white">
                         <span className="hdx-mask">{invitation.email}</span>
                       </TableCell>
-                      <TableCell className="text-gray-300">
+                      <TableCell className="text-zinc-300">
                         {invitation.roleName}
                       </TableCell>
                       <TableCell>
@@ -169,7 +169,7 @@ export const InvitationsPanel = () => {
                           {invitation.isAccepted ? "Accepted" : "Pending"}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-gray-400">
+                      <TableCell className="text-zinc-400">
                         {invitation.createdAt}
                       </TableCell>
                       <TableCell className="text-right">
@@ -181,7 +181,7 @@ export const InvitationsPanel = () => {
                               data-testid="invitation-edit-role-button"
                               onClick={() => handleOpenEditDialog(invitation)}
                               disabled={actionLoadingStates[invitation.id]}
-                              className="border-gray-700 text-gray-300 hover:bg-gray-800"
+                              className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
                             >
                               <Edit3 className="mr-1 h-3 w-3" />
                               Edit Role
@@ -210,21 +210,21 @@ export const InvitationsPanel = () => {
       </Card>
 
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="border-gray-800 bg-gray-900">
+        <DialogContent className="border-zinc-800 bg-zinc-900">
           <DialogHeader>
             <DialogTitle className="text-white">Update Invitation Role</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-gray-300">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-zinc-300">
               <span className="hdx-mask font-medium text-white">{selectedInviteEmail}</span>
             </div>
             <div className="space-y-2">
               <Label className="text-white">Role</Label>
               <Select value={selectedRoleId} onValueChange={setSelectedRoleId}>
-                <SelectTrigger className="border-gray-700 bg-gray-950 text-white">
+                <SelectTrigger className="border-zinc-700 bg-zinc-950 text-white">
                   <SelectValue placeholder="Choose role" />
                 </SelectTrigger>
-                <SelectContent className="border-gray-700 bg-gray-900">
+                <SelectContent className="border-zinc-700 bg-zinc-900">
                   {roles.map((role) => (
                     <SelectItem key={role.id} value={role.id} className="text-white">
                       {role.name}
@@ -241,14 +241,14 @@ export const InvitationsPanel = () => {
             <Button
               variant="outline"
               onClick={closeEditDialog}
-              className="border-gray-700 text-gray-200 hover:bg-gray-800"
+              className="border-zinc-700 text-zinc-200 hover:bg-zinc-800"
             >
               Cancel
             </Button>
             <Button
               onClick={handleUpdateRole}
               disabled={updateInvitationRoleMutation.isPending}
-              className="bg-violet-500 text-white hover:bg-violet-600"
+              className="bg-emerald-500 text-white hover:bg-emerald-600"
             >
               {updateInvitationRoleMutation.isPending ? "Saving..." : "Save Role"}
             </Button>
@@ -257,10 +257,10 @@ export const InvitationsPanel = () => {
       </Dialog>
 
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent className="border-gray-800 bg-gray-900">
+        <AlertDialogContent className="border-zinc-800 bg-zinc-900">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-white">Delete Invitation</AlertDialogTitle>
-            <AlertDialogDescription className="text-gray-300">
+            <AlertDialogDescription className="text-zinc-300">
               Remove the pending invitation for{" "}
               <span className="hdx-mask font-semibold text-white">
                 {selectedInviteEmail}
@@ -271,7 +271,7 @@ export const InvitationsPanel = () => {
           <AlertDialogFooter>
             <AlertDialogCancel
               onClick={closeDeleteDialog}
-              className="border-gray-700 bg-gray-800 text-gray-200 hover:bg-gray-700"
+              className="border-zinc-700 bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
             >
               Cancel
             </AlertDialogCancel>

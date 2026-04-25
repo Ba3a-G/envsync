@@ -319,7 +319,7 @@ export const ManageEnvironment = () => {
 
   const renderEnvironmentForm = (mode: "create" | "edit") => (
       <div className="space-y-6">
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-gray-300">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-zinc-300">
         {mode === "create"
           ? "Create a lane. Protect it only when changes should require review."
           : "Rename the lane, update its color, or adjust default and protection rules."}
@@ -334,7 +334,7 @@ export const ManageEnvironment = () => {
           value={formData.name}
           onChange={(event) => handleInputChange("name", event.target.value)}
           placeholder="e.g. Production"
-          className="border-gray-700 bg-gray-950 text-white"
+          className="border-zinc-700 bg-zinc-950 text-white"
         />
         {formErrors.name && (
           <p className="text-sm text-red-400">{formErrors.name}</p>
@@ -368,7 +368,7 @@ export const ManageEnvironment = () => {
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="font-medium text-white">Default environment</p>
-            <p className="text-sm text-gray-400">
+            <p className="text-sm text-zinc-400">
               New workflows land here first when no environment is specified.
             </p>
           </div>
@@ -383,7 +383,7 @@ export const ManageEnvironment = () => {
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="font-medium text-white">Protected environment</p>
-            <p className="text-sm text-gray-400">
+            <p className="text-sm text-zinc-400">
               Direct changes are blocked and move into a reviewable change-request flow.
             </p>
           </div>
@@ -403,8 +403,8 @@ export const ManageEnvironment = () => {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="flex flex-col items-center space-y-4">
-          <div className="size-12 animate-spin rounded-full border-4 border-gray-800 border-t-violet-500" />
-          <p className="text-gray-400">Loading environment types...</p>
+          <div className="size-12 animate-spin rounded-full border-4 border-zinc-800 border-t-emerald-500" />
+          <p className="text-zinc-400">Loading environment types...</p>
         </div>
       </div>
     );
@@ -419,20 +419,20 @@ export const ManageEnvironment = () => {
             <h3 className="mb-2 text-lg font-semibold text-white">
               Failed to load project
             </h3>
-            <p className="mb-4 text-gray-400">
+            <p className="mb-4 text-zinc-400">
               The requested project could not be found or you do not have access.
             </p>
             <div className="flex justify-center gap-2">
               <Button
                 onClick={() => refetch()}
-                className="bg-violet-500 text-white hover:bg-violet-600"
+                className="bg-emerald-500 text-white hover:bg-emerald-600"
               >
                 Try Again
               </Button>
               <Button
                 onClick={handleBack}
                 variant="outline"
-                className="border-gray-700 text-white hover:bg-gray-800"
+                className="border-zinc-700 text-white hover:bg-zinc-800"
               >
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Go Back
@@ -464,14 +464,14 @@ export const ManageEnvironment = () => {
             <Button
               onClick={handleBack}
               variant="outline"
-              className="border-gray-700 text-gray-200 hover:bg-gray-800"
+              className="border-zinc-700 text-zinc-200 hover:bg-zinc-800"
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Project
             </Button>
             <Button
               onClick={openCreateSheet}
-              className="bg-violet-500 text-white hover:bg-violet-600"
+              className="bg-emerald-500 text-white hover:bg-emerald-600"
             >
               <Plus className="mr-2 h-4 w-4" />
               Add Environment Type
@@ -509,7 +509,7 @@ export const ManageEnvironment = () => {
               <Card
                 key={envType.id}
                 data-testid={`env-type-card-${envType.id}`}
-                className="border-gray-800 bg-gradient-to-br from-gray-900 to-gray-950 transition-colors hover:border-gray-700"
+                className="border-zinc-800 bg-gradient-to-br from-zinc-900 to-zinc-950 transition-colors hover:border-zinc-700"
               >
                 <CardHeader className="space-y-4">
                   <div className="flex items-center justify-between gap-3">
@@ -524,7 +524,7 @@ export const ManageEnvironment = () => {
                     </div>
                     <div className="flex items-center gap-1">
                       {envType.is_default && (
-                        <span data-testid={`env-type-default-badge-${envType.id}`} className="rounded-full bg-violet-500/10 px-2 py-1 text-xs text-violet-300">
+                        <span data-testid={`env-type-default-badge-${envType.id}`} className="rounded-full bg-emerald-500/10 px-2 py-1 text-xs text-emerald-300">
                           Default
                         </span>
                       )}
@@ -538,7 +538,7 @@ export const ManageEnvironment = () => {
 
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                      <p className="text-[11px] uppercase tracking-[0.2em] text-gray-500">
+                      <p className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">
                         Indexed Variables
                       </p>
                       <p className="mt-2 text-2xl font-semibold text-white">
@@ -546,7 +546,7 @@ export const ManageEnvironment = () => {
                       </p>
                     </div>
                     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                      <p className="text-[11px] uppercase tracking-[0.2em] text-gray-500">
+                      <p className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">
                         Mutation Policy
                       </p>
                       <p className="mt-2 text-sm font-medium text-white">
@@ -559,7 +559,7 @@ export const ManageEnvironment = () => {
                 </CardHeader>
 
                 <CardContent className="space-y-4">
-                  <div className="rounded-2xl border border-white/10 bg-black/10 px-4 py-3 text-sm text-gray-400">
+                  <div className="rounded-2xl border border-white/10 bg-black/10 px-4 py-3 text-sm text-zinc-400">
                     {envType.is_protected ? (
                       <div className="flex items-start gap-3">
                         <ShieldAlert className="mt-0.5 h-4 w-4 text-red-300" />
@@ -567,13 +567,13 @@ export const ManageEnvironment = () => {
                       </div>
                     ) : (
                       <div className="flex items-start gap-3">
-                        <Layers3 className="mt-0.5 h-4 w-4 text-violet-300" />
+                        <Layers3 className="mt-0.5 h-4 w-4 text-emerald-300" />
                         <span>Direct edits are allowed.</span>
                       </div>
                     )}
                   </div>
 
-                  <div className="flex items-center justify-between border-t border-gray-800 pt-2">
+                  <div className="flex items-center justify-between border-t border-zinc-800 pt-2">
                     <Button
                       onClick={() =>
                         navigate(
@@ -583,7 +583,7 @@ export const ManageEnvironment = () => {
                       data-testid={`env-type-open-workspace-${envType.id}`}
                       variant="ghost"
                       size="sm"
-                      className="text-gray-400 hover:bg-gray-800 hover:text-white"
+                      className="text-zinc-400 hover:bg-zinc-800 hover:text-white"
                     >
                       <FolderKanban className="mr-2 h-4 w-4" />
                       Open Workspace
@@ -594,7 +594,7 @@ export const ManageEnvironment = () => {
                         variant="ghost"
                         size="sm"
                         data-testid={`env-type-edit-${envType.id}`}
-                        className="text-gray-400 hover:bg-gray-800 hover:text-white"
+                        className="text-zinc-400 hover:bg-zinc-800 hover:text-white"
                       >
                         <Edit3 className="h-4 w-4" />
                       </Button>
@@ -603,7 +603,7 @@ export const ManageEnvironment = () => {
                         variant="ghost"
                         size="sm"
                         data-testid={`env-type-delete-${envType.id}`}
-                        className="text-gray-400 hover:bg-red-900/20 hover:text-red-400"
+                        className="text-zinc-400 hover:bg-red-900/20 hover:text-red-400"
                         disabled={envType.is_protected}
                       >
                         <Trash2 className="h-4 w-4" />
@@ -616,18 +616,18 @@ export const ManageEnvironment = () => {
 
             {environmentTypes.length === 0 && (
               <div className="col-span-full">
-                <Card className="border-dashed border-gray-800 bg-gray-900">
+                <Card className="border-dashed border-zinc-800 bg-zinc-900">
                   <CardContent className="flex flex-col items-center justify-center py-12">
-                    <Settings className="mb-4 h-12 w-12 text-gray-600" />
+                    <Settings className="mb-4 h-12 w-12 text-zinc-600" />
                     <h3 className="mb-2 text-lg font-medium text-white">
                       No Environment Types
                     </h3>
-                    <p className="mb-6 max-w-md text-center text-gray-400">
+                    <p className="mb-6 max-w-md text-center text-zinc-400">
                       Create your first environment type to start organizing variables. Common types include Development, Staging, and Production.
                     </p>
                     <Button
                       onClick={openCreateSheet}
-                      className="bg-violet-500 text-white hover:bg-violet-600"
+                      className="bg-emerald-500 text-white hover:bg-emerald-600"
                     >
                       <Plus className="mr-2 h-4 w-4" />
                       Create Environment Type
@@ -638,21 +638,21 @@ export const ManageEnvironment = () => {
             )}
           </div>
 
-          <Card className="border-gray-800 bg-gradient-to-br from-gray-900 to-gray-950">
+          <Card className="border-zinc-800 bg-gradient-to-br from-zinc-900 to-zinc-950">
             <CardHeader>
               <CardTitle className="text-white">Quick Rules</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3 text-sm text-gray-400">
+            <CardContent className="space-y-3 text-sm text-zinc-400">
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                <p className="font-medium text-gray-200">Keep daily lanes editable</p>
+                <p className="font-medium text-zinc-200">Keep daily lanes editable</p>
                 <p className="mt-2">Development and preview usually stay direct-edit.</p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                <p className="font-medium text-gray-200">Choose one default lane</p>
+                <p className="font-medium text-zinc-200">Choose one default lane</p>
                 <p className="mt-2">It becomes the starting context for operators.</p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                <p className="font-medium text-gray-200">Protect production-like lanes</p>
+                <p className="font-medium text-zinc-200">Protect production-like lanes</p>
                 <p className="mt-2">Use protection when changes should be reviewed first.</p>
               </div>
             </CardContent>
@@ -663,13 +663,13 @@ export const ManageEnvironment = () => {
       <Sheet open={showCreateSheet} onOpenChange={setShowCreateSheet}>
         <SheetContent
           side="right"
-          className="w-full border-gray-800 bg-gray-900 sm:max-w-2xl"
+          className="w-full border-zinc-800 bg-zinc-900 sm:max-w-2xl"
         >
           <SheetHeader>
             <SheetTitle className="text-white">
               Create Environment Type
             </SheetTitle>
-            <SheetDescription className="text-gray-400">
+            <SheetDescription className="text-zinc-400">
               Add a new environment lane for this project.
             </SheetDescription>
           </SheetHeader>
@@ -678,14 +678,14 @@ export const ManageEnvironment = () => {
             <Button
               onClick={() => setShowCreateSheet(false)}
               variant="outline"
-              className="border-gray-700 text-white hover:bg-gray-800"
+              className="border-zinc-700 text-white hover:bg-zinc-800"
             >
               Cancel
             </Button>
             <Button
               onClick={handleCreate}
               disabled={createEnvironmentType.isPending}
-              className="bg-violet-500 text-white hover:bg-violet-600"
+              className="bg-emerald-500 text-white hover:bg-emerald-600"
             >
               {createEnvironmentType.isPending
                 ? "Creating..."
@@ -698,11 +698,11 @@ export const ManageEnvironment = () => {
       <Sheet open={showEditSheet} onOpenChange={setShowEditSheet}>
         <SheetContent
           side="right"
-          className="w-full border-gray-800 bg-gray-900 sm:max-w-2xl"
+          className="w-full border-zinc-800 bg-zinc-900 sm:max-w-2xl"
         >
           <SheetHeader>
             <SheetTitle className="text-white">Edit Environment Type</SheetTitle>
-            <SheetDescription className="text-gray-400">
+            <SheetDescription className="text-zinc-400">
               Update naming, color, and workflow rules.
             </SheetDescription>
           </SheetHeader>
@@ -711,14 +711,14 @@ export const ManageEnvironment = () => {
             <Button
               onClick={closeEditSheet}
               variant="outline"
-              className="border-gray-700 text-white hover:bg-gray-800"
+              className="border-zinc-700 text-white hover:bg-zinc-800"
             >
               Cancel
             </Button>
             <Button
               onClick={handleUpdate}
               disabled={updateEnvironmentType.isPending}
-              className="bg-violet-500 text-white hover:bg-violet-600"
+              className="bg-emerald-500 text-white hover:bg-emerald-600"
             >
               {updateEnvironmentType.isPending
                 ? "Updating..."
@@ -729,12 +729,12 @@ export const ManageEnvironment = () => {
       </Sheet>
 
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <DialogContent className="border-gray-800 bg-gray-900">
+        <DialogContent className="border-zinc-800 bg-zinc-900">
           <DialogHeader>
             <DialogTitle className="text-white">
               Delete Environment Type
             </DialogTitle>
-            <DialogDescription className="text-gray-400">
+            <DialogDescription className="text-zinc-400">
               This action cannot be undone. Type the environment name to confirm deletion.
             </DialogDescription>
           </DialogHeader>
@@ -756,7 +756,7 @@ export const ManageEnvironment = () => {
                 value={deleteConfirmText}
                 onChange={(event) => setDeleteConfirmText(event.target.value)}
                 placeholder={selectedEnvironment?.name}
-                className="border-gray-700 bg-gray-950 text-white"
+                className="border-zinc-700 bg-zinc-950 text-white"
               />
             </div>
           </div>
@@ -764,7 +764,7 @@ export const ManageEnvironment = () => {
             <Button
               onClick={() => setShowDeleteDialog(false)}
               variant="outline"
-              className="border-gray-700 text-white hover:bg-gray-800"
+              className="border-zinc-700 text-white hover:bg-zinc-800"
             >
               Cancel
             </Button>

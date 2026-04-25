@@ -3,6 +3,8 @@
 /* tslint:disable */
 /* eslint-disable */
 import type { CheckSlugResponse } from '../models/CheckSlugResponse';
+import type { DeleteOrgRequest } from '../models/DeleteOrgRequest';
+import type { DeleteOrgResponse } from '../models/DeleteOrgResponse';
 import type { OrgResponse } from '../models/OrgResponse';
 import type { UpdateOrgRequest } from '../models/UpdateOrgRequest';
 import type { CancelablePromise } from '../core/CancelablePromise';
@@ -36,6 +38,26 @@ export class OrganizationsService {
     ): CancelablePromise<OrgResponse> {
         return this.httpRequest.request({
             method: 'PATCH',
+            url: '/api/org',
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                500: `Internal server error`,
+            },
+        });
+    }
+    /**
+     * Delete Organization
+     * Permanently delete the current organization
+     * @param requestBody
+     * @returns DeleteOrgResponse Organization deleted successfully
+     * @throws ApiError
+     */
+    public deleteOrg(
+        requestBody?: DeleteOrgRequest,
+    ): CancelablePromise<DeleteOrgResponse> {
+        return this.httpRequest.request({
+            method: 'DELETE',
             url: '/api/org',
             body: requestBody,
             mediaType: 'application/json',

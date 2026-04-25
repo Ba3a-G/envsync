@@ -110,6 +110,8 @@ export const envHistoryRequestSchema = z
 		env_type_id: z.string().openapi({ example: "env_type_123" }),
 		page: z.number().int().min(1).default(1).openapi({ example: 1 }),
 		per_page: z.number().int().min(1).max(100).default(20).openapi({ example: 20 }),
+		from_created_at: z.string().datetime().optional().openapi({ example: "2024-01-01T00:00:00Z" }),
+		to_created_at: z.string().datetime().optional().openapi({ example: "2024-01-31T23:59:59Z" }),
 	})
 	.openapi({ ref: "EnvHistoryRequest" });
 
@@ -137,6 +139,15 @@ export const envDiffRequestSchema = z
 		to_pit_id: z.string().openapi({ example: "pit_456" }),
 	})
 	.openapi({ ref: "EnvDiffRequest" });
+
+export const envTimestampRangeDiffRequestSchema = z
+	.object({
+		app_id: z.string().openapi({ example: "app_123" }),
+		env_type_id: z.string().openapi({ example: "env_type_123" }),
+		from_timestamp: z.string().datetime().openapi({ example: "2024-01-01T10:00:00Z" }),
+		to_timestamp: z.string().datetime().openapi({ example: "2024-01-07T10:00:00Z" }),
+	})
+	.openapi({ ref: "EnvTimestampRangeDiffRequest" });
 
 export const variableTimelineRequestSchema = z
 	.object({
@@ -206,6 +217,7 @@ export const envHistoryResponseSchema = z
 				user_id: z.string().openapi({ example: "user_123" }),
 				created_at: z.string().openapi({ example: "2024-01-01T10:00:00Z" }),
 				updated_at: z.string().openapi({ example: "2024-01-01T10:00:00Z" }),
+				changes_count: z.number().int().openapi({ example: 3 }),
 			}),
 		),
 		totalPages: z.number().int().openapi({ example: 5 }),

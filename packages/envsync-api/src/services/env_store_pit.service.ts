@@ -2,6 +2,10 @@ import { v4 as uuidv4 } from "uuid";
 
 import { DB } from "@/libs/db";
 
+function createExclusiveUpperBound(timestamp: Date) {
+	return new Date(timestamp.getTime() + 1);
+}
+
 export class EnvStorePiTService {
 	public static createEnvStorePiT = async ({
 		org_id,
@@ -80,38 +84,72 @@ export class EnvStorePiTService {
 		env_type_id,
 		page,
 		per_page,
+		from_created_at,
+		to_created_at,
 	}: {
 		org_id: string;
 		app_id: string;
 		env_type_id: string;
 		page: number;
 		per_page: number;
+		from_created_at?: Date;
+		to_created_at?: Date;
 	}) => {
 		const db = await DB.getInstance();
 
+		let historyQuery = db
+			.selectFrom("env_store_pit")
+			.select(eb => [
+				"env_store_pit.id",
+				"env_store_pit.org_id",
+				"env_store_pit.app_id",
+				"env_store_pit.env_type_id",
+				"env_store_pit.change_request_message",
+				"env_store_pit.user_id",
+				"env_store_pit.created_at",
+				"env_store_pit.updated_at",
+				eb
+					.selectFrom("env_store_pit_change_request")
+					.select(db.fn.count<number>("env_store_pit_change_request.id").as("count"))
+					.whereRef("env_store_pit_change_request.env_store_pit_id", "=", "env_store_pit.id")
+					.as("changes_count"),
+			])
+			.where("env_store_pit.org_id", "=", org_id)
+			.where("env_store_pit.app_id", "=", app_id)
+			.where("env_store_pit.env_type_id", "=", env_type_id);
+
+		let totalCountQuery = db
+			.selectFrom("env_store_pit")
+			.select(db.fn.count<number>("env_store_pit.id").as("count"))
+			.where("env_store_pit.org_id", "=", org_id)
+			.where("env_store_pit.app_id", "=", app_id)
+			.where("env_store_pit.env_type_id", "=", env_type_id);
+
+		if (from_created_at) {
+			historyQuery = historyQuery.where("env_store_pit.created_at", ">=", from_created_at);
+			totalCountQuery = totalCountQuery.where("env_store_pit.created_at", ">=", from_created_at);
+		}
+
+		if (to_created_at) {
+			const toCreatedAtExclusive = createExclusiveUpperBound(to_created_at);
+			historyQuery = historyQuery.where("env_store_pit.created_at", "<", toCreatedAtExclusive);
+			totalCountQuery = totalCountQuery.where("env_store_pit.created_at", "<", toCreatedAtExclusive);
+		}
+
 		const [pits, totalCount] = await Promise.all([
-			db
-				.selectFrom("env_store_pit")
-				.selectAll()
-				.where("org_id", "=", org_id)
-				.where("app_id", "=", app_id)
-				.where("env_type_id", "=", env_type_id)
-				.orderBy("created_at", "desc")
-				.limit(per_page)
-				.offset((page - 1) * per_page)
-				.execute(),
-			db
-				.selectFrom("env_store_pit")
-				.select(db.fn.count<number>("id").as("count"))
-				.where("org_id", "=", org_id)
-				.where("app_id", "=", app_id)
-				.where("env_type_id", "=", env_type_id)
-				.executeTakeFirstOrThrow(),
+			historyQuery.orderBy("env_store_pit.created_at", "desc").limit(per_page).offset((page - 1) * per_page).execute(),
+			totalCountQuery.executeTakeFirstOrThrow(),
 		]);
 
 		const totalPages = Math.ceil(totalCount.count / per_page);
 
-		return { pits, totalPages };
+		return {
+			pits: pits.map(pit => ({
+				...pit,
+				changes_count: Number(pit.changes_count ?? 0),
+			})),
+			totalPages,
+		};
 	};
 
 	public static getEnvStorePiTsByVariable = async ({
@@ -246,7 +284,7 @@ export class EnvStorePiTService {
 			.where("env_store_pit.org_id", "=", org_id)
 			.where("env_store_pit.app_id", "=", app_id)
 			.where("env_store_pit.env_type_id", "=", env_type_id)
-			.where("env_store_pit.created_at", "<=", targetPiT.created_at)
+			.where("env_store_pit.created_at", "<", createExclusiveUpperBound(targetPiT.created_at))
 			.orderBy("env_store_pit.created_at", "asc")
 			.orderBy("env_store_pit_change_request.created_at", "asc")
 			.execute();
@@ -308,8 +346,9 @@ export class EnvStorePiTService {
 			.where("env_store_pit.org_id", "=", org_id)
 			.where("env_store_pit.app_id", "=", app_id)
 			.where("env_store_pit.env_type_id", "=", env_type_id)
-			.where("env_store_pit.created_at", "<=", timestamp)
+			.where("env_store_pit.created_at", "<", createExclusiveUpperBound(timestamp))
 			.orderBy("env_store_pit.created_at", "asc")
+			.orderBy("env_store_pit_change_request.created_at", "asc")
 			.execute();
 
 		// Replay changes to build state
@@ -381,7 +420,7 @@ export class EnvStorePiTService {
 			.where("env_store_pit.org_id", "=", org_id)
 			.where("env_store_pit.app_id", "=", app_id)
 			.where("env_store_pit.env_type_id", "=", env_type_id)
-			.where("env_store_pit.created_at", "<=", toPiT.created_at)
+			.where("env_store_pit.created_at", "<", createExclusiveUpperBound(toPiT.created_at))
 			.orderBy("env_store_pit.created_at", "asc")
 			.orderBy("env_store_pit_change_request.created_at", "asc")
 			.execute();
@@ -439,6 +478,99 @@ export class EnvStorePiTService {
 		}
 
 		// Find deleted
+		for (const [key, value] of fromState) {
+			if (!toState.has(key)) {
+				diff.deleted.push({ key, value });
+			}
+		}
+
+		return diff;
+	};
+
+	public static getEnvDiffByTimestampRange = async ({
+		org_id,
+		app_id,
+		env_type_id,
+		from_timestamp,
+		to_timestamp,
+	}: {
+		org_id: string;
+		app_id: string;
+		env_type_id: string;
+		from_timestamp: Date;
+		to_timestamp: Date;
+	}) => {
+		const db = await DB.getInstance();
+
+		const allChanges = await db
+			.selectFrom("env_store_pit")
+			.innerJoin(
+				"env_store_pit_change_request",
+				"env_store_pit.id",
+				"env_store_pit_change_request.env_store_pit_id",
+			)
+			.select([
+				"env_store_pit_change_request.key",
+				"env_store_pit_change_request.value",
+				"env_store_pit_change_request.operation",
+				"env_store_pit.created_at",
+			])
+			.where("env_store_pit.org_id", "=", org_id)
+			.where("env_store_pit.app_id", "=", app_id)
+			.where("env_store_pit.env_type_id", "=", env_type_id)
+			.where("env_store_pit.created_at", "<", createExclusiveUpperBound(to_timestamp))
+			.orderBy("env_store_pit.created_at", "asc")
+			.orderBy("env_store_pit_change_request.created_at", "asc")
+			.execute();
+
+		const fromState = new Map<string, string>();
+		const toState = new Map<string, string>();
+
+		for (const change of allChanges) {
+			const operation = change.operation || "UPDATE";
+			const isBeforeOrAtFrom = change.created_at <= from_timestamp;
+
+			if (isBeforeOrAtFrom) {
+				switch (operation) {
+					case "CREATE":
+					case "UPDATE":
+						fromState.set(change.key, change.value);
+						break;
+					case "DELETE":
+						fromState.delete(change.key);
+						break;
+				}
+			}
+
+			switch (operation) {
+				case "CREATE":
+				case "UPDATE":
+					toState.set(change.key, change.value);
+					break;
+				case "DELETE":
+					toState.delete(change.key);
+					break;
+			}
+		}
+
+		const diff = {
+			added: [] as Array<{ key: string; value: string }>,
+			modified: [] as Array<{ key: string; old_value: string; new_value: string }>,
+			deleted: [] as Array<{ key: string; value: string }>,
+		};
+
+		for (const [key, value] of toState) {
+			if (!fromState.has(key)) {
+				diff.added.push({ key, value });
+			} else if (fromState.get(key) !== value) {
+				diff.modified.push({
+					key,
+					old_value: fromState.get(key)!,
+					new_value: value,
+				});
+			}
+		}
+
 		for (const [key, value] of fromState) {
 			if (!toState.has(key)) {
 				diff.deleted.push({ key, value });

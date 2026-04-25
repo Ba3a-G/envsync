@@ -18,14 +18,14 @@ const formatCompactNumber = (num: number): string => {
 };
 
 const variantStyles = {
-  default: "bg-violet-500 text-white",
+  default: "bg-emerald-500 text-white",
   subtle:
-    "bg-violet-500/10 text-violet-400 border border-violet-500/20",
+    "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20",
   ghost:
-    "bg-transparent text-violet-400 hover:bg-violet-500/10 hover:text-violet-500",
+    "bg-transparent text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-500",
   destructive: "bg-red-500 text-white hover:bg-red-600",
   outline:
-    "bg-transparent border border-violet-500/50 text-violet-400",
+    "bg-transparent border border-emerald-500/50 text-emerald-400",
 };
 
 const sizeStyles = {

@@ -10,9 +10,16 @@ export type MemberCertResponse = {
     subject_cn: string;
     subject_email: string | null;
     status: string;
+    description?: string | null;
     metadata?: any | null;
-    cert_pem: string;
-    key_pem: string;
+    cert_pem?: string | null;
+    is_system_generated: boolean;
+    not_before?: string | null;
+    not_after?: string | null;
+    revoked_at?: string | null;
+    supersedes_certificate_id?: string | null;
     created_at: string;
+    updated_at: string;
+    key_pem: string;
 };
 

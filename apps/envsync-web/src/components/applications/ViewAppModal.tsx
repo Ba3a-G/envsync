@@ -61,17 +61,17 @@ export const ViewAppModal = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-gray-900 border-gray-800 max-w-2xl">
+      <DialogContent className="bg-zinc-900 border-zinc-800 max-w-2xl">
         <DialogHeader>
           <div className="flex items-center space-x-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-violet-500/20 to-indigo-500/20 rounded-lg flex items-center justify-center">
+            <div className="w-12 h-12 bg-gradient-to-br from-emerald-500/20 to-teal-500/20 rounded-lg flex items-center justify-center">
               <Database className="w-6 h-6 text-white" />
             </div>
             <div>
               <DialogTitle className="text-white text-xl font-semibold">
                 {app.name}
               </DialogTitle>
-              <DialogDescription className="text-gray-400">
+              <DialogDescription className="text-zinc-400">
                 Project Details and Configuration
               </DialogDescription>
             </div>
@@ -86,13 +86,13 @@ export const ViewAppModal = ({
                 variant="secondary"
                 className={`${
                   app.status === "active"
-                    ? "bg-violet-500/10 text-violet-400 border-violet-500/30"
-                    : "bg-gray-700 text-gray-300 border-gray-600"
+                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                    : "bg-zinc-700 text-zinc-300 border-zinc-600"
                 } border`}
               >
                 {app.status || "active"}
               </Badge>
-              <div className="flex items-center space-x-4 text-sm text-gray-400">
+              <div className="flex items-center space-x-4 text-sm text-zinc-400">
                 <div className="flex items-center space-x-1">
                   <Key className="w-4 h-4" />
                   <span>{app.env_count || 0} variables</span>
@@ -108,7 +108,7 @@ export const ViewAppModal = ({
             {canEdit && (
               <Button
                 onClick={() => onEdit(app)}
-                className="bg-violet-500 hover:bg-violet-600 text-white"
+                className="bg-emerald-500 hover:bg-emerald-600 text-white"
                 size="sm"
               >
                 <Edit className="w-4 h-4 mr-2" />
@@ -120,7 +120,7 @@ export const ViewAppModal = ({
           {/* Description */}
           <div className="space-y-2">
             <h4 className="text-white font-medium">Description</h4>
-            <p className="text-gray-300 bg-gray-900 p-3 rounded-lg">
+            <p className="text-zinc-300 bg-zinc-900 p-3 rounded-lg">
               {app.description || "No description provided"}
             </p>
           </div>
@@ -134,13 +134,13 @@ export const ViewAppModal = ({
                   Project ID
                 </h4>
                 <div className="flex items-center space-x-2">
-                  <code className="text-sm select-all font-mono text-gray-300 bg-gray-900 px-3 py-2 rounded flex-1">
+                  <code className="text-sm select-all font-mono text-zinc-300 bg-zinc-900 px-3 py-2 rounded flex-1">
                     {app.id}
                   </code>
                   {/* <Button
                     size="sm"
                     variant="ghost"
-                    className="text-gray-400 hover:text-white"
+                    className="text-zinc-400 hover:text-white"
                     onClick={handleCopyId}
                   >
                     <Copy className="w-4 h-4" />
@@ -155,7 +155,7 @@ export const ViewAppModal = ({
                   <User className="w-4 h-4 mr-2" />
                   Organization
                 </h4>
-                <p className="text-gray-300 bg-gray-900 p-3 rounded">
+                <p className="text-zinc-300 bg-zinc-900 p-3 rounded">
                   {app.org_id}
                 </p>
               </div> */}
@@ -164,7 +164,7 @@ export const ViewAppModal = ({
                   <Calendar className="w-4 h-4 mr-2" />
                   Secrets Enabled
                 </h4>
-                <p className="text-gray-300 bg-gray-900 p-3 rounded">
+                <p className="text-zinc-300 bg-zinc-900 p-3 rounded">
                   {app.enable_secrets ? "Yes" : "No"}
                 </p>
               </div>
@@ -175,8 +175,8 @@ export const ViewAppModal = ({
           {app.metadata && Object.keys(app.metadata).length > 0 && (
             <div className="space-y-2">
               <h4 className="text-white font-medium">Metadata</h4>
-              <div className="bg-gray-900 p-3 rounded-lg">
-                <pre className="text-sm text-gray-300 overflow-x-auto">
+              <div className="bg-zinc-900 p-3 rounded-lg">
+                <pre className="text-sm text-zinc-300 overflow-x-auto">
                   {JSON.stringify(app.metadata, null, 2)}
                 </pre>
               </div>
@@ -187,8 +187,8 @@ export const ViewAppModal = ({
           {app.public_key && (
             <div className="space-y-2">
               <h4 className="text-white font-medium">Public Key</h4>
-              <div className="bg-gray-900 p-3 rounded-lg">
-                <pre className="text-sm text-gray-300 overflow-x-auto">
+              <div className="bg-zinc-900 p-3 rounded-lg">
+                <pre className="text-sm text-zinc-300 overflow-x-auto">
                   {app.public_key ? app.public_key : "No public key available"}
                 </pre>
               </div>
@@ -196,14 +196,14 @@ export const ViewAppModal = ({
           )}
 
           {/* Quick Actions */}
-          <div className="flex items-center justify-between gap-4 pt-4 border-t border-gray-800">
-            <div className="text-xs text-gray-400">
+          <div className="flex items-center justify-between gap-4 pt-4 border-t border-zinc-800">
+            <div className="text-xs text-zinc-400">
               <Info className="inline-block mr-1" size={16} />
               Manage variables and configurations for this project
             </div>
             <Button
               variant="outline"
-              className="text-white border-gray-700 hover:bg-gray-800"
+              className="text-white border-zinc-700 hover:bg-zinc-800"
               onClick={() => {
                 // Navigate to project environments
                 navigate(`/applications/${app.id}`);

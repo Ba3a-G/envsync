@@ -20,6 +20,7 @@ import {
 	secretPitRequestSchema,
 	secretTimestampRequestSchema,
 	secretDiffRequestSchema,
+	secretTimestampRangeDiffRequestSchema,
 	secretVariableTimelineRequestSchema,
 	rollbackSecretsToPitRequestSchema,
 	rollbackSecretsToTimestampRequestSchema,
@@ -436,6 +437,36 @@ app.post(
 	}),
 	zValidator("json", secretDiffRequestSchema),
 	SecretController.getSecretDiff,
+);
+
+app.post(
+	"/diff/timestamp-range",
+	describeRoute({
+		operationId: "getSecretDiffByTimestampRange",
+		summary: "Get Secrets Diff By Timestamp Range",
+		description: "Compare secrets between two timestamps",
+		tags: ["Secrets - Point in Time"],
+		responses: {
+			200: {
+				description: "Secrets timestamp-range diff retrieved successfully",
+				content: {
+					"application/json": {
+						schema: resolver(secretDiffResponseSchema),
+					},
+				},
+			},
+			500: {
+				description: "Internal server error",
+				content: {
+					"application/json": {
+						schema: resolver(errorResponseSchema),
+					},
+				},
+			},
+		},
+	}),
+	zValidator("json", secretTimestampRangeDiffRequestSchema),
+	SecretController.getSecretDiffByTimestampRange,
 );
 
 app.post(

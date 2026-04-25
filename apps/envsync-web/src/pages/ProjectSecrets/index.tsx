@@ -162,7 +162,7 @@ export const ProjectEnvironments = () => {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center">
-          <p className="text-gray-400 mb-4">Loading user data ...</p>
+          <p className="text-zinc-400 mb-4">Loading user data ...</p>
         </div>
       </div>
     );
@@ -189,13 +189,13 @@ export const ProjectEnvironments = () => {
           <h3 className="text-lg font-semibold text-white mb-2">
             Project not found
           </h3>
-          <p className="text-gray-400 mb-4">
+          <p className="text-zinc-400 mb-4">
             The requested project could not be found.
           </p>
           <Button
             onClick={onBack}
             variant="outline"
-            className="text-white border-gray-700 hover:bg-gray-800"
+            className="text-white border-zinc-700 hover:bg-zinc-800"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Go Back

@@ -45,7 +45,7 @@ export const AuditLogs = () => {
             onClick={() => refetch()}
             variant="outline"
             size="sm"
-            className="text-gray-400 border-gray-700 hover:bg-gray-800 hover:text-gray-200"
+            className="text-zinc-400 border-zinc-700 hover:bg-zinc-800 hover:text-zinc-200"
             disabled={isRefetching}
           >
             <RefreshCw
@@ -56,7 +56,7 @@ export const AuditLogs = () => {
             onClick={handleExportLogs}
             variant="outline"
             size="sm"
-            className="text-gray-400 border-gray-700 hover:bg-gray-800 hover:text-gray-200"
+            className="text-zinc-400 border-zinc-700 hover:bg-zinc-800 hover:text-zinc-200"
           >
             <Download className="w-4 h-4 mr-2" />
             Export

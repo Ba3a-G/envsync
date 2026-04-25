@@ -80,6 +80,12 @@ export const coreWebModules: WebModule[] = [
         loadComponent: () => import("@/pages/PointInTimeVariables"),
       },
       {
+        id: "applications-pit-secrets",
+        layout: "root",
+        path: "applications/pit/:appId/secrets",
+        loadComponent: () => import("@/pages/PointInTimeVariables"),
+      },
+      {
         id: "roles",
         layout: "root",
         path: "roles",

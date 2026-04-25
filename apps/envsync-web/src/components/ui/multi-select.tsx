@@ -107,12 +107,12 @@ export function MultiSelect({
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className="w-[var(--radix-popover-trigger-width)] bg-gray-900 p-0"
+        className="w-[var(--radix-popover-trigger-width)] bg-zinc-900 p-0"
         align="start"
       >
         <Command>
           {enableSearch && <CommandInput placeholder={placeholder} />}
-          <CommandList className="bg-gray-900">
+          <CommandList className="bg-zinc-900">
             <CommandEmpty>No item found.</CommandEmpty>
             <CommandGroup>
               {items.map((item) => (

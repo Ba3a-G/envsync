@@ -6,42 +6,42 @@
 
 @layer base {
   :root {
-    --background: 222 47% 7%;
+    --background: 240 6% 8%;
     --foreground: 210 20% 98%;
 
-    --card: 221 39% 11%;
+    --card: 240 6% 11%;
     --card-foreground: 210 20% 98%;
 
-    --popover: 221 39% 11%;
+    --popover: 240 6% 11%;
     --popover-foreground: 210 20% 98%;
 
-    --primary: 258 90% 66%;
+    --primary: 160 84% 39%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 217 33% 17%;
+    --secondary: 240 4% 16%;
     --secondary-foreground: 210 20% 98%;
 
-    --muted: 217 33% 17%;
-    --muted-foreground: 218 11% 65%;
+    --muted: 240 4% 16%;
+    --muted-foreground: 240 5% 65%;
 
-    --accent: 217 33% 17%;
+    --accent: 160 40% 16%;
     --accent-foreground: 210 20% 98%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 217 33% 17%;
-    --input: 217 33% 17%;
-    --ring: 258 90% 66%;
+    --border: 240 4% 18%;
+    --input: 240 4% 18%;
+    --ring: 160 84% 39%;
 
-    --sidebar-background: 221 39% 11%;
+    --sidebar-background: 240 6% 10%;
     --sidebar-foreground: 210 20% 98%;
-    --sidebar-primary: 258 90% 66%;
+    --sidebar-primary: 160 84% 39%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 217 33% 17%;
+    --sidebar-accent: 160 40% 16%;
     --sidebar-accent-foreground: 210 20% 98%;
-    --sidebar-border: 217 33% 17%;
-    --sidebar-ring: 258 90% 66%;
+    --sidebar-border: 240 4% 18%;
+    --sidebar-ring: 160 84% 39%;
   }
 
   html {
@@ -90,22 +90,22 @@ body,
 }
 
 .overflow-y-auto::-webkit-scrollbar-track {
-  background: #111827;
+  background: #18181b;
 }
 
 .overflow-y-auto::-webkit-scrollbar-thumb {
-  background: #4c1d95;
+  background: #059669;
   border-radius: 3px;
 }
 
 .overflow-y-auto::-webkit-scrollbar-thumb:hover {
-  background: #6d28d9;
+  background: #10b981;
 }
 
 /* Firefox scrollbar */
 .overflow-y-auto {
   scrollbar-width: thin;
-  scrollbar-color: #4c1d95 #111827;
+  scrollbar-color: #059669 #18181b;
 }
 
 /* Ensure tables are responsive within scrollable containers */
@@ -114,11 +114,11 @@ body,
 }
 
 .overflow-x-auto::-webkit-scrollbar-track {
-  background: #111827;
+  background: #18181b;
 }
 
 .overflow-x-auto::-webkit-scrollbar-thumb {
-  background: #4c1d95;
+  background: #059669;
   border-radius: 3px;
 }
 
@@ -134,7 +134,7 @@ img {
 }
 
 *::selection {
-  background-color: rgba(139, 92, 246, 0.4);
+  background-color: rgba(16, 185, 129, 0.28);
 }
 
 /* Page entrance animation */

@@ -158,7 +158,7 @@ export const Users = () => {
         actions={
           canManageUsers ? (
             <Button
-              className="bg-violet-500 hover:bg-violet-600 text-white"
+              className="bg-emerald-500 hover:bg-emerald-600 text-white"
               onClick={() => setShowInviteUserModalOpen(true)}
               disabled={inviteUserMutation.isPending}
               data-testid="users-invite-member"
@@ -176,10 +176,10 @@ export const Users = () => {
         secondaryNav={
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="h-auto bg-transparent p-0">
-              <TabsTrigger value="members" className="rounded-xl data-[state=active]:bg-violet-500/18 data-[state=active]:text-white">
+              <TabsTrigger value="members" className="rounded-xl data-[state=active]:bg-emerald-500/18 data-[state=active]:text-white">
                 <span data-testid="users-tab-members">Members</span>
               </TabsTrigger>
-              <TabsTrigger value="invitations" className="rounded-xl data-[state=active]:bg-violet-500/18 data-[state=active]:text-white">
+              <TabsTrigger value="invitations" className="rounded-xl data-[state=active]:bg-emerald-500/18 data-[state=active]:text-white">
                 <span data-testid="users-tab-invitations">Invitations</span>
               </TabsTrigger>
             </TabsList>

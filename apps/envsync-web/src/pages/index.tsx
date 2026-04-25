@@ -10,7 +10,7 @@ const webRoutes = getWebRoutes();
 
 function RouteFallback() {
   return (
-    <div className="flex min-h-[240px] items-center justify-center text-sm text-gray-400">
+    <div className="flex min-h-[240px] items-center justify-center text-sm text-zinc-400">
       Loading…
     </div>
   );

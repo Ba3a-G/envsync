@@ -25,7 +25,7 @@ function escapeRegExp(value: string) {
 
 function getEnvironmentCard(page: Page, envName: string) {
 	return page
-		.locator('[class*="bg-gray-900"]')
+		.locator('[class*="bg-zinc-900"]')
 		.filter({
 			has: page.getByRole("heading", {
 				name: new RegExp(`^${escapeRegExp(envName)}$`, "i"),
