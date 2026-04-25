@@ -79,10 +79,10 @@ export const InviteUserModal = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-gray-800 border-gray-700">
+      <DialogContent className="bg-zinc-800 border-zinc-700">
         <DialogHeader>
           <DialogTitle className="text-white">Invite Team Member</DialogTitle>
-          <DialogDescription className="text-gray-400">
+          <DialogDescription className="text-zinc-400">
             Send an invitation to add a new member to your team.
           </DialogDescription>
         </DialogHeader>
@@ -96,7 +96,7 @@ export const InviteUserModal = ({
               type="email"
               value={emailAddress}
               onChange={(e) => setEmailAddress(e.target.value)}
-              className={`bg-gray-900 border-gray-700 text-white ${
+              className={`bg-zinc-900 border-zinc-700 text-white ${
                 formErrors.email ? "border-red-500" : ""
               }`}
               placeholder="Enter email address"
@@ -116,18 +116,18 @@ export const InviteUserModal = ({
               disabled={isLoading}
             >
               <SelectTrigger
-                className={`bg-gray-900 border-gray-700 text-white ${
+                className={`bg-zinc-900 border-zinc-700 text-white ${
                   formErrors.role ? "border-red-500" : ""
                 }`}
               >
                 <SelectValue placeholder="Select a role" />
               </SelectTrigger>
-              <SelectContent className="bg-gray-800 border-gray-700">
+              <SelectContent className="bg-zinc-800 border-zinc-700">
                 {roles.map((role) => (
                   <SelectItem
                     key={role.id}
                     value={role.id}
-                    className="text-white hover:bg-gray-700"
+                    className="text-white hover:bg-zinc-700"
                   >
                     <div className="flex items-center space-x-2">
                       {getRoleIcon(role.name)}
@@ -146,14 +146,14 @@ export const InviteUserModal = ({
           <Button
             variant="outline"
             onClick={onClose}
-            className="text-white border-gray-600 hover:bg-gray-700"
+            className="text-white border-zinc-600 hover:bg-zinc-700"
             disabled={isLoading}
           >
             Cancel
           </Button>
           <Button
             onClick={onInvite}
-            className="bg-violet-500 hover:bg-violet-600 text-white"
+            className="bg-emerald-500 hover:bg-emerald-600 text-white"
             disabled={isLoading || !emailAddress || !selectedRoleId}
           >
             {isLoading ? (

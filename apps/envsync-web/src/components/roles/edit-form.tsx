@@ -226,7 +226,7 @@ export const RoleEditForm = ({
           })
         ) : (
           <Button
-            className="bg-violet-500 hover:bg-violet-600 text-white"
+            className="bg-emerald-500 hover:bg-emerald-600 text-white"
             disabled={createRoleMutation.isPending}
           >
             <Plus className="size-4 mr-2" />
@@ -234,12 +234,12 @@ export const RoleEditForm = ({
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent hideCloseButton className="bg-gray-800 border-gray-700 max-w-lg">
+      <DialogContent hideCloseButton className="bg-zinc-800 border-zinc-700 max-w-lg">
         <DialogHeader>
           <DialogTitle className="text-white">
             {edit ? "Edit Role" : "Create New Role"}
           </DialogTitle>
-          <DialogDescription className="text-gray-400">
+          <DialogDescription className="text-zinc-400">
             Roles define sets of permissions that can be assigned to users.
           </DialogDescription>
         </DialogHeader>
@@ -254,7 +254,7 @@ export const RoleEditForm = ({
                 id="role-name"
                 value={name}
                 onChange={(e) => setRoleName(e.target.value)}
-                className="bg-gray-900"
+                className="bg-zinc-900"
               />
             </div>
             <div className="space-y-2">
@@ -269,7 +269,7 @@ export const RoleEditForm = ({
             <Label className="text-white">Permissions</Label>
             {PERMISSION_GROUPS.map((group) => (
               <div key={group.label} className="space-y-2">
-                <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+                <p className="text-xs font-medium text-zinc-400 uppercase tracking-wider">
                   {group.label}
                 </p>
                 <div className="grid grid-cols-3 gap-2">
@@ -287,16 +287,16 @@ export const RoleEditForm = ({
                         key={perm.key}
                         className={`flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer transition-colors ${
                           isChecked
-                            ? "border-violet-500 bg-violet-500/10"
-                            : "border-gray-700 bg-gray-900 hover:border-gray-600"
+                            ? "border-emerald-500 bg-emerald-500/10"
+                            : "border-zinc-700 bg-zinc-900 hover:border-zinc-600"
                         }`}
                       >
                         <Checkbox
                           checked={isChecked || isInherited}
                           onCheckedChange={() => togglePermission(perm.key)}
-                          className="border-gray-600 data-[state=checked]:bg-violet-500 data-[state=checked]:border-violet-500"
+                          className="border-zinc-600 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
                         />
-                        <Icon size={14} className="text-gray-400 shrink-0" />
+                        <Icon size={14} className="text-zinc-400 shrink-0" />
                         <span className="text-sm text-white truncate">
                           {perm.label}
                         </span>
@@ -307,7 +307,7 @@ export const RoleEditForm = ({
               </div>
             ))}
             {permissions.is_admin && (
-              <p className="text-xs text-violet-400">
+              <p className="text-xs text-emerald-400">
                 Admin inherits all management permissions via FGA.
               </p>
             )}
@@ -317,7 +317,7 @@ export const RoleEditForm = ({
           <DialogClose asChild>
             <Button
               variant="outline"
-              className="text-white border-gray-600 hover:bg-gray-700"
+              className="text-white border-zinc-600 hover:bg-zinc-700"
             >
               Close
             </Button>
@@ -325,7 +325,7 @@ export const RoleEditForm = ({
           {edit ? (
             <Button
               onClick={handleUpdateRole}
-              className="bg-violet-500 hover:bg-violet-600 text-white"
+              className="bg-emerald-500 hover:bg-emerald-600 text-white"
               disabled={!unsavedChanges || updateRoleMutation.isPending}
             >
               Update
@@ -333,7 +333,7 @@ export const RoleEditForm = ({
           ) : (
             <Button
               onClick={handleCreateRole}
-              className="bg-violet-500 hover:bg-violet-600 text-white"
+              className="bg-emerald-500 hover:bg-emerald-600 text-white"
               disabled={!name || createRoleMutation.isPending}
             >
               Create

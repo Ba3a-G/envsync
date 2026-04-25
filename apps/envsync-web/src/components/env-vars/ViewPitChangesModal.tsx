@@ -1,421 +1,259 @@
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import {
-  History,
-  Plus,
-  Edit,
-  Minus,
-  User,
-  Calendar,
-  MessageSquare,
-  GitBranch,
-  Clock,
-  Key,
-  Loader2,
-  AlertCircle,
+	AlertCircle,
+	Clock3,
+	GitBranch,
+	History,
+	KeyRound,
+	Loader2,
+	MessageSquare,
+	User,
 } from "lucide-react";
+
 import { sdk } from "@/api";
 import { useEnvsAtPit } from "@/api/pointInTime.api";
-import { useEffect, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from "@/components/ui/table";
+import type {
+	PitDataKind,
+	PitHistoryItem,
+} from "@/pages/PointInTimeVariables/pit.utils";
+import {
+	getPitItemLabel,
+	getPitKindLabel,
+	maskPitValue,
+} from "@/pages/PointInTimeVariables/pit.utils";
 
 interface ViewPitChangesModalProps {
-  isOpen: boolean;
-  onOpenChange: (open: boolean) => void;
-  pitData: any;
-  projectId: string;
-  environmentId: string;
+	kind: PitDataKind;
+	isOpen: boolean;
+	onOpenChange: (open: boolean) => void;
+	pitData: PitHistoryItem | null;
+	projectId: string;
+	environmentId: string;
 }
 
 export const ViewPitChangesModal = ({
-  isOpen,
-  onOpenChange,
-  pitData,
-  projectId,
-  environmentId,
+	kind,
+	isOpen,
+	onOpenChange,
+	pitData,
+	projectId,
+	environmentId,
 }: ViewPitChangesModalProps) => {
-  const { data: users = [] } = useQuery({
-    queryKey: ["pit-users"],
-    queryFn: async () => sdk.users.getUsers(),
-    staleTime: 5 * 60 * 1000,
-  });
-  const usersMap = useMemo(
-    () => new Map(users.map((entry) => [entry.id, entry])),
-    [users]
-  );
-  // Fetch the actual changes for this PiT
-  const {
-    data: pitStateData,
-    isLoading,
-    error,
-    refetch,
-  } = useEnvsAtPit(
-    {
-      app_id: projectId,
-      env_type_id: environmentId,
-      pit_id: pitData?.id || "",
-    },
-    {
-      enabled: isOpen && !!pitData?.id && !!projectId && !!environmentId,
-    }
-  );
+	const { data: users = [] } = useQuery({
+		queryKey: ["pit-users"],
+		queryFn: async () => sdk.users.getUsers(),
+		staleTime: 5 * 60 * 1000,
+	});
 
-  // Refetch when modal opens with new data
-  useEffect(() => {
-    if (isOpen && pitData?.id) {
-      refetch();
-    }
-  }, [isOpen, pitData?.id, refetch]);
+	const usersMap = useMemo(
+		() => new Map(users.map((entry) => [entry.id, entry])),
+		[users]
+	);
 
-  const getOperationIcon = (operation: string) => {
-    switch (operation) {
-      case "CREATE":
-        return <Plus className="size-4 text-green-500" />;
-      case "UPDATE":
-        return <Edit className="size-4 text-indigo-500" />;
-      case "DELETE":
-        return <Minus className="size-4 text-red-500" />;
-      default:
-        return <Clock className="size-4 text-gray-500" />;
-    }
-  };
+	const {
+		data: pitStateData = [],
+		isLoading,
+		error,
+	} = useEnvsAtPit(
+		kind,
+		{
+			app_id: projectId,
+			env_type_id: environmentId,
+			pit_id: pitData?.id || "",
+		},
+		{
+			enabled: isOpen && Boolean(pitData?.id && projectId && environmentId),
+		}
+	);
 
-  const getOperationColor = (operation: string) => {
-    switch (operation) {
-      case "CREATE":
-        return "bg-green-500/20 text-green-300 hover:bg-green/40 border-green-500/30";
-      case "UPDATE":
-        return "bg-indigo/20 text-indigo-800 hover:bg-indigo/40 border-indigo/30";
-      case "DELETE":
-        return "bg-red-500/20 text-red-300 hover:bg-red/40 border-red-500/30";
-      default:
-        return "bg-gray-500/20 text-gray-300 hover:bg-gray/40 border-gray-500/30";
-    }
-  };
+	if (!pitData) {
+		return null;
+	}
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return {
-      date: date.toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      }),
-      time: date.toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: true,
-      }),
-    };
-  };
+	const kindLabel = getPitKindLabel(kind);
+	const itemLabel = getPitItemLabel(kind);
+	const createdCount = pitStateData.filter((item) => item.operation === "CREATE").length;
+	const updatedCount = pitStateData.filter((item) => item.operation === "UPDATE").length;
+	const operationCount = createdCount + updatedCount;
 
-  const getUserDisplayName = (userId: string) => {
-    const matchingUser = usersMap.get(userId);
-    if (matchingUser?.full_name?.trim()) {
-      return matchingUser.full_name;
-    }
-    if (matchingUser?.email?.trim()) {
-      return matchingUser.email;
-    }
-    if (userId?.includes("@")) {
-      return userId.split("@")[0];
-    }
-    return userId || "Unknown User";
-  };
+	function getUserDisplayName(userId: string) {
+		const user = usersMap.get(userId);
+		if (user?.full_name?.trim()) return user.full_name;
+		if (user?.email?.trim()) return user.email;
+		if (userId.includes("@")) return userId.split("@")[0];
+		return userId;
+	}
 
-  const getUserInitials = (userId: string) => {
-    const displayName = getUserDisplayName(userId);
-    return displayName.charAt(0).toUpperCase();
-  };
+	function formatDateTime(value: string) {
+		return new Date(value).toLocaleString(undefined, {
+			dateStyle: "medium",
+			timeStyle: "short",
+		});
+	}
 
-  if (!pitData) {
-    return null;
-  }
+	return (
+		<Dialog open={isOpen} onOpenChange={onOpenChange}>
+			<DialogContent className="flex max-h-[90vh] max-w-5xl flex-col border-zinc-800 bg-zinc-900 text-white">
+				<DialogHeader>
+					<DialogTitle className="flex items-center gap-2 text-xl">
+						<History className="size-5 text-emerald-400" />
+						{kindLabel} Snapshot Details
+					</DialogTitle>
+					<DialogDescription className="text-zinc-400">
+						Review the recorded snapshot metadata and the {itemLabel} state stored at this point in
+						time.
+					</DialogDescription>
+				</DialogHeader>
 
-  const dateTime = formatDate(pitData.created_at);
-  const changes = pitStateData || [];
+				<div className="space-y-4">
+					<Card className="border-zinc-800 bg-zinc-950">
+						<CardContent className="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-5">
+							<div className="space-y-1">
+								<p className="flex items-center gap-2 text-xs uppercase tracking-wide text-zinc-500">
+									<GitBranch className="size-3.5" />
+									PIT ID
+								</p>
+								<p className="font-mono text-sm text-white">{pitData.id}</p>
+							</div>
+							<div className="space-y-1">
+								<p className="flex items-center gap-2 text-xs uppercase tracking-wide text-zinc-500">
+									<Clock3 className="size-3.5" />
+									Created at
+								</p>
+								<p className="text-sm text-zinc-200">{formatDateTime(pitData.created_at)}</p>
+							</div>
+							<div className="space-y-1">
+								<p className="flex items-center gap-2 text-xs uppercase tracking-wide text-zinc-500">
+									<User className="size-3.5" />
+									Created by
+								</p>
+								<p className="text-sm text-zinc-200">{getUserDisplayName(pitData.user_id)}</p>
+							</div>
+							<div className="space-y-1">
+								<p className="flex items-center gap-2 text-xs uppercase tracking-wide text-zinc-500">
+									<KeyRound className="size-3.5" />
+									Items in snapshot
+								</p>
+								<p className="text-sm text-zinc-200">{pitStateData.length}</p>
+							</div>
+							<div className="space-y-1">
+								<p className="text-xs uppercase tracking-wide text-zinc-500">Recorded changes</p>
+								<p className="text-sm text-zinc-200">{pitData.changes_count}</p>
+							</div>
+						</CardContent>
+					</Card>
 
-  const changeStats = {
-    created: changes.filter((c) => c.operation === "CREATE").length,
-    updated: changes.filter((c) => c.operation === "UPDATE").length,
-    deleted: changes.filter((c) => c.operation === "DELETE").length,
-  };
+					<Card className="border-zinc-800 bg-zinc-950">
+						<CardContent className="space-y-4 p-4">
+							<div className="space-y-2">
+								<p className="flex items-center gap-2 text-xs uppercase tracking-wide text-zinc-500">
+									<MessageSquare className="size-3.5" />
+									Message
+								</p>
+								<p className="text-sm text-zinc-200">{pitData.change_request_message}</p>
+							</div>
+							<Separator className="bg-zinc-800" />
+							<div className="flex flex-wrap items-center gap-2">
+								<Badge className="border border-emerald-500/20 bg-emerald-500/10 text-emerald-300">
+									Current items: {pitStateData.length}
+								</Badge>
+								<Badge className="border border-cyan-500/20 bg-cyan-500/10 text-cyan-300">
+									Recorded ops: {operationCount || pitData.changes_count}
+								</Badge>
+								{kind === "secrets" && (
+									<Badge className="border border-amber-500/20 bg-amber-500/10 text-amber-300">
+										Values masked
+									</Badge>
+								)}
+							</div>
+						</CardContent>
+					</Card>
 
-  return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-gray-900 border-gray-800 text-white max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader className="py-4 fixed top-0 bg-inherit w-full">
-          <DialogTitle className="text-white text-2xl flex items-center gap-3">
-            <div className="p-2 bg-purple-500/20 rounded-lg">
-              <History className="w-6 h-6 text-purple-400" />
-            </div>
-            Point-in-Time Changes
-          </DialogTitle>
-          <DialogDescription className="text-gray-300 text-base">
-            Detailed view of all changes made in this snapshot
-          </DialogDescription>
-        </DialogHeader>
+					{error && (
+						<Alert className="border-red-500/20 bg-red-500/10 text-red-200">
+							<AlertCircle className="size-4" />
+							<AlertDescription>
+								Failed to load snapshot state: {error.message}
+							</AlertDescription>
+						</Alert>
+					)}
 
-        <div className="space-y-6 flex-1 overflow-auto mt-24 hide-scrollbar flex flex-col">
-          {/* PIT Information Header */}
-          <Card className="bg-gray-800/30 border-gray-700">
-            <CardContent className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-gray-400 text-sm">
-                    <GitBranch className="w-4 h-4" />
-                    PIT ID
-                  </div>
-                  <code className="text-white font-mono text-sm bg-gray-800/50 px-3 py-2 rounded-md block">
-                    {pitData.id}
-                  </code>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-gray-400 text-sm">
-                    <Calendar className="w-4 h-4" />
-                    Created On
-                  </div>
-                  <div className="text-white">
-                    <p className="font-medium">{dateTime.date}</p>
-                    <p className="text-gray-400 text-sm">{dateTime.time}</p>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-gray-400 text-sm">
-                    <User className="w-4 h-4" />
-                    Created By
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white text-xs font-medium">
-                      {getUserInitials(pitData.user_id)}
-                    </div>
-                    <p className="text-white font-medium text-sm">
-                      {getUserDisplayName(pitData.user_id)}
-                    </p>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-gray-400 text-sm">
-                    <Key className="w-4 h-4" />
-                    Total Changes
-                  </div>
-                  <p className="text-white font-bold text-lg">
-                    {isLoading ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      changes.length
-                    )}
-                  </p>
-                </div>
-              </div>
-
-              <Separator className="bg-gray-700 my-4" />
-
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-gray-400 text-sm">
-                  <MessageSquare className="w-4 h-4" />
-                  Commit Message
-                </div>
-                <p className="text-gray-300 leading-relaxed bg-gray-800/30 p-3 rounded-lg">
-                  {pitData.change_request_message}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Loading State */}
-          {isLoading && (
-            <Card className="bg-gray-800/30 border-gray-700">
-              <CardContent className="p-12 text-center">
-                <Loader2 className="w-12 h-12 text-gray-400 mx-auto mb-4 animate-spin" />
-                <p className="text-gray-400 text-lg font-medium">
-                  Loading changes...
-                </p>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Error State */}
-          {error && (
-            <Card className="bg-red-500/10 border-red-500/30">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <AlertCircle className="w-5 h-5 text-red-400" />
-                  <p className="text-red-200 font-medium">
-                    Failed to load changes: {error.message}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Change Statistics */}
-          {!isLoading && !error && (
-            <Card className="bg-gray-800/30 border-gray-700">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg text-white">
-                  Change Summary
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="text-center p-4 bg-green-500/10 rounded-lg border border-green-500/20">
-                    <div className="text-2xl font-bold text-green-400">
-                      {changeStats.created}
-                    </div>
-                    <div className="text-sm text-green-300 flex items-center justify-center gap-1 mt-1">
-                      <Plus className="w-3 h-3" />
-                      Created
-                    </div>
-                  </div>
-                  <div className="text-center p-4 bg-indigo-500/10 rounded-lg border border-indigo-500/20">
-                    <div className="text-2xl font-bold text-indigo-500">
-                      {changeStats.updated}
-                    </div>
-                    <div className="text-sm text-indigo-600 flex items-center justify-center gap-1 mt-1">
-                      <Edit className="w-3 h-3" />
-                      Updated
-                    </div>
-                  </div>
-                  <div className="text-center p-4 bg-red-500/10 rounded-lg border border-red-500/20">
-                    <div className="text-2xl font-bold text-red-400">
-                      {changeStats.deleted}
-                    </div>
-                    <div className="text-sm text-red-300 flex items-center justify-center gap-1 mt-1">
-                      <Minus className="w-3 h-3" />
-                      Deleted
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Detailed Changes List */}
-          {!isLoading && !error && (
-            <Card className="flex-1 h-fit border-gray-700">
-              <CardContent className="p-0 flex-1">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg text-white">
-                    Detailed Changes
-                  </CardTitle>
-                </CardHeader>
-                <div className="space-y-0">
-                  {changes.map((change, index) => (
-                    <div
-                      key={index}
-                      className="border-b border-gray-800 last:border-b-0 p-6 hover:bg-gray-800/30 transition-colors"
-                    >
-                      <div className="space-y-4">
-                        {/* Change Header */}
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-3">
-                            <Badge
-                              className={`${getOperationColor(
-                                change.operation
-                              )} border font-medium px-3 py-1`}
-                            >
-                              {getOperationIcon(change.operation)}
-                              <span className="ml-1">{change.operation}</span>
-                            </Badge>
-                            <code className="text-white font-mono text-sm bg-gray-800/50 px-3 py-1 rounded">
-                              {change.key}
-                            </code>
-                          </div>
-                        </div>
-
-                        {/* Value Display */}
-                        <div className="space-y-3">
-                          {change.operation === "UPDATE" && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div className="space-y-2">
-                                <div className="flex items-center gap-2 text-gray-400 text-xs font-medium">
-                                  <Minus className="w-3 h-3 text-red-400" />
-                                  PREVIOUS VALUE
-                                </div>
-                                <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
-                                  <code className="text-red-200 text-sm font-mono break-all">
-                                    {change.key || "N/A"}
-                                  </code>
-                                </div>
-                              </div>
-                              <div className="space-y-2">
-                                <div className="flex items-center gap-2 text-gray-400 text-xs font-medium">
-                                  <Plus className="w-3 h-3 text-green-400" />
-                                  NEW VALUE
-                                </div>
-                                <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3">
-                                  <code className="text-green-200 text-sm font-mono break-all">
-                                    {change.value}
-                                  </code>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                          {change.operation === "CREATE" && (
-                            <div className="space-y-2">
-                              <div className="flex items-center gap-2 text-gray-400 text-xs font-medium">
-                                <Plus className="w-3 h-3 text-green-400" />
-                                NEW VALUE
-                              </div>
-                              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3">
-                                <code className="text-green-200 text-sm font-mono break-all">
-                                  {change.value}
-                                </code>
-                              </div>
-                            </div>
-                          )}
-
-                          {change.operation === "DELETE" && (
-                            <div className="space-y-2">
-                              <div className="flex items-center gap-2 text-gray-400 text-xs font-medium">
-                                <Minus className="w-3 h-3 text-red-400" />
-                                REMOVED VALUE
-                              </div>
-                              <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
-                                <code className="text-red-200 text-sm font-mono break-all">
-                                  {change.value}
-                                </code>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-
-                  {changes.length === 0 && !isLoading && (
-                    <div className="p-12 text-center">
-                      <div className="flex flex-col items-center gap-4">
-                        <History className="w-16 h-16 text-gray-500" />
-                        <div>
-                          <p className="text-gray-400 text-lg font-medium">
-                            No Changes Found
-                          </p>
-                          <p className="text-gray-500 text-sm">
-                            This point-in-time snapshot contains no variable
-                            changes
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
+					<Card className="flex-1 border-zinc-800 bg-zinc-950">
+						<CardHeader className="pb-3">
+							<CardTitle className="text-base text-white">
+								Snapshot state
+							</CardTitle>
+						</CardHeader>
+						<CardContent className="px-0 pt-0">
+							<ScrollArea className="max-h-[42vh]">
+								{isLoading ? (
+									<div className="flex items-center justify-center gap-3 px-6 py-16 text-sm text-zinc-400">
+										<Loader2 className="size-4 animate-spin" />
+										Loading snapshot state...
+									</div>
+								) : pitStateData.length === 0 ? (
+									<div className="px-6 py-16 text-center text-sm text-zinc-500">
+										No {itemLabel}s were present in this snapshot.
+									</div>
+								) : (
+									<Table>
+										<TableHeader>
+											<TableRow className="border-zinc-800 hover:bg-transparent">
+												<TableHead className="text-zinc-500">Key</TableHead>
+												<TableHead className="text-zinc-500">Value</TableHead>
+												<TableHead className="text-zinc-500">Operation</TableHead>
+												<TableHead className="text-zinc-500">Last updated</TableHead>
+											</TableRow>
+										</TableHeader>
+										<TableBody>
+											{pitStateData.map((change) => (
+												<TableRow
+													key={`${pitData.id}-${change.key}`}
+													className="border-zinc-800 hover:bg-zinc-800/60"
+												>
+													<TableCell className="font-mono text-sm text-white">
+														{change.key}
+													</TableCell>
+													<TableCell className="text-zinc-300">
+														{maskPitValue(change.value, kind)}
+													</TableCell>
+													<TableCell className="text-zinc-300">
+														{change.operation ?? "Recorded"}
+													</TableCell>
+													<TableCell className="text-zinc-400">
+														{formatDateTime(change.last_updated)}
+													</TableCell>
+												</TableRow>
+											))}
+										</TableBody>
+									</Table>
+								)}
+							</ScrollArea>
+						</CardContent>
+					</Card>
+				</div>
+			</DialogContent>
+		</Dialog>
+	);
 };

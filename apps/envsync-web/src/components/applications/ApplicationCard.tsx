@@ -49,20 +49,20 @@ export const ApplicationCard = ({
   };
 
   return (
-    <Card className="bg-card text-card-foreground bg-gradient-to-br from-gray-900 to-gray-950 border-gray-800/80 shadow-xl rounded-xl hover:border-violet-500/50 transition-all duration-200 group cursor-pointer hover:shadow-glow-md hover:-translate-y-1">
+    <Card className="bg-card text-card-foreground bg-gradient-to-br from-zinc-900 to-zinc-950 border-zinc-800/80 shadow-xl rounded-xl hover:border-emerald-500/50 transition-all duration-200 group cursor-pointer hover:shadow-glow-md hover:-translate-y-1">
       <CardHeader className="pb-3">
         <div
           onClick={() => navigate(appDetailPath(app.id))}
           className="flex items-start justify-between"
         >
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-violet-500/20 to-indigo-500/20 rounded-lg flex items-center justify-center">
-              <span className="text-lg font-semibold text-violet-400">
+            <div className="w-10 h-10 bg-gradient-to-br from-emerald-500/20 to-teal-500/20 rounded-lg flex items-center justify-center">
+              <span className="text-lg font-semibold text-emerald-400">
                 {app.name.charAt(0).toUpperCase()}
               </span>
             </div>
             <div>
-              <CardTitle className="text-gray-100 text-base font-semibold group-hover:text-white group-hover:translate-x-0.5 transition-all duration-200">
+              <CardTitle className="text-zinc-100 text-base font-semibold group-hover:text-white group-hover:translate-x-0.5 transition-all duration-200">
                 {app.name}
               </CardTitle>
             </div>
@@ -74,18 +74,18 @@ export const ApplicationCard = ({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="text-gray-500 hover:text-gray-200 hover:bg-gray-800 opacity-0 group-hover:opacity-100 transition-all h-8 w-8"
+                  className="text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 opacity-0 group-hover:opacity-100 transition-all h-8 w-8"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <MoreHorizontal className="w-4 h-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent
-                className="bg-gray-900 border-gray-800"
+                className="bg-zinc-900 border-zinc-800"
                 align="end"
               >
                 <DropdownMenuItem
-                  className="text-gray-300 focus:bg-gray-800 focus:text-gray-100 cursor-pointer"
+                  className="text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer"
                   onClick={(e) => {
                     e.stopPropagation();
                     onView(app);
@@ -95,7 +95,7 @@ export const ApplicationCard = ({
                   View Details
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  className="text-gray-300 focus:bg-gray-800 focus:text-gray-100 cursor-pointer"
+                  className="text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100 cursor-pointer"
                   onClick={(e) => {
                     e.stopPropagation();
                     onEdit(app);
@@ -124,19 +124,19 @@ export const ApplicationCard = ({
         className="pt-0"
         onClick={() => navigate(appDetailPath(app.id))}
       >
-        <p className="text-gray-500 text-sm mb-4 line-clamp-2">
+        <p className="text-zinc-500 text-sm mb-4 line-clamp-2">
           {app.description || "No description provided"}
         </p>
 
         <div className="flex items-center justify-between text-xs">
           <div className="flex items-center space-x-3">
-            <div className="flex items-center space-x-1.5 text-gray-400">
+            <div className="flex items-center space-x-1.5 text-zinc-400">
               <Key className="w-3 h-3" />
               <span data-testid={`application-card-${app.id}-config-count`}>{configItemCount} vars / secrets</span>
             </div>
           </div>
 
-          <span className="text-gray-500">
+          <span className="text-zinc-500">
             {getRelativeTime(app.updated_at)}
           </span>
         </div>

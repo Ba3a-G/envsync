@@ -37,13 +37,13 @@ export const DeleteAccountModal = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-gray-800 border-gray-700">
+      <DialogContent className="bg-zinc-800 border-zinc-700">
         <DialogHeader>
           <DialogTitle className="text-white flex items-center">
             <AlertTriangle className="w-5 h-5 text-red-500 mr-2" />
             Leave Organization
           </DialogTitle>
-          <DialogDescription className="text-gray-400">
+          <DialogDescription className="text-zinc-400">
             This action cannot be undone for this workspace. It removes your membership from the current organization and ends your access immediately.
           </DialogDescription>
         </DialogHeader>
@@ -65,13 +65,13 @@ export const DeleteAccountModal = ({
 
           <div className="space-y-2">
             <Label htmlFor="delete-confirm" className="text-white">
-              Type <code className="bg-gray-700 px-1 rounded text-red-400">{userEmail}</code> to confirm:
+              Type <code className="bg-zinc-700 px-1 rounded text-red-400">{userEmail}</code> to confirm:
             </Label>
             <Input
               id="delete-confirm"
               value={deleteConfirmText}
               onChange={(e) => setDeleteConfirmText(e.target.value)}
-              className="bg-gray-900 border-gray-700 text-white"
+              className="bg-zinc-900 border-zinc-700 text-white"
               placeholder="Enter your email address"
               disabled={isLoading}
             />
@@ -82,7 +82,7 @@ export const DeleteAccountModal = ({
           <Button
             variant="outline"
             onClick={handleClose}
-            className="text-white border-gray-600 hover:bg-gray-700"
+            className="text-white border-zinc-600 hover:bg-zinc-700"
             disabled={isLoading}
           >
             Cancel

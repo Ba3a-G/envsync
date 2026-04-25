@@ -7,5 +7,7 @@ export type EnvHistoryRequest = {
     env_type_id: string;
     page?: number;
     per_page?: number;
+    from_created_at?: string;
+    to_created_at?: string;
 };
 

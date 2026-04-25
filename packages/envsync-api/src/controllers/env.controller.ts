@@ -640,10 +640,19 @@ export class EnvController {
 	// New Point-in-Time related endpoints
 	public static readonly getEnvHistory = async (c: Context) => {
 		const org_id = c.get("org_id");
-		const { app_id, env_type_id, page, per_page } = c.req.valid("json" as never);
+		const { app_id, env_type_id, page, per_page, from_created_at, to_created_at } = c.req.valid("json" as never);
 
 		if (!org_id || !app_id || !env_type_id) {
 			return c.json({ error: "org_id, app_id, and env_type_id are required." }, 400);
+		}
+
+		const lowerBound = from_created_at ? new Date(from_created_at) : undefined;
+		const upperBound = to_created_at ? new Date(to_created_at) : undefined;
+		if ((lowerBound && Number.isNaN(lowerBound.getTime())) || (upperBound && Number.isNaN(upperBound.getTime()))) {
+			return c.json({ error: "Invalid history date range." }, 400);
+		}
+		if (lowerBound && upperBound && lowerBound > upperBound) {
+			return c.json({ error: "from_created_at must be less than or equal to to_created_at." }, 400);
 		}
 
 		const canView = await AuthorizationService.check(c.get("user_id"), "can_view", "env_type", env_type_id);
@@ -657,6 +666,8 @@ export class EnvController {
 			env_type_id,
 			page,
 			per_page,
+			from_created_at: lowerBound,
+			to_created_at: upperBound,
 		});
 
 		return c.json(history);
@@ -743,6 +754,55 @@ export class EnvController {
 				env_type_id,
 				from_pit_id,
 				to_pit_id,
+			},
+		});
+
+		return c.json(diff);
+	};
+
+	public static readonly getEnvDiffByTimestampRange = async (c: Context) => {
+		const org_id = c.get("org_id");
+		const { app_id, env_type_id, from_timestamp, to_timestamp } = c.req.valid("json" as never);
+
+		if (!org_id || !app_id || !env_type_id || !from_timestamp || !to_timestamp) {
+			return c.json(
+				{ error: "org_id, app_id, env_type_id, from_timestamp, and to_timestamp are required." },
+				400,
+			);
+		}
+
+		const fromDate = new Date(from_timestamp);
+		const toDate = new Date(to_timestamp);
+		if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) {
+			return c.json({ error: "Invalid timestamp range." }, 400);
+		}
+		if (fromDate > toDate) {
+			return c.json({ error: "from_timestamp must be less than or equal to to_timestamp." }, 400);
+		}
+
+		const canView = await AuthorizationService.check(c.get("user_id"), "can_view", "env_type", env_type_id);
+		if (!canView) {
+			return c.json({ error: "You do not have permission to view this environment." }, 403);
+		}
+
+		const diff = await EnvStorePiTService.getEnvDiffByTimestampRange({
+			org_id,
+			app_id,
+			env_type_id,
+			from_timestamp: fromDate,
+			to_timestamp: toDate,
+		});
+
+		await AuditLogService.notifyAuditSystem({
+			action: "env_variable_diff_viewed",
+			org_id,
+			user_id: c.get("user_id"),
+			message: `Environment diff viewed from timestamp ${fromDate.toISOString()} to ${toDate.toISOString()} in app ${app_id} for environment type ${env_type_id}.`,
+			details: {
+				app_id,
+				env_type_id,
+				from_timestamp: fromDate.toISOString(),
+				to_timestamp: toDate.toISOString(),
 			},
 		});
 

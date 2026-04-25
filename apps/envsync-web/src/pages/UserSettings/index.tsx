@@ -64,12 +64,12 @@ export const UserSettings = () => {
   return (
     <div className="animate-page-enter space-y-8">
       <div className="flex items-center space-x-3">
-        <div className="p-2 bg-violet-500/10 rounded-lg ring-1 ring-violet-500/20">
-          <Settings className="size-5 text-violet-400" />
+        <div className="p-2 bg-emerald-500/10 rounded-lg ring-1 ring-emerald-500/20">
+          <Settings className="size-5 text-emerald-400" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold text-gray-100 tracking-tight">Account Settings</h1>
-          <p className="text-sm text-gray-400 mt-0.5">
+          <h1 className="text-xl font-semibold text-zinc-100 tracking-tight">Account Settings</h1>
+          <p className="text-sm text-zinc-400 mt-0.5">
             Manage your account configuration and preferences
           </p>
         </div>

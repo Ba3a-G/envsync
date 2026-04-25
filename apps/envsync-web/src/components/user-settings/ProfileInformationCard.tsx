@@ -45,11 +45,11 @@ export const ProfileInformationCard = ({
   isLoading,
 }: ProfileInformationCardProps) => {
   return (
-    <Card className="bg-card text-card-foreground bg-gradient-to-br from-gray-900 to-gray-950 border-gray-800/80 shadow-xl rounded-xl">
+    <Card className="bg-card text-card-foreground bg-gradient-to-br from-zinc-900 to-zinc-950 border-zinc-800/80 shadow-xl rounded-xl">
       <CardHeader>
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <User className="size-8 bg-violet-400 border border-violet-600 p-2 stroke-[3] text-white rounded-md" />
+            <User className="size-8 bg-emerald-400 border border-emerald-600 p-2 stroke-[3] text-white rounded-md" />
             <CardTitle className="text-white">Profile Information</CardTitle>
           </div>
           {hasUnsavedChanges && (
@@ -68,7 +68,7 @@ export const ProfileInformationCard = ({
             id="full-name"
             value={formData.name}
             onChange={(e) => onInputChange("name", e.target.value)}
-            className={`bg-gray-900 border-gray-700 text-white ${
+            className={`bg-zinc-900 border-zinc-700 text-white ${
               formErrors.name ? "border-red-500" : ""
             }`}
             placeholder="Enter your full name"
@@ -87,7 +87,7 @@ export const ProfileInformationCard = ({
             type="email"
             value={formData.email}
             onChange={(e) => onInputChange("email", e.target.value)}
-            className={`bg-gray-900 border-gray-700 text-white ${
+            className={`bg-zinc-900 border-zinc-700 text-white ${
               formErrors.email ? "border-red-500" : ""
             }`}
             placeholder="Enter your email address"
@@ -108,7 +108,7 @@ export const ProfileInformationCard = ({
 
         <div className="flex gap-2">
           <Button
-            className="bg-violet-500 hover:bg-violet-600 text-white"
+            className="bg-emerald-500 hover:bg-emerald-600 text-white"
             onClick={onSaveChanges}
             disabled={isLoading || !hasUnsavedChanges}
           >
@@ -123,7 +123,7 @@ export const ProfileInformationCard = ({
           </Button>
           {hasUnsavedChanges && (
             <Button
-              className="border border-violet-500 bg-violet-200 hover:bg-violet-300 text-white/80"
+              className="border border-emerald-500 bg-emerald-200 hover:bg-emerald-300 text-white/80"
               onClick={onResetChanges}
             >
               Cancel Changes

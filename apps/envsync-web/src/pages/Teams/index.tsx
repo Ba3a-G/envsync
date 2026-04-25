@@ -148,7 +148,7 @@ const Teams = () => {
         stickyActions
         actions={
           canManage ? (
-            <Button data-testid="teams-create" className="bg-violet-500 hover:bg-violet-600" onClick={openCreate}>
+            <Button data-testid="teams-create" className="bg-emerald-500 hover:bg-emerald-600" onClick={openCreate}>
               <Plus className="mr-2 size-4" />
               New Team
             </Button>
@@ -162,10 +162,10 @@ const Teams = () => {
         secondaryNav={
           <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "teams" | "detail")}>
             <TabsList className="h-auto bg-transparent p-0">
-              <TabsTrigger data-testid="teams-tab-directory" value="teams" className="rounded-xl data-[state=active]:bg-violet-500/18 data-[state=active]:text-white">
+              <TabsTrigger data-testid="teams-tab-directory" value="teams" className="rounded-xl data-[state=active]:bg-emerald-500/18 data-[state=active]:text-white">
                 Teams Directory
               </TabsTrigger>
-              <TabsTrigger data-testid="teams-tab-detail" value="detail" className="rounded-xl data-[state=active]:bg-violet-500/18 data-[state=active]:text-white">
+              <TabsTrigger data-testid="teams-tab-detail" value="detail" className="rounded-xl data-[state=active]:bg-emerald-500/18 data-[state=active]:text-white">
                 Team Details
               </TabsTrigger>
             </TabsList>
@@ -173,7 +173,7 @@ const Teams = () => {
         }
       >
       {activeTab === "teams" ? (
-        <Card data-testid="teams-directory-list" className="border-gray-800 bg-gray-950/70">
+        <Card data-testid="teams-directory-list" className="border-zinc-800 bg-zinc-950/70">
           <CardHeader>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle className="text-white">Teams</CardTitle>
@@ -181,18 +181,18 @@ const Teams = () => {
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder="Search teams…"
-                className="max-w-sm border-gray-700 bg-gray-950 text-white"
+                className="max-w-sm border-zinc-700 bg-zinc-950 text-white"
               />
             </div>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
-                <TableRow className="border-gray-800 hover:bg-transparent">
-                  <TableHead className="text-gray-400">Name</TableHead>
-                  <TableHead className="text-gray-400">Description</TableHead>
-                  <TableHead className="text-gray-400">Team Role</TableHead>
-                  <TableHead className="text-gray-400">Updated</TableHead>
+                <TableRow className="border-zinc-800 hover:bg-transparent">
+                  <TableHead className="text-zinc-400">Name</TableHead>
+                  <TableHead className="text-zinc-400">Description</TableHead>
+                  <TableHead className="text-zinc-400">Team Role</TableHead>
+                  <TableHead className="text-zinc-400">Updated</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -200,7 +200,7 @@ const Teams = () => {
                   <TableRow
                     key={team.id}
                     data-testid={`teams-row-${team.id}`}
-                    className={`cursor-pointer border-gray-800 ${selectedTeamId === team.id ? "bg-gray-900" : "hover:bg-gray-900/60"}`}
+                    className={`cursor-pointer border-zinc-800 ${selectedTeamId === team.id ? "bg-zinc-900" : "hover:bg-zinc-900/60"}`}
                     onClick={() => {
                       setSelectedTeamId(team.id);
                       setActiveTab("detail");
@@ -212,19 +212,19 @@ const Teams = () => {
                         {team.name}
                       </div>
                     </TableCell>
-                    <TableCell className="text-gray-300">{team.description || "No description"}</TableCell>
+                    <TableCell className="text-zinc-300">{team.description || "No description"}</TableCell>
                     <TableCell>
                       {team.role_id ? (
-                        <Badge variant="secondary" className="bg-violet-500/10 text-violet-300">
+                        <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-300">
                           {roles.find((role) => role.id === team.role_id)?.name || "Assigned"}
                         </Badge>
                       ) : (
-                        <Badge variant="secondary" className="bg-gray-800 text-gray-300">
+                        <Badge variant="secondary" className="bg-zinc-800 text-zinc-300">
                           None
                         </Badge>
                       )}
                     </TableCell>
-                    <TableCell className="text-gray-400">
+                    <TableCell className="text-zinc-400">
                       {new Date(team.updated_at).toLocaleDateString()}
                     </TableCell>
                   </TableRow>
@@ -234,13 +234,13 @@ const Teams = () => {
           </CardContent>
         </Card>
       ) : (
-        <Card data-testid="teams-detail-panel" className="border-gray-800 bg-gray-950/70">
+        <Card data-testid="teams-detail-panel" className="border-zinc-800 bg-zinc-950/70">
           <CardHeader className="flex flex-row items-start justify-between">
             <div>
               <CardTitle className="text-white">
                 {selectedTeam ? selectedTeam.name : "Select a team"}
               </CardTitle>
-              <p className="mt-1 text-sm text-gray-400">
+              <p className="mt-1 text-sm text-zinc-400">
                 {selectedTeam
                   ? "Members inherit the team role and any app access granted to this team."
                   : "Pick a team from the directory to manage membership and the shared role."}
@@ -248,7 +248,7 @@ const Teams = () => {
             </div>
             {selectedTeam && canManage && (
               <div className="flex gap-2">
-                <Button variant="outline" className="border-gray-700 text-gray-200" onClick={openEdit}>
+                <Button variant="outline" className="border-zinc-700 text-zinc-200" onClick={openEdit}>
                   <Pencil className="mr-2 size-4" />
                   Edit
                 </Button>
@@ -267,26 +267,26 @@ const Teams = () => {
             {selectedTeam ? (
               <>
                 <div className="grid gap-4 md:grid-cols-2">
-                  <div className="rounded-lg border border-gray-800 bg-gray-900/70 p-4">
+                  <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 p-4">
                     <div className="mb-3 flex items-center gap-2">
-                      <ShieldAlert className="size-4 text-violet-400" />
+                      <ShieldAlert className="size-4 text-emerald-400" />
                       <h3 className="font-medium text-white">Team Role</h3>
                     </div>
-                    <p className="mb-3 text-sm text-gray-400">
+                    <p className="mb-3 text-sm text-zinc-400">
                       Team members keep their direct org role and also inherit this team-scoped role bundle.
                     </p>
                     <div className="mb-3 flex items-center gap-2">
-                      <Badge variant="secondary" className="bg-violet-500/10 text-violet-300">
+                      <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-300">
                         {selectedRoleName}
                       </Badge>
                     </div>
                     {canManage && (
                       <div className="flex gap-2">
                         <Select value={teamRoleId} onValueChange={setTeamRoleId}>
-                          <SelectTrigger className="border-gray-700 bg-gray-950 text-white">
+                          <SelectTrigger className="border-zinc-700 bg-zinc-950 text-white">
                             <SelectValue placeholder="Choose role" />
                           </SelectTrigger>
-                          <SelectContent className="border-gray-700 bg-gray-900">
+                          <SelectContent className="border-zinc-700 bg-zinc-900">
                             {roles
                               .filter((role) => !role.isMaster)
                               .map((role) => (
@@ -297,7 +297,7 @@ const Teams = () => {
                           </SelectContent>
                         </Select>
                         <Button
-                          className="bg-violet-500 hover:bg-violet-600"
+                          className="bg-emerald-500 hover:bg-emerald-600"
                           onClick={() => teamRoleId && assignRole.mutate({ teamId: selectedTeam.id, role_id: teamRoleId })}
                         >
                           Assign
@@ -305,7 +305,7 @@ const Teams = () => {
                         {selectedTeam.role_id && (
                           <Button
                             variant="outline"
-                            className="border-gray-700 text-gray-200"
+                            className="border-zinc-700 text-zinc-200"
                             onClick={() => unassignRole.mutate({ teamId: selectedTeam.id })}
                           >
                             Clear
@@ -315,21 +315,21 @@ const Teams = () => {
                     )}
                   </div>
 
-                  <div className="rounded-lg border border-gray-800 bg-gray-900/70 p-4">
+                  <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 p-4">
                     <div className="mb-3 flex items-center gap-2">
-                      <UserPlus className="size-4 text-violet-400" />
+                      <UserPlus className="size-4 text-emerald-400" />
                       <h3 className="font-medium text-white">Add Member</h3>
                     </div>
-                    <p className="mb-3 text-sm text-gray-400">
+                    <p className="mb-3 text-sm text-zinc-400">
                       App access can be granted to the team, and every member inherits that access automatically.
                     </p>
                     {canManage ? (
                       <div className="flex gap-2">
                         <Select value={memberUserId} onValueChange={setMemberUserId}>
-                          <SelectTrigger className="border-gray-700 bg-gray-950 text-white">
+                          <SelectTrigger className="border-zinc-700 bg-zinc-950 text-white">
                             <SelectValue placeholder="Select user" />
                           </SelectTrigger>
-                          <SelectContent className="border-gray-700 bg-gray-900">
+                          <SelectContent className="border-zinc-700 bg-zinc-900">
                             {availableUsers.map((entry) => (
                               <SelectItem key={entry.id} value={entry.id} className="text-white">
                                 {entry.full_name || entry.email}
@@ -338,37 +338,37 @@ const Teams = () => {
                           </SelectContent>
                         </Select>
                         <Button
-                          className="bg-violet-500 hover:bg-violet-600"
+                          className="bg-emerald-500 hover:bg-emerald-600"
                           onClick={() => memberUserId && addMember.mutate({ teamId: selectedTeam.id, user_id: memberUserId })}
                         >
                           Add
                         </Button>
                       </div>
                     ) : (
-                      <p className="text-sm text-gray-500">Admin access required to manage membership.</p>
+                      <p className="text-sm text-zinc-500">Admin access required to manage membership.</p>
                     )}
                   </div>
                 </div>
 
-                <div className="rounded-lg border border-gray-800 bg-gray-900/70 p-4">
+                <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 p-4">
                   <h3 className="mb-3 font-medium text-white">Members</h3>
                   <Table>
                     <TableHeader>
-                      <TableRow className="border-gray-800 hover:bg-transparent">
-                        <TableHead className="text-gray-400">User</TableHead>
-                        <TableHead className="text-gray-400">Email</TableHead>
-                        <TableHead className="text-gray-400">Joined</TableHead>
-                        <TableHead className="text-right text-gray-400">Actions</TableHead>
+                      <TableRow className="border-zinc-800 hover:bg-transparent">
+                        <TableHead className="text-zinc-400">User</TableHead>
+                        <TableHead className="text-zinc-400">Email</TableHead>
+                        <TableHead className="text-zinc-400">Joined</TableHead>
+                        <TableHead className="text-right text-zinc-400">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {selectedTeam.members.map((member) => (
-                        <TableRow key={member.id} className="border-gray-800">
+                        <TableRow key={member.id} className="border-zinc-800">
                           <TableCell className="text-white">{member.full_name || "Unnamed user"}</TableCell>
-                          <TableCell className="text-gray-300">
+                          <TableCell className="text-zinc-300">
                             <span className="hdx-mask">{member.email}</span>
                           </TableCell>
-                          <TableCell className="text-gray-400">
+                          <TableCell className="text-zinc-400">
                             {new Date(member.created_at).toLocaleDateString()}
                           </TableCell>
                           <TableCell className="text-right">
@@ -390,7 +390,7 @@ const Teams = () => {
                 </div>
               </>
             ) : (
-              <div data-testid="teams-empty-detail" className="rounded-lg border border-dashed border-gray-800 bg-gray-900/50 p-8 text-center text-gray-400">
+              <div data-testid="teams-empty-detail" className="rounded-lg border border-dashed border-zinc-800 bg-zinc-900/50 p-8 text-center text-zinc-400">
                 Pick a team from the directory to manage membership, shared roles, and inherited access.
               </div>
             )}
@@ -399,7 +399,7 @@ const Teams = () => {
       )}
 
       <Sheet open={editorOpen} onOpenChange={setEditorOpen}>
-        <SheetContent side="right" className="border-gray-800 bg-gray-900 sm:max-w-xl">
+        <SheetContent side="right" className="border-zinc-800 bg-zinc-900 sm:max-w-xl">
           <SheetHeader>
             <SheetTitle className="text-white">
               {editingTeamId ? "Edit Team" : "Create Team"}
@@ -408,11 +408,11 @@ const Teams = () => {
           <div className="mt-6 space-y-4">
             <div className="space-y-2">
               <Label className="text-white">Name</Label>
-              <Input value={name} onChange={(event) => setName(event.target.value)} className="border-gray-700 bg-gray-950 text-white" />
+              <Input value={name} onChange={(event) => setName(event.target.value)} className="border-zinc-700 bg-zinc-950 text-white" />
             </div>
             <div className="space-y-2">
               <Label className="text-white">Description</Label>
-              <Textarea value={description} onChange={(event) => setDescription(event.target.value)} className="border-gray-700 bg-gray-950 text-white" />
+              <Textarea value={description} onChange={(event) => setDescription(event.target.value)} className="border-zinc-700 bg-zinc-950 text-white" />
             </div>
             <div className="space-y-2">
               <Label className="text-white">Color</Label>
@@ -430,10 +430,10 @@ const Teams = () => {
             </div>
           </div>
           <SheetFooter className="mt-8">
-            <Button variant="outline" className="border-gray-700 text-gray-200" onClick={() => setEditorOpen(false)}>
+            <Button variant="outline" className="border-zinc-700 text-zinc-200" onClick={() => setEditorOpen(false)}>
               Cancel
             </Button>
-            <Button className="bg-violet-500 hover:bg-violet-600" onClick={saveTeam}>
+            <Button className="bg-emerald-500 hover:bg-emerald-600" onClick={saveTeam}>
               Save
             </Button>
           </SheetFooter>

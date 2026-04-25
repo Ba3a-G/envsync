@@ -88,6 +88,8 @@ export const secretHistoryRequestSchema = z
 		env_type_id: z.string().openapi({ example: "env_type_123" }),
 		page: z.coerce.number().int().min(1).default(1).openapi({ example: 1 }),
 		per_page: z.coerce.number().int().min(1).max(100).default(20).openapi({ example: 20 }),
+		from_created_at: z.string().datetime().optional().openapi({ example: "2024-01-01T00:00:00Z" }),
+		to_created_at: z.string().datetime().optional().openapi({ example: "2024-01-31T23:59:59Z" }),
 	})
 	.openapi({ ref: "SecretHistoryRequest" });
 
@@ -115,6 +117,15 @@ export const secretDiffRequestSchema = z
 		to_pit_id: z.string().openapi({ example: "pit_456" }),
 	})
 	.openapi({ ref: "SecretDiffRequest" });
+
+export const secretTimestampRangeDiffRequestSchema = z
+	.object({
+		app_id: z.string().openapi({ example: "app_123" }),
+		env_type_id: z.string().openapi({ example: "env_type_123" }),
+		from_timestamp: z.string().datetime().openapi({ example: "2024-01-01T10:00:00Z" }),
+		to_timestamp: z.string().datetime().openapi({ example: "2024-01-07T10:00:00Z" }),
+	})
+	.openapi({ ref: "SecretTimestampRangeDiffRequest" });
 
 export const secretVariableTimelineRequestSchema = z
 	.object({
@@ -242,6 +253,7 @@ export const secretHistoryResponseSchema = z
 				user_id: z.string().openapi({ example: "user_123" }),
 				created_at: z.string().openapi({ example: "2024-01-01T10:00:00Z" }),
 				updated_at: z.string().openapi({ example: "2024-01-01T10:00:00Z" }),
+				changes_count: z.number().int().openapi({ example: 3 }),
 			}),
 		),
 		totalPages: z.number().int().openapi({ example: 5 }),
@@ -254,6 +266,7 @@ export const secretPitStateResponseSchema = z
 			key: z.string().openapi({ example: "API_SECRET_KEY" }),
 			value: z.string().openapi({ example: "***ENCRYPTED***" }),
 			last_updated: z.string().openapi({ example: "2024-01-01T10:00:00Z" }),
+			operation: z.enum(["CREATE", "UPDATE", "DELETE"]).openapi({ example: "UPDATE" }),
 		}),
 	)
 	.openapi({ ref: "SecretPitStateResponse" });

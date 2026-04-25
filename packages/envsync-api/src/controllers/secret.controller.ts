@@ -630,10 +630,19 @@ export class SecretController {
 
 	public static readonly getSecretHistory = async (c: Context) => {
 		const org_id = c.get("org_id");
-		const { app_id, env_type_id, page, per_page } = c.req.valid("json" as never);
+		const { app_id, env_type_id, page, per_page, from_created_at, to_created_at } = c.req.valid("json" as never);
 
 		if (!org_id || !app_id || !env_type_id) {
 			return c.json({ error: "org_id, app_id, and env_type_id are required." }, 400);
+		}
+
+		const lowerBound = from_created_at ? new Date(from_created_at) : undefined;
+		const upperBound = to_created_at ? new Date(to_created_at) : undefined;
+		if ((lowerBound && Number.isNaN(lowerBound.getTime())) || (upperBound && Number.isNaN(upperBound.getTime()))) {
+			return c.json({ error: "Invalid history date range." }, 400);
+		}
+		if (lowerBound && upperBound && lowerBound > upperBound) {
+			return c.json({ error: "from_created_at must be less than or equal to to_created_at." }, 400);
 		}
 
 		// Check env type permissions
@@ -649,6 +658,8 @@ export class SecretController {
 			env_type_id,
 			page,
 			per_page,
+			from_created_at: lowerBound,
+			to_created_at: upperBound,
 		});
 
 		// Log the retrieval of secret history
@@ -787,6 +798,56 @@ export class SecretController {
 				env_type_id,
 				from_pit_id,
 				to_pit_id,
+			},
+		});
+
+		return c.json(diff);
+	};
+
+	public static readonly getSecretDiffByTimestampRange = async (c: Context) => {
+		const org_id = c.get("org_id");
+		const { app_id, env_type_id, from_timestamp, to_timestamp } = c.req.valid("json" as never);
+
+		if (!org_id || !app_id || !env_type_id || !from_timestamp || !to_timestamp) {
+			return c.json(
+				{ error: "org_id, app_id, env_type_id, from_timestamp, and to_timestamp are required." },
+				400,
+			);
+		}
+
+		const fromDate = new Date(from_timestamp);
+		const toDate = new Date(to_timestamp);
+		if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) {
+			return c.json({ error: "Invalid timestamp range." }, 400);
+		}
+		if (fromDate > toDate) {
+			return c.json({ error: "from_timestamp must be less than or equal to to_timestamp." }, 400);
+		}
+
+		const env_type = await EnvTypeService.getEnvType(env_type_id);
+		const canView = await AuthorizationService.check(c.get("user_id"), env_type.is_protected ? "can_manage_protected" : "can_view", "env_type", env_type_id);
+		if (!canView) {
+			return c.json({ error: "You do not have permission to view this environment." }, 403);
+		}
+
+		const diff = await SecretStorePiTService.getEnvDiffByTimestampRange({
+			org_id,
+			app_id,
+			env_type_id,
+			from_timestamp: fromDate,
+			to_timestamp: toDate,
+		});
+
+		await AuditLogService.notifyAuditSystem({
+			action: "secret_diff_viewed",
+			org_id,
+			user_id: c.get("user_id"),
+			message: `Secret diff viewed between timestamps ${fromDate.toISOString()} and ${toDate.toISOString()} for app ${app_id} and environment type ${env_type_id}.`,
+			details: {
+				app_id,
+				env_type_id,
+				from_timestamp: fromDate.toISOString(),
+				to_timestamp: toDate.toISOString(),
 			},
 		});
 

@@ -17,7 +17,7 @@ export const PageError = ({
   title = "Something went wrong",
   message = "An unexpected error occurred",
   onRetry,
-  retryClassName = "bg-violet-500 hover:bg-violet-600 text-white",
+  retryClassName = "bg-emerald-500 hover:bg-emerald-600 text-white",
   fullScreen = false,
   actions,
   className,
@@ -26,7 +26,7 @@ export const PageError = ({
     <div
       className={cn(
         "flex items-center justify-center",
-        fullScreen ? "h-screen bg-gray-950" : "min-h-[60vh]",
+        fullScreen ? "h-screen bg-zinc-950" : "min-h-[60vh]",
         className
       )}
     >
@@ -34,7 +34,7 @@ export const PageError = ({
         <AlertTriangle className="w-12 h-12 text-red-400" />
         <div>
           <h3 className="text-lg font-semibold text-white mb-2">{title}</h3>
-          <p className="text-gray-400 mb-4">{message}</p>
+          <p className="text-zinc-400 mb-4">{message}</p>
           <div className="flex items-center justify-center space-x-3">
             {onRetry && (
               <Button onClick={onRetry} className={retryClassName}>

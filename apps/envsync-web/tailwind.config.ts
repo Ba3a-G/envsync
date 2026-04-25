@@ -71,8 +71,8 @@ export default {
         },
       },
       boxShadow: {
-        "glow-sm": "0 0 10px rgba(139, 92, 246, 0.15)",
-        "glow-md": "0 0 20px rgba(139, 92, 246, 0.2)",
+        "glow-sm": "0 0 12px rgba(16, 185, 129, 0.18)",
+        "glow-md": "0 0 24px rgba(16, 185, 129, 0.24)",
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "-apple-system", "sans-serif"],

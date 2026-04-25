@@ -18,10 +18,10 @@ export const AccountSettingsCard = ({
   userData,
 }: AccountSettingsCardProps) => {
   return (
-    <Card className="bg-card text-card-foreground bg-gradient-to-br from-gray-900 to-gray-950 border-gray-800/80 shadow-xl rounded-xl">
+    <Card className="bg-card text-card-foreground bg-gradient-to-br from-zinc-900 to-zinc-950 border-zinc-800/80 shadow-xl rounded-xl">
       <CardHeader>
         <div className="flex items-center space-x-2">
-          <Bell className="size-8 bg-violet-400 border border-violet-600 p-2 stroke-[3] text-white rounded-md" />
+          <Bell className="size-8 bg-emerald-400 border border-emerald-600 p-2 stroke-[3] text-white rounded-md" />
           <CardTitle className="text-white">Account Settings</CardTitle>
         </div>
       </CardHeader>
@@ -29,7 +29,7 @@ export const AccountSettingsCard = ({
         <div className="flex items-center justify-between">
           <div>
             <h4 className="font-medium text-white">Email Notifications</h4>
-            <p className="text-sm text-gray-400">
+            <p className="text-sm text-zinc-400">
               Receive updates and alerts via email
             </p>
           </div>
@@ -40,20 +40,20 @@ export const AccountSettingsCard = ({
               checked={emailNotifications}
               onChange={(e) => setEmailNotifications(e.target.checked)}
             />
-            <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-500"></div>
+            <div className="w-11 h-6 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
           </label>
         </div>
 
         <div className="flex items-center justify-between">
           <div>
             <h4 className="font-medium text-white">Change Password</h4>
-            <p className="text-sm text-gray-400">
+            <p className="text-sm text-zinc-400">
               Update your account password for security
             </p>
           </div>
           <Button
             variant="outline"
-            className="text-white border-gray-600 hover:bg-gray-700"
+            className="text-white border-zinc-600 hover:bg-zinc-700"
             onClick={onPasswordReset}
             disabled={isPasswordResetLoading}
           >
@@ -63,10 +63,10 @@ export const AccountSettingsCard = ({
         </div>
 
         {/* Account Stats */}
-        <div className="pt-4 border-t border-gray-700">
+        <div className="pt-4 border-t border-zinc-700">
           <h4 className="font-medium text-white mb-3">Account Information</h4>
           <div className="grid grid-cols-2 gap-4">
-            <div className="bg-gray-900 p-3 rounded-lg">
+            <div className="bg-zinc-900 p-3 rounded-lg">
               <div className="text-lg font-bold text-white">
                 {userData?.created_at
                   ? Math.floor(
@@ -75,13 +75,13 @@ export const AccountSettingsCard = ({
                     )
                   : 0}
               </div>
-              <div className="text-xs text-gray-400">Days Active</div>
+              <div className="text-xs text-zinc-400">Days Active</div>
             </div>
-            <div className="bg-gray-900 p-3 rounded-lg">
+            <div className="bg-zinc-900 p-3 rounded-lg">
               <div className="text-lg font-bold text-white">
                 {userData?.id ? userData.id.substring(0, 8) : "N/A"}
               </div>
-              <div className="text-xs text-gray-400">User ID</div>
+              <div className="text-xs text-zinc-400">User ID</div>
             </div>
           </div>
         </div>

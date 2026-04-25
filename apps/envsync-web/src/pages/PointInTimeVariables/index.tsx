@@ -1,661 +1,600 @@
-import { useParams, useSearchParams } from "react-router-dom";
-import { PointInTimeHeader } from "@/components/env-vars/PointInTimeHeader";
-import { sdk } from "@/api";
+import { startTransition, useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
+import { CalendarRange, Clock3, GitBranch, MessageSquare, User } from "lucide-react";
+import { toast } from "sonner";
+
+import { sdk } from "@/api";
 import {
-  ArrowRight,
-  GitCompare,
-  History,
-  MoreVertical,
-  RotateCcw,
-  Clock,
-  User,
-  Calendar,
-  MessageSquare,
-  Eye,
-  GitBranch,
-  AlertCircle,
-} from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { useCallback, useState, useMemo } from "react";
-import { CheckDiffModal } from "@/components/env-vars/CheckDiffModal";
-import { ViewPitChangesModal } from "@/components/env-vars/ViewPitChangesModal";
-import { useNavigate } from "react-router-dom";
-import { useProjectEnvironments } from "@/hooks/useProjectEnvironments";
-import { PointInTimeLoadingPage } from "./loading";
-import { PointInTimeErrorPage } from "./error";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import {
-  usePointInTimeHistory,
-  usePointInTimeRollback,
+	usePointInTimeDiff,
+	usePointInTimeHistory,
+	usePointInTimeRollback,
+	usePointInTimeTimestampRangeDiff,
 } from "@/api/pointInTime.api";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { PitDiffResults } from "@/components/env-vars/PitDiffResults";
+import { PitHistoryTable } from "@/components/env-vars/PitHistoryTable";
+import { PitModeSwitch } from "@/components/env-vars/PitModeSwitch";
+import { PitRollbackDialog } from "@/components/env-vars/PitRollbackDialog";
+import { PitSnapshotComparePanel } from "@/components/env-vars/PitSnapshotComparePanel";
+import { PitTimeRangePanel } from "@/components/env-vars/PitTimeRangePanel";
+import { PointInTimeHeader } from "@/components/env-vars/PointInTimeHeader";
+import { ViewPitChangesModal } from "@/components/env-vars/ViewPitChangesModal";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useProjectEnvironments } from "@/hooks/useProjectEnvironments";
+import {
+	createDefaultTimeRange,
+	createPresetRange,
+	getDefaultSnapshotCompareIds,
+	getPitItemLabel,
+	getPitKindFromPathname,
+	getPitKindLabel,
+	getPitRangeSummary,
+	type PitDataKind,
+	type PitHistoryItem,
+	type PitMode,
+	type PitRangePreset,
+	type PitRangeState,
+} from "./pit.utils";
+import { PointInTimeErrorPage } from "./error";
+import { PointInTimeLoadingPage } from "./loading";
 
-// Updated interface to match API response structure
-export interface PitHistoryItem {
-  id: string;
-  change_request_message: string;
-  user_id: string;
-  created_at: string;
-  updated_at: string;
-  org_id: string;
-  app_id: string;
-  env_type_id: string;
-}
-
-export interface PitChangeRequest {
-  id: string;
-  env_store_pit_id: string;
-  key: string;
-  value: string;
-  operation: "CREATE" | "UPDATE" | "DELETE";
-  created_at: string;
-  updated_at: string;
-}
-
-export interface PitWithChanges extends PitHistoryItem {
-  changes?: PitChangeRequest[];
-  changes_count?: number;
-}
+const SNAPSHOT_PAGE_SIZE = 20;
+const RANGE_PAGE_SIZE = 100;
 
 const PointInTime = () => {
-  const navigate = useNavigate();
-  const { appId, environmentNameId } = useParams();
-  const [searchParams, setSearchParams] = useSearchParams();
+	const location = useLocation();
+	const navigate = useNavigate();
+	const { appId, environmentNameId } = useParams();
+	const [searchParams, setSearchParams] = useSearchParams();
+	const selectedEnvSlug = searchParams.get("env") || environmentNameId;
+	const kind = getPitKindFromPathname(location.pathname);
+	const kindLabel = getPitKindLabel(kind);
+	const itemLabel = getPitItemLabel(kind);
 
-  // Get selected environment from URL params or default to first environment
-  const selectedEnvId = searchParams.get("env") || environmentNameId;
+	const [activeMode, setActiveMode] = useState<PitMode>("snapshots");
+	const [snapshotPage, setSnapshotPage] = useState(1);
+	const [rangePage, setRangePage] = useState(1);
+	const [selectedSnapshotPitId, setSelectedSnapshotPitId] = useState<string | null>(null);
+	const [selectedRangePitId, setSelectedRangePitId] = useState<string | null>(null);
+	const [compareFromPitId, setCompareFromPitId] = useState<string | null>(null);
+	const [compareToPitId, setCompareToPitId] = useState<string | null>(null);
+	const [timeRange, setTimeRange] = useState<PitRangeState>(() => createDefaultTimeRange());
+	const [selectedPitForModal, setSelectedPitForModal] = useState<PitHistoryItem | null>(null);
+	const [isViewPitChangesModalOpen, setIsViewPitChangesModalOpen] = useState(false);
+	const [hasPreviewedSnapshotDiff, setHasPreviewedSnapshotDiff] = useState(false);
+	const [hasPreviewedTimeRangeDiff, setHasPreviewedTimeRangeDiff] = useState(false);
+	const [selectedRollbackPit, setSelectedRollbackPit] = useState<PitHistoryItem | null>(null);
+	const [isRollbackDialogOpen, setIsRollbackDialogOpen] = useState(false);
+	const [rollbackConfirmPitId, setRollbackConfirmPitId] = useState("");
+	const [rollbackMessage, setRollbackMessage] = useState("");
 
-  const [isCheckDiffModalOpen, setIsCheckDiffModalOpen] = useState(false);
-  const [isViewPitChangesModalOpen, setIsViewPitChangesModalOpen] =
-    useState(false);
-  const [selectedPitData, setSelectedPitData] = useState<PitWithChanges | null>(
-    null
-  );
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize] = useState(20);
-  const { data: users = [] } = useQuery({
-    queryKey: ["pit-users"],
-    queryFn: async () => sdk.users.getUsers(),
-    staleTime: 5 * 60 * 1000,
-  });
-  const usersMap = useMemo(
-    () => new Map(users.map((entry) => [entry.id, entry])),
-    [users]
-  );
+	const {
+		project,
+		environmentTypes,
+		enableSecrets,
+		isLoading: isProjectLoading,
+		error: projectError,
+		refetch: refetchProject,
+	} = useProjectEnvironments(appId);
 
-  // Get project and environment data
-  const {
-    project,
-    environmentTypes,
-    enableSecrets,
-    isLoading: isProjectLoading,
-    error: projectError,
-    refetch: refetchProject,
-  } = useProjectEnvironments(appId);
+	const selectedEnvironment = useMemo(() => {
+		if (!environmentTypes?.length) return null;
+		if (!selectedEnvSlug) return environmentTypes[0];
+		return (
+			environmentTypes.find(
+				(environment) =>
+					environment.id === selectedEnvSlug ||
+					environment.name.toLowerCase() === selectedEnvSlug.toLowerCase()
+			) ?? environmentTypes[0]
+		);
+	}, [environmentTypes, selectedEnvSlug]);
 
-  // Find the selected environment
-  const selectedEnvironment = useMemo(() => {
-    console.log(environmentTypes);
-    if (!environmentTypes || !selectedEnvId) return null;
-    return (
-      environmentTypes.find(
-        (env) =>
-          env.id === selectedEnvId ||
-          env.name.toLowerCase() === selectedEnvId.toLowerCase()
-      ) || environmentTypes[0]
-    );
-  }, [environmentTypes, selectedEnvId]);
+	const { data: users = [] } = useQuery({
+		queryKey: ["pit-users"],
+		queryFn: async () => sdk.users.getUsers(),
+		staleTime: 5 * 60 * 1000,
+	});
 
-  // Get point-in-time history
-  const {
-    data: historyData,
-    isLoading: isHistoryLoading,
-    error: historyError,
-    refetch: refetchHistory,
-    isRefetching,
-  } = usePointInTimeHistory(
-    {
-      app_id: appId || "",
-      env_type_id: selectedEnvironment?.id || "",
-      page: currentPage,
-      per_page: pageSize,
-    },
-    {
-      enabled: !!appId && !!selectedEnvironment?.id,
-      staleTime: 30000, // 30 seconds
-    }
-  );
+	const usersMap = useMemo(
+		() => new Map(users.map((user) => [user.id, user])),
+		[users]
+	);
 
-  // Rollback mutations
-  const { rollbackToPit } = usePointInTimeRollback();
+	const snapshotHistoryQuery = usePointInTimeHistory(
+		kind,
+		{
+			app_id: appId || "",
+			env_type_id: selectedEnvironment?.id || "",
+			page: snapshotPage,
+			per_page: SNAPSHOT_PAGE_SIZE,
+		},
+		{
+			enabled: Boolean(appId && selectedEnvironment?.id),
+			staleTime: 30000,
+		}
+	);
 
-  const handleRetry = useCallback(() => {
-    refetchProject();
-    refetchHistory();
-  }, [refetchProject, refetchHistory]);
+	const rangeHistoryQuery = usePointInTimeHistory(
+		kind,
+		{
+			app_id: appId || "",
+			env_type_id: selectedEnvironment?.id || "",
+			page: rangePage,
+			per_page: RANGE_PAGE_SIZE,
+			from_created_at: timeRange.start,
+			to_created_at: timeRange.end,
+		},
+		{
+			enabled: Boolean(appId && selectedEnvironment?.id && activeMode === "time-range"),
+			staleTime: 30000,
+		}
+	);
 
-  const onBack = () => navigate(-1);
+	const snapshotDiff = usePointInTimeDiff(kind);
+	const timeRangeDiff = usePointInTimeTimestampRangeDiff(kind);
+	const { rollbackToPit } = usePointInTimeRollback(kind);
 
-  // Handle environment change
-  const handleEnvironmentChange = useCallback(
-    (envId: string) => {
-      const env = environmentTypes?.find((e) => e.id === envId);
-      setSearchParams((prev) => {
-        const newParams = new URLSearchParams(prev);
-        newParams.set("env", env?.name?.toLowerCase() || envId);
-        return newParams;
-      });
-      setCurrentPage(1); // Reset to first page when changing environment
-      setSelectedPitData(null); // Clear selected PiT when changing environment
-    },
-    [setSearchParams, environmentTypes]
-  );
+	const snapshotHistory = snapshotHistoryQuery.data?.pits ?? [];
+	const rangeHistory = rangeHistoryQuery.data?.pits ?? [];
 
-  // Handle page change
-  const handlePageChange = useCallback((page: number) => {
-    setCurrentPage(page);
-  }, []);
+	const allKnownPits = useMemo(() => {
+		const unique = new Map<string, PitHistoryItem>();
+		for (const pit of [...snapshotHistory, ...rangeHistory]) {
+			unique.set(pit.id, pit);
+		}
+		return unique;
+	}, [rangeHistory, snapshotHistory]);
 
-  // Handle refresh
-  const handleRefresh = useCallback(() => {
-    refetchHistory();
-  }, [refetchHistory]);
+	const selectedSnapshotPit =
+		(selectedSnapshotPitId ? allKnownPits.get(selectedSnapshotPitId) : null) ??
+		snapshotHistory[0] ??
+		null;
+	const selectedRangePit =
+		(selectedRangePitId ? allKnownPits.get(selectedRangePitId) : null) ?? null;
+	const rangeSummary = getPitRangeSummary(rangeHistory);
+	const timezoneLabel =
+		Intl.DateTimeFormat().resolvedOptions().timeZone || "Local time";
 
-  const handleRollback = useCallback(
-    (pitData: PitHistoryItem) => {
-      if (!appId || !selectedEnvironment?.id) return;
+	useEffect(() => {
+		if (snapshotHistory.length === 0) {
+			setSelectedSnapshotPitId(null);
+			setCompareFromPitId(null);
+			setCompareToPitId(null);
+			return;
+		}
 
-      const confirmMessage = `Are you sure you want to rollback to PIT ${pitData.id}?\n\nThis will restore all variables to their state at that point in time.\n\nMessage: ${pitData.change_request_message}`;
+		if (!selectedSnapshotPitId || !snapshotHistory.some((pit) => pit.id === selectedSnapshotPitId)) {
+			setSelectedSnapshotPitId(snapshotHistory[0].id);
+		}
 
-      if (window.confirm(confirmMessage)) {
-        rollbackToPit.mutate({
-          app_id: appId,
-          env_type_id: selectedEnvironment.id,
-          pit_id: pitData.id,
-          rollback_message: `Rollback to PIT ${pitData.id} via dashboard`,
-        });
-      }
-    },
-    [appId, selectedEnvironment?.id, rollbackToPit]
-  );
+		const preferredToId =
+			compareToPitId && snapshotHistory.some((pit) => pit.id === compareToPitId)
+				? compareToPitId
+				: selectedSnapshotPitId && snapshotHistory.some((pit) => pit.id === selectedSnapshotPitId)
+					? selectedSnapshotPitId
+					: snapshotHistory[0].id;
 
-  const handleViewChanges = useCallback((pitData: PitHistoryItem) => {
-    setSelectedPitData(pitData);
-    setIsViewPitChangesModalOpen(true);
-  }, []);
+		const defaults = getDefaultSnapshotCompareIds(snapshotHistory, preferredToId);
 
-  const handleCheckDiff = useCallback((pitData: PitHistoryItem) => {
-    setSelectedPitData(pitData);
-    setIsCheckDiffModalOpen(true);
-  }, []);
+		if (compareToPitId !== defaults.toPitId) {
+			setCompareToPitId(defaults.toPitId);
+		}
+		if (compareFromPitId !== defaults.fromPitId) {
+			setCompareFromPitId(defaults.fromPitId);
+		}
+	}, [compareFromPitId, compareToPitId, selectedSnapshotPitId, snapshotHistory]);
 
-  // Loading state
-  if (isProjectLoading || isHistoryLoading) {
-    return <PointInTimeLoadingPage />;
-  }
+	useEffect(() => {
+		if (!selectedRangePitId) return;
+		if (!rangeHistory.some((pit) => pit.id === selectedRangePitId)) {
+			setSelectedRangePitId(null);
+		}
+	}, [rangeHistory, selectedRangePitId]);
 
-  // Error state
-  if (projectError || historyError) {
-    return (
-      <PointInTimeErrorPage
-        error={projectError || historyError}
-        onRetry={handleRetry}
-        onBack={onBack}
-      />
-    );
-  }
+	useEffect(() => {
+		snapshotDiff.reset();
+		setHasPreviewedSnapshotDiff(false);
+	}, [activeMode, compareFromPitId, compareToPitId, kind, selectedEnvironment?.id]);
 
-  // No environment selected or found
-  if (!selectedEnvironment) {
-    return (
-      <PointInTimeErrorPage
-        error={new Error("No environment found")}
-        onRetry={handleRetry}
-        onBack={onBack}
-      />
-    );
-  }
+	useEffect(() => {
+		timeRangeDiff.reset();
+		setHasPreviewedTimeRangeDiff(false);
+	}, [activeMode, kind, selectedEnvironment?.id, timeRange.end, timeRange.start]);
 
-  // Extract PiT history from API response
-  const pitHistory: PitHistoryItem[] = historyData?.pits || [];
-  const totalPages = historyData?.totalPages || 1;
+	function getUserLabel(userId: string) {
+		const user = usersMap.get(userId);
+		if (user?.full_name?.trim()) return user.full_name;
+		if (user?.email?.trim()) return user.email;
+		if (userId.includes("@")) return userId.split("@")[0];
+		return userId;
+	}
 
-  // Set default selected PIT data to the first item
-  const currentSelectedPit =
-    selectedPitData || (pitHistory.length > 0 ? pitHistory[0] : null);
+	function formatDateTime(value: string) {
+		return new Date(value).toLocaleString(undefined, {
+			dateStyle: "medium",
+			timeStyle: "short",
+		});
+	}
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return {
-      date: date.toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      }),
-      time: date.toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: true,
-      }),
-    };
-  };
+	function handleRetry() {
+		refetchProject();
+		snapshotHistoryQuery.refetch();
+		if (activeMode === "time-range") {
+			rangeHistoryQuery.refetch();
+		}
+	}
 
-  const getOperationColor = (operation: string) => {
-    switch (operation) {
-      case "CREATE":
-        return "bg-green-500/20 text-green-400 border-green-500/30";
-      case "UPDATE":
-        return "bg-indigo-500/20 text-indigo-400 border-indigo-500/30";
-      case "DELETE":
-        return "bg-red-500/20 text-red-400 border-red-500/30";
-      default:
-        return "bg-gray-500/20 text-gray-300 border-gray-500/30";
-    }
-  };
+	function handleEnvironmentChange(environmentId: string) {
+		const environment = environmentTypes?.find((item) => item.id === environmentId);
+		setSearchParams((previous) => {
+			const next = new URLSearchParams(previous);
+			next.set("env", environment?.name?.toLowerCase() || environmentId);
+			return next;
+		});
+		setSnapshotPage(1);
+		setRangePage(1);
+		setSelectedSnapshotPitId(null);
+		setSelectedRangePitId(null);
+	}
 
-  const getOperationIcon = (operation: string) => {
-    switch (operation) {
-      case "CREATE":
-        return <GitBranch className="w-3 h-3" />;
-      case "UPDATE":
-        return <Clock className="w-3 h-3" />;
-      case "DELETE":
-        return <RotateCcw className="w-3 h-3" />;
-      default:
-        return <Clock className="w-3 h-3" />;
-    }
-  };
+	function handlePreviewSnapshotDiff() {
+		if (!appId || !selectedEnvironment?.id || !compareFromPitId || !compareToPitId) return;
 
-  const getUserDisplayName = (userId: string) => {
-    const matchingUser = usersMap.get(userId);
-    if (matchingUser?.full_name?.trim()) {
-      return matchingUser.full_name;
-    }
-    if (matchingUser?.email?.trim()) {
-      return matchingUser.email;
-    }
-    if (userId.includes("@")) {
-      return userId.split("@")[0];
-    }
-    return userId;
-  };
+		if (compareFromPitId === compareToPitId) {
+			toast.error("Choose two different snapshots to compare.");
+			return;
+		}
 
-  const getUserInitials = (userId: string) => {
-    const displayName = getUserDisplayName(userId);
-    return displayName.charAt(0).toUpperCase();
-  };
+		setHasPreviewedSnapshotDiff(true);
+		snapshotDiff.mutate({
+			app_id: appId,
+			env_type_id: selectedEnvironment.id,
+			from_pit_id: compareFromPitId,
+			to_pit_id: compareToPitId,
+		});
+	}
 
-  return (
-    <div className="flex flex-col gap-6 p-6">
-      <PointInTimeHeader
-        projectName={project?.name || appId || ""}
-        environmentName={selectedEnvironment.name}
-        environmentTypes={environmentTypes || []}
-        selectedEnvironmentId={selectedEnvironment.id}
-        canEdit={false}
-        isRefetching={isRefetching}
-        enableSecrets={enableSecrets}
-        onBack={onBack}
-        onRefresh={handleRefresh}
-        onAddVariable={() => {}}
-        onBulkImport={() => {}}
-        onExport={() => {}}
-        onManageEnvironments={() => {}}
-        onEnvironmentChange={handleEnvironmentChange}
-      />
+	function handlePreviewTimeRangeDiff() {
+		if (!appId || !selectedEnvironment?.id || !timeRange.start || !timeRange.end) return;
 
-      {/* Empty State */}
-      {pitHistory.length === 0 && !isHistoryLoading && (
-        <Card className="bg-card text-card-foreground bg-gradient-to-br from-gray-900 to-gray-950 border-gray-800/80 shadow-xl rounded-xl">
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <div className="p-4 bg-gray-800/50 rounded-full mb-4">
-              <History className="w-8 h-8 text-gray-400" />
-            </div>
-            <h3 className="text-lg font-semibold text-white mb-2">
-              No Point-in-Time History
-            </h3>
-            <p className="text-gray-400 text-center max-w-md">
-              No variable changes have been recorded yet. Start making changes
-              to see the point-in-time history here.
-            </p>
-          </CardContent>
-        </Card>
-      )}
+		if (new Date(timeRange.start) > new Date(timeRange.end)) {
+			toast.error("Range start must be before range end.");
+			return;
+		}
 
-      {/* Current PIT Overview Card */}
-      {currentSelectedPit && (
-        <Card className="bg-gradient-to-br from-gray-900 to-gray-950 border-gray-800/80 shadow-xl rounded-xl">
-          <CardHeader className="pb-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-indigo-500/20 rounded-lg">
-                  <Clock className="w-5 h-5 text-indigo-400" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-semibold text-white">
-                    Selected Point in Time
-                  </h2>
-                  <p className="text-gray-400 text-sm">
-                    Snapshot details and metadata
-                  </p>
-                </div>
-              </div>
-              <Badge className="bg-indigo-500/20 text-indigo-400 border-indigo-500/30 border font-medium">
-                <Clock className="w-3 h-3 mr-1" />
-                SNAPSHOT
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-gray-400 text-sm">
-                  <GitBranch className="w-4 h-4" />
-                  PIT ID
-                </div>
-                <p className="text-white font-mono text-sm bg-gray-800/50 px-3 py-2 rounded-md">
-                  {currentSelectedPit.id}
-                </p>
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-gray-400 text-sm">
-                  <Calendar className="w-4 h-4" />
-                  Created On
-                </div>
-                <div className="text-white">
-                  <p className="font-medium">
-                    {formatDate(currentSelectedPit.created_at).date}
-                  </p>
-                  <p className="text-gray-400 text-sm">
-                    {formatDate(currentSelectedPit.created_at).time}
-                  </p>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-gray-400 text-sm">
-                  <User className="w-4 h-4" />
-                  Created By
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white text-xs font-medium">
-                    {getUserInitials(currentSelectedPit.user_id)}
-                  </div>
-                  <p className="text-white font-medium">
-                    {getUserDisplayName(currentSelectedPit.user_id)}
-                  </p>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-gray-400 text-sm">
-                  <MessageSquare className="w-4 h-4" />
-                  Change Message
-                </div>
-                <p className="text-gray-300 text-sm leading-relaxed">
-                  {currentSelectedPit.change_request_message}
-                </p>
-              </div>
-            </div>
+		setHasPreviewedTimeRangeDiff(true);
+		timeRangeDiff.mutate({
+			app_id: appId,
+			env_type_id: selectedEnvironment.id,
+			from_timestamp: timeRange.start,
+			to_timestamp: timeRange.end,
+		});
+	}
 
-            <Separator className="bg-gray-800" />
+	function resetRollbackState() {
+		setSelectedRollbackPit(null);
+		setRollbackConfirmPitId("");
+		setRollbackMessage("");
+	}
 
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-4">
-                <Button
-                  variant="outline"
-                  className="text-gray-300 border-gray-700 hover:bg-gray-800"
-                  onClick={() => handleCheckDiff(currentSelectedPit)}
-                >
-                  <GitCompare className="w-4 h-4 mr-2" />
-                  Compare Changes
-                </Button>
-                <Button
-                  variant="outline"
-                  className="text-orange-300 border-orange-600 hover:bg-orange-900/20"
-                  onClick={() => handleRollback(currentSelectedPit)}
-                  disabled={rollbackToPit.isPending}
-                >
-                  {rollbackToPit.isPending ? (
-                    <>
-                      <div className="w-4 h-4 mr-2 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />
-                      Rolling back...
-                    </>
-                  ) : (
-                    <>
-                      <RotateCcw className="w-4 h-4 mr-2" />
-                      Rollback to this PIT
-                    </>
-                  )}
-                </Button>
-              </div>
-              <Button
-                className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg"
-                onClick={() => handleViewChanges(currentSelectedPit)}
-              >
-                <Eye className="w-4 h-4 mr-2" />
-                View Changes
-                <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+	function handleRollbackRequest(pit: PitHistoryItem) {
+		setSelectedRollbackPit(pit);
+		setRollbackConfirmPitId("");
+		setRollbackMessage(`Rollback ${itemLabel}s to snapshot ${pit.id}`);
+		setIsRollbackDialogOpen(true);
+	}
 
-      {/* PIT History Timeline */}
-      <Card className="bg-card text-card-foreground bg-gradient-to-br from-gray-900 to-gray-950 border-gray-800/80 shadow-xl rounded-xl">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-purple-500/20 rounded-lg">
-                <History className="w-5 h-5 text-purple-400" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-white">
-                  Point-in-Time History
-                </h3>
-                <p className="text-gray-400 text-sm">
-                  Complete timeline of variable changes for{" "}
-                  {selectedEnvironment.name}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <Badge
-                variant="outline"
-                className="text-gray-300 border-gray-700"
-              >
-                {historyData?.pits.length || pitHistory.length} total snapshots
-              </Badge>
-              {totalPages > 1 && (
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handlePageChange(currentPage - 1)}
-                    disabled={currentPage <= 1 || isRefetching}
-                    className="text-gray-300 border-gray-700 hover:bg-gray-800"
-                  >
-                    Previous
-                  </Button>
-                  <span className="text-gray-400 text-sm">
-                    Page {currentPage} of {totalPages}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handlePageChange(currentPage + 1)}
-                    disabled={currentPage >= totalPages || isRefetching}
-                    className="text-gray-300 border-gray-700 hover:bg-gray-800"
-                  >
-                    Next
-                  </Button>
-                </div>
-              )}
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="space-y-0">
-            {pitHistory.map((pitData, index) => {
-              const dateTime = formatDate(pitData.created_at);
-              const isSelected = selectedPitData?.id === pitData.id;
+	function handleRollbackDialogChange(open: boolean) {
+		setIsRollbackDialogOpen(open);
+		if (!open) {
+			resetRollbackState();
+		}
+	}
 
-              return (
-                <div
-                  key={pitData.id}
-                  className={`relative flex items-center p-6 border-b border-gray-800 last:border-b-0 transition-all duration-200 ${
-                    isSelected
-                      ? "bg-indigo-500/10 border-l-4 border-l-indigo-500"
-                      : "hover:bg-gray-800 cursor-pointer"
-                  }`}
-                  onClick={() => setSelectedPitData(pitData)}
-                >
-                  {/* Timeline indicator */}
-                  <div className="absolute left-0 top-1/2 transform -translate-y-1/2 w-1 h-12 bg-gradient-to-b from-transparent via-gray-700 to-transparent"></div>
+	function handleConfirmRollback() {
+		if (!appId || !selectedEnvironment?.id || !selectedRollbackPit) return;
 
-                  <div className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
-                    {/* PIT ID & Timestamp */}
-                    <div className="md:col-span-3 space-y-1">
-                      <div className="flex items-center gap-2">
-                        <code className="text-white font-mono text-sm bg-gray-800/50 px-2 py-1 rounded">
-                          {pitData.id.slice(0, 8)}...
-                        </code>
-                        <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30 border text-xs">
-                          <Clock className="w-3 h-3 mr-1" />
-                          PIT
-                        </Badge>
-                      </div>
-                    </div>
+		rollbackToPit.mutate(
+			{
+				app_id: appId,
+				env_type_id: selectedEnvironment.id,
+				pit_id: selectedRollbackPit.id,
+				rollback_message: rollbackMessage.trim(),
+			},
+			{
+				onSuccess: () => {
+					handleRollbackDialogChange(false);
+				},
+			}
+		);
+	}
 
-                    {/* Date & Time */}
-                    <div className="md:col-span-2 space-y-1">
-                      <p className="text-white font-medium text-sm">
-                        {dateTime.date}
-                      </p>
-                      <p className="text-gray-400 text-xs">{dateTime.time}</p>
-                    </div>
+	function handleUsePitForCompare(pitId: string) {
+		startTransition(() => {
+			setSelectedSnapshotPitId(pitId);
+			const defaults = getDefaultSnapshotCompareIds(snapshotHistory, pitId);
+			setCompareToPitId(defaults.toPitId);
+			setCompareFromPitId(defaults.fromPitId);
+			setActiveMode("snapshots");
+		});
+	}
 
-                    {/* User */}
-                    <div className="md:col-span-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white text-xs font-medium">
-                          {getUserInitials(pitData.user_id)}
-                        </div>
-                        <p className="text-gray-300 text-sm truncate">
-                          {getUserDisplayName(pitData.user_id)}
-                        </p>
-                      </div>
-                    </div>
+	function handleViewChanges(pitId: string) {
+		const pit = allKnownPits.get(pitId);
+		if (!pit) return;
+		setSelectedPitForModal(pit);
+		setIsViewPitChangesModalOpen(true);
+	}
 
-                    {/* Message */}
-                    <div className="md:col-span-4">
-                      <p className="text-gray-300 text-sm line-clamp-2 leading-relaxed">
-                        {pitData.change_request_message}
-                      </p>
-                    </div>
+	function handleCustomRangeChange(nextRange: Pick<PitRangeState, "start" | "end">) {
+		setTimeRange({
+			preset: "custom",
+			start: nextRange.start,
+			end: nextRange.end,
+		});
+		setRangePage(1);
+		setSelectedRangePitId(null);
+	}
 
-                    {/* Actions */}
-                    <div className="md:col-span-1 flex justify-end">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 hover:bg-gray-700 text-gray-400 hover:text-white"
-                          >
-                            <MoreVertical className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          className="bg-gray-900 border-gray-800 min-w-[180px]"
-                          align="end"
-                        >
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleRollback(pitData);
-                            }}
-                            className="text-white hover:bg-gray-800 cursor-pointer"
-                            disabled={rollbackToPit.isPending}
-                          >
-                            <RotateCcw className="w-4 h-4 mr-2 text-orange-400" />
-                            Rollback to this PIT
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleViewChanges(pitData);
-                            }}
-                            className="text-white hover:bg-gray-800 cursor-pointer"
-                          >
-                            <History className="w-4 h-4 mr-2 text-indigo-400" />
-                            View Changes
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleCheckDiff(pitData);
-                            }}
-                            className="text-white hover:bg-gray-800 cursor-pointer"
-                          >
-                            <GitCompare className="w-4 h-4 mr-2 text-green-400" />
-                            Compare Changes
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </div>
+	if (
+		isProjectLoading ||
+		snapshotHistoryQuery.isLoading ||
+		(activeMode === "time-range" && rangeHistoryQuery.isLoading && !rangeHistoryQuery.data)
+	) {
+		return <PointInTimeLoadingPage />;
+	}
 
-                  {/* Selection indicator */}
-                  {isSelected && (
-                    <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
-                      <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
+	if (projectError || snapshotHistoryQuery.error || (activeMode === "time-range" && rangeHistoryQuery.error)) {
+		return (
+			<PointInTimeErrorPage
+				error={projectError || snapshotHistoryQuery.error || rangeHistoryQuery.error}
+				onRetry={handleRetry}
+				onBack={() => navigate(-1)}
+			/>
+		);
+	}
 
-      {/* Rollback Status Alert */}
-      {rollbackToPit.isPending && (
-        <Alert className="bg-orange-500/10 border-orange-500/30">
-          <AlertCircle className="h-4 w-4 text-orange-400" />
-          <AlertDescription className="text-orange-200">
-            Rolling back variables... This may take a few moments.
-          </AlertDescription>
-        </Alert>
-      )}
+	if (!selectedEnvironment) {
+		return (
+			<PointInTimeErrorPage
+				error={new Error("No environment found")}
+				onRetry={handleRetry}
+				onBack={() => navigate(-1)}
+			/>
+		);
+	}
 
-      {/* Modals */}
-      <CheckDiffModal
-        isOpen={isCheckDiffModalOpen}
-        onOpenChange={setIsCheckDiffModalOpen}
-        pitData={selectedPitData}
-        pitIdList={pitHistory.map((pit) => pit.id)}
-        projectId={appId || ""}
-        environmentId={selectedEnvironment.id}
-      />
+	return (
+		<div className="min-h-full bg-zinc-950 p-6">
+			<div className="mx-auto flex max-w-7xl flex-col gap-6">
+				<PointInTimeHeader
+					projectName={project?.name || appId || ""}
+					environmentTypes={environmentTypes || []}
+					selectedEnvironmentId={selectedEnvironment.id}
+					isRefetching={snapshotHistoryQuery.isRefetching || rangeHistoryQuery.isRefetching}
+					enableSecrets={enableSecrets}
+					onBack={() => navigate(-1)}
+					onRefresh={() => {
+						snapshotHistoryQuery.refetch();
+						if (activeMode === "time-range") {
+							rangeHistoryQuery.refetch();
+						}
+					}}
+					onEnvironmentChange={handleEnvironmentChange}
+				/>
 
-      <ViewPitChangesModal
-        isOpen={isViewPitChangesModalOpen}
-        onOpenChange={setIsViewPitChangesModalOpen}
-        pitData={selectedPitData}
-        projectId={appId || ""}
-        environmentId={selectedEnvironment.id}
-      />
-    </div>
-  );
+				<div className="space-y-4">
+					<PitModeSwitch value={activeMode} onValueChange={setActiveMode} />
+
+					{activeMode === "snapshots" ? (
+						<PitSnapshotComparePanel
+							kind={kind}
+							history={snapshotHistory}
+							compareFromPitId={compareFromPitId}
+							compareToPitId={compareToPitId}
+							onCompareFromChange={setCompareFromPitId}
+							onCompareToChange={setCompareToPitId}
+							onPreview={handlePreviewSnapshotDiff}
+							isPreviewPending={snapshotDiff.isPending}
+							getUserLabel={getUserLabel}
+							formatDateTime={formatDateTime}
+						/>
+					) : (
+						<PitTimeRangePanel
+							kind={kind}
+							range={timeRange}
+							timezoneLabel={timezoneLabel}
+							isPreviewPending={timeRangeDiff.isPending}
+							onPresetChange={(preset: PitRangePreset) => {
+								setTimeRange(createPresetRange(preset));
+								setRangePage(1);
+								setSelectedRangePitId(null);
+							}}
+							onCustomRangeChange={handleCustomRangeChange}
+							onPreview={handlePreviewTimeRangeDiff}
+						/>
+					)}
+				</div>
+
+				<Card className="border-zinc-800 bg-zinc-900">
+					<CardHeader>
+						<CardTitle className="text-base text-white">Selected context</CardTitle>
+					</CardHeader>
+					<CardContent>
+						{activeMode === "snapshots" ? selectedSnapshotPit ? (
+							<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+								<div className="space-y-1">
+									<p className="flex items-center gap-2 text-xs uppercase tracking-wide text-zinc-500">
+										<GitBranch className="size-3.5" />
+										PIT ID
+									</p>
+									<p className="font-mono text-sm text-white">{selectedSnapshotPit.id}</p>
+								</div>
+								<div className="space-y-1">
+									<p className="flex items-center gap-2 text-xs uppercase tracking-wide text-zinc-500">
+										<Clock3 className="size-3.5" />
+										Created at
+									</p>
+									<p className="text-sm text-zinc-200">{formatDateTime(selectedSnapshotPit.created_at)}</p>
+								</div>
+								<div className="space-y-1">
+									<p className="flex items-center gap-2 text-xs uppercase tracking-wide text-zinc-500">
+										<User className="size-3.5" />
+										Created by
+									</p>
+									<p className="text-sm text-zinc-200">{getUserLabel(selectedSnapshotPit.user_id)}</p>
+								</div>
+								<div className="space-y-1">
+									<p className="flex items-center gap-2 text-xs uppercase tracking-wide text-zinc-500">
+										<MessageSquare className="size-3.5" />
+										Message
+									</p>
+									<p className="text-sm text-zinc-200">{selectedSnapshotPit.change_request_message}</p>
+								</div>
+								<div className="space-y-1">
+									<p className="text-xs uppercase tracking-wide text-zinc-500">{kindLabel} changes</p>
+									<p className="text-sm text-zinc-200">{selectedSnapshotPit.changes_count}</p>
+								</div>
+							</div>
+						) : (
+							<p className="text-sm text-zinc-400">
+								No snapshots are available yet for this environment&apos;s {itemLabel}s.
+							</p>
+						) : (
+							<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+								<div className="space-y-1">
+									<p className="flex items-center gap-2 text-xs uppercase tracking-wide text-zinc-500">
+										<CalendarRange className="size-3.5" />
+										Range start
+									</p>
+									<p className="text-sm text-zinc-200">{formatDateTime(timeRange.start)}</p>
+								</div>
+								<div className="space-y-1">
+									<p className="flex items-center gap-2 text-xs uppercase tracking-wide text-zinc-500">
+										<CalendarRange className="size-3.5" />
+										Range end
+									</p>
+									<p className="text-sm text-zinc-200">{formatDateTime(timeRange.end)}</p>
+								</div>
+								<div className="space-y-1">
+									<p className="text-xs uppercase tracking-wide text-zinc-500">Total PiTs found</p>
+									<p className="text-sm text-zinc-200">{rangeSummary.total}</p>
+								</div>
+								<div className="space-y-1">
+									<p className="text-xs uppercase tracking-wide text-zinc-500">Earliest PiT</p>
+									<p className="text-sm text-zinc-200">
+										{rangeSummary.earliest ? formatDateTime(rangeSummary.earliest.created_at) : "None"}
+									</p>
+								</div>
+								<div className="space-y-1">
+									<p className="text-xs uppercase tracking-wide text-zinc-500">Latest PiT</p>
+									<p className="text-sm text-zinc-200">
+										{rangeSummary.latest ? formatDateTime(rangeSummary.latest.created_at) : "None"}
+									</p>
+								</div>
+							</div>
+						)}
+					</CardContent>
+				</Card>
+
+				{activeMode === "time-range" && rangeHistory.length === 1 && !selectedRangePitId && (
+					<Badge className="w-fit border border-cyan-500/20 bg-cyan-500/10 text-cyan-300">
+						One snapshot found in range. Select it to enable rollback.
+					</Badge>
+				)}
+
+				<PitHistoryTable
+					kind={kind}
+					mode={activeMode}
+					title={activeMode === "snapshots" ? `${kindLabel} snapshot history` : "Snapshots in selected range"}
+					description={
+						activeMode === "snapshots"
+							? `Browse the full PiT history for ${selectedEnvironment.name} ${itemLabel}s.`
+							: "Use the selected time window to narrow rollback candidates and jump back into snapshot compare."
+					}
+					history={activeMode === "snapshots" ? snapshotHistory : rangeHistory}
+					selectedPitId={activeMode === "snapshots" ? selectedSnapshotPitId : selectedRangePitId}
+					totalPages={
+						activeMode === "snapshots"
+							? snapshotHistoryQuery.data?.totalPages || 1
+							: rangeHistoryQuery.data?.totalPages || 1
+					}
+					currentPage={activeMode === "snapshots" ? snapshotPage : rangePage}
+					isRefetching={
+						activeMode === "snapshots"
+							? snapshotHistoryQuery.isRefetching
+							: rangeHistoryQuery.isRefetching
+					}
+					isRollbackPending={rollbackToPit.isPending}
+					onPageChange={(page) => {
+						if (activeMode === "snapshots") {
+							setSnapshotPage(page);
+						} else {
+							setRangePage(page);
+						}
+					}}
+					onSelectRow={(pitId) => {
+						if (activeMode === "snapshots") {
+							setSelectedSnapshotPitId(pitId);
+						} else {
+							setSelectedRangePitId(pitId);
+						}
+					}}
+					onUseForCompare={handleUsePitForCompare}
+					onViewChanges={handleViewChanges}
+					onRollback={(pitId) => {
+						const pit = allKnownPits.get(pitId);
+						if (pit) {
+							handleRollbackRequest(pit);
+						}
+					}}
+					getUserLabel={getUserLabel}
+					formatDateTime={formatDateTime}
+				/>
+
+				<PitDiffResults
+					kind={kind}
+					title={activeMode === "snapshots" ? `${kindLabel} snapshot diff` : `${kindLabel} time-range net diff`}
+					description={
+						activeMode === "snapshots"
+							? "Preview the difference between two concrete PiT snapshots."
+							: "Preview the net diff between the selected range start and range end."
+					}
+					diff={activeMode === "snapshots" ? snapshotDiff.data ?? null : timeRangeDiff.data ?? null}
+					isPending={activeMode === "snapshots" ? snapshotDiff.isPending : timeRangeDiff.isPending}
+					error={
+						activeMode === "snapshots"
+							? (snapshotDiff.error as Error | null)
+							: (timeRangeDiff.error as Error | null)
+					}
+					hasPreviewed={activeMode === "snapshots" ? hasPreviewedSnapshotDiff : hasPreviewedTimeRangeDiff}
+				/>
+
+				<ViewPitChangesModal
+					kind={kind}
+					isOpen={isViewPitChangesModalOpen}
+					onOpenChange={setIsViewPitChangesModalOpen}
+					pitData={selectedPitForModal}
+					projectId={appId || ""}
+					environmentId={selectedEnvironment.id}
+				/>
+
+				<PitRollbackDialog
+					kind={kind}
+					pit={selectedRollbackPit}
+					isOpen={isRollbackDialogOpen}
+					typedPitId={rollbackConfirmPitId}
+					rollbackMessage={rollbackMessage}
+					isSubmitting={rollbackToPit.isPending}
+					onOpenChange={handleRollbackDialogChange}
+					onTypedPitIdChange={setRollbackConfirmPitId}
+					onRollbackMessageChange={setRollbackMessage}
+					onConfirm={handleConfirmRollback}
+				/>
+			</div>
+		</div>
+	);
 };
 
 export default PointInTime;

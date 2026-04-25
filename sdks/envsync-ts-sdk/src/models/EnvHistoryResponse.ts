@@ -12,6 +12,7 @@ export type EnvHistoryResponse = {
         user_id: string;
         created_at: string;
         updated_at: string;
+        changes_count: number;
     }>;
     totalPages: number;
 };

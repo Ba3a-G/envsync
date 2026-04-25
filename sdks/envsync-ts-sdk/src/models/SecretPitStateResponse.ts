@@ -6,4 +6,5 @@ export type SecretPitStateResponse = Array<{
     key: string;
     value: string;
     last_updated: string;
+    operation: 'CREATE' | 'UPDATE' | 'DELETE';
 }>;

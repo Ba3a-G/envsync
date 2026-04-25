@@ -68,11 +68,11 @@ export const WEBHOOK_TYPES = [
   {
     value: "DISCORD",
     label: "Discord",
-    color: "bg-indigo-500/20 hover:bg-indigo-500/50 border-indigo-700",
+    color: "bg-teal-500/20 hover:bg-teal-500/50 border-teal-700",
     activeColor:
-      "bg-indigo-500/30 border-indigo-500 ring-2 ring-indigo-500/40",
+      "bg-teal-500/30 border-teal-500 ring-2 ring-teal-500/40",
     icon: MessageCircle,
-    accent: "text-indigo-400",
+    accent: "text-teal-400",
   },
 ] as const;
 
@@ -222,10 +222,10 @@ export function CreateWebhookDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-gray-800 border-gray-700 max-w-4xl max-h-[90vh] overflow-y-auto hide-scrollbar">
+      <DialogContent className="bg-zinc-800 border-zinc-700 max-w-4xl max-h-[90vh] overflow-y-auto hide-scrollbar">
         <DialogHeader>
           <DialogTitle className="text-white">Create New Webhook</DialogTitle>
-          <DialogDescription className="text-gray-400">
+          <DialogDescription className="text-zinc-400">
             Configure your webhook step by step using the sections below.
           </DialogDescription>
         </DialogHeader>
@@ -236,7 +236,7 @@ export function CreateWebhookDialog({
           className="w-full"
         >
           {/* Section 1: Basic Information */}
-          <AccordionItem value="basic-info" className="border-gray-700">
+          <AccordionItem value="basic-info" className="border-zinc-700">
             <AccordionTrigger className="hover:no-underline px-1">
               <div className="flex items-center gap-3 flex-1">
                 <div
@@ -244,7 +244,7 @@ export function CreateWebhookDialog({
                     "flex items-center justify-center size-6 rounded-full border text-xs font-bold",
                     isBasicInfoComplete
                       ? "bg-green-500/20 border-green-500 text-green-400"
-                      : "bg-gray-700 border-gray-600 text-gray-400"
+                      : "bg-zinc-700 border-zinc-600 text-zinc-400"
                   )}
                 >
                   {isBasicInfoComplete ? (
@@ -260,7 +260,7 @@ export function CreateWebhookDialog({
                   <span
                     className={cn(
                       "text-xs",
-                      isBasicInfoComplete ? "text-gray-400" : "text-gray-500"
+                      isBasicInfoComplete ? "text-zinc-400" : "text-zinc-500"
                     )}
                   >
                     {basicInfoSummary}
@@ -284,7 +284,7 @@ export function CreateWebhookDialog({
                         name: e.target.value,
                       })
                     }
-                    className="bg-gray-900 border-gray-700 text-white"
+                    className="bg-zinc-900 border-zinc-700 text-white"
                     disabled={isCreating}
                   />
                 </div>
@@ -303,7 +303,7 @@ export function CreateWebhookDialog({
                         url: e.target.value,
                       })
                     }
-                    className="bg-gray-900 border-gray-700 text-white"
+                    className="bg-zinc-900 border-zinc-700 text-white"
                     disabled={isCreating}
                   />
                 </div>
@@ -312,7 +312,7 @@ export function CreateWebhookDialog({
           </AccordionItem>
 
           {/* Section 2: Webhook Configuration */}
-          <AccordionItem value="config" className="border-gray-700">
+          <AccordionItem value="config" className="border-zinc-700">
             <AccordionTrigger className="hover:no-underline px-1">
               <div className="flex items-center gap-3 flex-1">
                 <div
@@ -320,7 +320,7 @@ export function CreateWebhookDialog({
                     "flex items-center justify-center size-6 rounded-full border text-xs font-bold",
                     isConfigComplete
                       ? "bg-green-500/20 border-green-500 text-green-400"
-                      : "bg-gray-700 border-gray-600 text-gray-400"
+                      : "bg-zinc-700 border-zinc-600 text-zinc-400"
                   )}
                 >
                   {isConfigComplete ? <Check className="size-3.5" /> : "2"}
@@ -329,7 +329,7 @@ export function CreateWebhookDialog({
                   <span className="text-sm font-semibold text-white">
                     Webhook Configuration
                   </span>
-                  <span className="text-xs text-gray-400">
+                  <span className="text-xs text-zinc-400">
                     {configSummary}
                   </span>
                 </div>
@@ -399,14 +399,14 @@ export function CreateWebhookDialog({
                           className={cn(
                             "flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all",
                             isActive
-                              ? "bg-indigo-500/20 border-indigo-500 ring-2 ring-indigo-500/40"
-                              : "bg-gray-900 border-gray-700 hover:bg-gray-800"
+                              ? "bg-teal-500/20 border-teal-500 ring-2 ring-teal-500/40"
+                              : "bg-zinc-900 border-zinc-700 hover:bg-zinc-800"
                           )}
                         >
                           <Icon
                             className={cn(
                               "size-5",
-                              isActive ? "text-indigo-400" : "text-gray-400"
+                              isActive ? "text-teal-400" : "text-zinc-400"
                             )}
                           />
                           <span className="text-sm font-medium text-white">
@@ -434,18 +434,18 @@ export function CreateWebhookDialog({
                       }
                       disabled={isCreating || applicationsLoading}
                     >
-                      <SelectTrigger className="bg-gray-900 border-gray-700 text-white">
+                      <SelectTrigger className="bg-zinc-900 border-zinc-700 text-white">
                         <SelectValue placeholder="Select an application" />
                       </SelectTrigger>
-                      <SelectContent className="bg-gray-900 border-gray-700 max-h-60 overflow-y-auto">
+                      <SelectContent className="bg-zinc-900 border-zinc-700 max-h-60 overflow-y-auto">
                         {applicationsLoading ? (
                           <SelectItem
                             value=""
                             disabled
-                            className="text-gray-400"
+                            className="text-zinc-400"
                           >
                             <div className="flex items-center space-x-2">
-                              <div className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                              <div className="w-3 h-3 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" />
                               <span>Loading applications...</span>
                             </div>
                           </SelectItem>
@@ -458,7 +458,7 @@ export function CreateWebhookDialog({
                             >
                               <div className="flex flex-col py-1">
                                 <span className="font-medium">{app.name}</span>
-                                <span className="text-xs text-gray-400 font-mono">
+                                <span className="text-xs text-zinc-400 font-mono">
                                   ID: {app.id}
                                 </span>
                               </div>
@@ -468,7 +468,7 @@ export function CreateWebhookDialog({
                           <SelectItem
                             value=""
                             disabled
-                            className="text-gray-400"
+                            className="text-zinc-400"
                           >
                             No applications found
                           </SelectItem>
@@ -487,7 +487,7 @@ export function CreateWebhookDialog({
           </AccordionItem>
 
           {/* Section 3: Event Subscriptions */}
-          <AccordionItem value="events" className="border-gray-700">
+          <AccordionItem value="events" className="border-zinc-700">
             <AccordionTrigger className="hover:no-underline px-1">
               <div className="flex items-center gap-3 flex-1">
                 <div
@@ -495,7 +495,7 @@ export function CreateWebhookDialog({
                     "flex items-center justify-center size-6 rounded-full border text-xs font-bold",
                     isEventsComplete
                       ? "bg-green-500/20 border-green-500 text-green-400"
-                      : "bg-gray-700 border-gray-600 text-gray-400"
+                      : "bg-zinc-700 border-zinc-600 text-zinc-400"
                   )}
                 >
                   {isEventsComplete ? <Check className="size-3.5" /> : "3"}
@@ -507,7 +507,7 @@ export function CreateWebhookDialog({
                   <span
                     className={cn(
                       "text-xs",
-                      isEventsComplete ? "text-gray-400" : "text-gray-500"
+                      isEventsComplete ? "text-zinc-400" : "text-zinc-500"
                     )}
                   >
                     {eventsSummary}
@@ -519,12 +519,12 @@ export function CreateWebhookDialog({
               <div className="space-y-4">
                 {/* Search bar */}
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-500" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-zinc-500" />
                   <Input
                     placeholder="Search events..."
                     value={eventSearch}
                     onChange={(e) => setEventSearch(e.target.value)}
-                    className="bg-gray-900 border-gray-700 text-white pl-9"
+                    className="bg-zinc-900 border-zinc-700 text-white pl-9"
                     disabled={isCreating}
                   />
                 </div>
@@ -546,8 +546,8 @@ export function CreateWebhookDialog({
                         className={cn(
                           "rounded-lg border transition-all",
                           isExpanded
-                            ? "border-indigo-500/50 bg-gray-900/80 col-span-2"
-                            : "border-gray-700 bg-gray-900/40 hover:bg-gray-900/60"
+                            ? "border-teal-500/50 bg-zinc-900/80 col-span-2"
+                            : "border-zinc-700 bg-zinc-900/40 hover:bg-zinc-900/60"
                         )}
                       >
                         {/* Category Header */}
@@ -560,7 +560,7 @@ export function CreateWebhookDialog({
                           }
                         >
                           <div className="flex items-center gap-2.5">
-                            <CategoryIcon className="size-4 text-gray-400" />
+                            <CategoryIcon className="size-4 text-zinc-400" />
                             <span className="text-sm font-medium text-white">
                               {category.label}
                             </span>
@@ -569,8 +569,8 @@ export function CreateWebhookDialog({
                               className={cn(
                                 "text-[10px] px-1.5 py-0",
                                 selected > 0
-                                  ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/30"
-                                  : "bg-gray-700 text-gray-400"
+                                  ? "bg-teal-500/20 text-teal-300 border-teal-500/30"
+                                  : "bg-zinc-700 text-zinc-400"
                               )}
                             >
                               {selected}/{total}
@@ -587,8 +587,8 @@ export function CreateWebhookDialog({
                               className={cn(
                                 "text-[10px] px-2 py-0.5 rounded border transition-colors",
                                 allSelected
-                                  ? "bg-indigo-500/20 border-indigo-500/50 text-indigo-300"
-                                  : "bg-gray-800 border-gray-600 text-gray-400 hover:text-white hover:border-gray-500"
+                                  ? "bg-teal-500/20 border-teal-500/50 text-teal-300"
+                                  : "bg-zinc-800 border-zinc-600 text-zinc-400 hover:text-white hover:border-zinc-500"
                               )}
                             >
                               {allSelected ? "Deselect all" : "Select all"}
@@ -598,7 +598,7 @@ export function CreateWebhookDialog({
 
                         {/* Expanded: Subcategories + Events */}
                         {isExpanded && (
-                          <div className="px-3 pb-3 space-y-3 border-t border-gray-700/50 pt-3">
+                          <div className="px-3 pb-3 space-y-3 border-t border-zinc-700/50 pt-3">
                             {category.subcategories.map((subcategory) => {
                               const subEvents = subcategory.events;
                               if (subEvents.length === 0) return null;
@@ -622,9 +622,9 @@ export function CreateWebhookDialog({
                                           )
                                         }
                                         disabled={isCreating}
-                                        className="border-gray-600 data-[state=checked]:bg-indigo-500 data-[state=checked]:border-indigo-500"
+                                        className="border-zinc-600 data-[state=checked]:bg-teal-500 data-[state=checked]:border-teal-500"
                                       />
-                                      <span className="text-xs font-medium text-gray-300">
+                                      <span className="text-xs font-medium text-zinc-300">
                                         {subcategory.label}
                                       </span>
                                     </div>
@@ -643,9 +643,9 @@ export function CreateWebhookDialog({
                                             onEventToggle(event.value)
                                           }
                                           disabled={isCreating}
-                                          className="border-gray-600 data-[state=checked]:bg-indigo-500 data-[state=checked]:border-indigo-500"
+                                          className="border-zinc-600 data-[state=checked]:bg-teal-500 data-[state=checked]:border-teal-500"
                                         />
-                                        <span className="text-xs text-gray-400">
+                                        <span className="text-xs text-zinc-400">
                                           {event.label}
                                         </span>
                                       </label>
@@ -662,7 +662,7 @@ export function CreateWebhookDialog({
                 </div>
 
                 {filteredCategories.length === 0 && (
-                  <p className="text-center text-sm text-gray-500 py-4">
+                  <p className="text-center text-sm text-zinc-500 py-4">
                     No events match your search.
                   </p>
                 )}
@@ -671,7 +671,7 @@ export function CreateWebhookDialog({
           </AccordionItem>
 
           {/* Section 4: Review & Create */}
-          <AccordionItem value="review" className="border-gray-700">
+          <AccordionItem value="review" className="border-zinc-700">
             <AccordionTrigger className="hover:no-underline px-1">
               <div className="flex items-center gap-3 flex-1">
                 <div
@@ -679,7 +679,7 @@ export function CreateWebhookDialog({
                     "flex items-center justify-center size-6 rounded-full border text-xs font-bold",
                     isBasicInfoComplete && isConfigComplete && isEventsComplete
                       ? "bg-green-500/20 border-green-500 text-green-400"
-                      : "bg-gray-700 border-gray-600 text-gray-400"
+                      : "bg-zinc-700 border-zinc-600 text-zinc-400"
                   )}
                 >
                   {isBasicInfoComplete &&
@@ -694,7 +694,7 @@ export function CreateWebhookDialog({
                   <span className="text-sm font-semibold text-white">
                     Review & Create
                   </span>
-                  <span className="text-xs text-gray-400">
+                  <span className="text-xs text-zinc-400">
                     Confirm your webhook configuration
                   </span>
                 </div>
@@ -703,31 +703,31 @@ export function CreateWebhookDialog({
             <AccordionContent className="px-1">
               <div className="space-y-4">
                 {/* Summary Grid */}
-                <div className="grid grid-cols-2 gap-3 rounded-lg bg-gray-900/60 border border-gray-700 p-4">
+                <div className="grid grid-cols-2 gap-3 rounded-lg bg-zinc-900/60 border border-zinc-700 p-4">
                   <div className="space-y-1">
-                    <span className="text-[10px] uppercase tracking-wider text-gray-500">
+                    <span className="text-[10px] uppercase tracking-wider text-zinc-500">
                       Name
                     </span>
                     <p className="text-sm text-white font-medium">
                       {webhookData.name || (
-                        <span className="text-gray-500 italic">Not set</span>
+                        <span className="text-zinc-500 italic">Not set</span>
                       )}
                     </p>
                   </div>
                   <div className="space-y-1">
-                    <span className="text-[10px] uppercase tracking-wider text-gray-500">
+                    <span className="text-[10px] uppercase tracking-wider text-zinc-500">
                       Payload URL
                     </span>
                     <p className="text-sm text-white font-mono truncate">
                       {webhookData.url || (
-                        <span className="text-gray-500 italic font-sans">
+                        <span className="text-zinc-500 italic font-sans">
                           Not set
                         </span>
                       )}
                     </p>
                   </div>
                   <div className="space-y-1">
-                    <span className="text-[10px] uppercase tracking-wider text-gray-500">
+                    <span className="text-[10px] uppercase tracking-wider text-zinc-500">
                       Type
                     </span>
                     <div>
@@ -745,18 +745,18 @@ export function CreateWebhookDialog({
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <span className="text-[10px] uppercase tracking-wider text-gray-500">
+                    <span className="text-[10px] uppercase tracking-wider text-zinc-500">
                       Scope
                     </span>
                     <p className="text-sm text-white">
                       {scopeLabel}
                       {appName && (
-                        <span className="text-gray-400"> &middot; {appName}</span>
+                        <span className="text-zinc-400"> &middot; {appName}</span>
                       )}
                     </p>
                   </div>
                   <div className="col-span-2 space-y-1">
-                    <span className="text-[10px] uppercase tracking-wider text-gray-500">
+                    <span className="text-[10px] uppercase tracking-wider text-zinc-500">
                       Events ({webhookData.event_types.length})
                     </span>
                     <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
@@ -769,14 +769,14 @@ export function CreateWebhookDialog({
                             <Badge
                               key={eventValue}
                               variant="secondary"
-                              className="text-[10px] bg-gray-700 text-gray-300"
+                              className="text-[10px] bg-zinc-700 text-zinc-300"
                             >
                               {eventLabel || eventValue}
                             </Badge>
                           );
                         })
                       ) : (
-                        <span className="text-sm text-gray-500 italic">
+                        <span className="text-sm text-zinc-500 italic">
                           No events selected
                         </span>
                       )}
@@ -789,14 +789,14 @@ export function CreateWebhookDialog({
                   <Button
                     variant="outline"
                     onClick={() => onOpenChange(false)}
-                    className="text-white border-gray-600 hover:bg-gray-700"
+                    className="text-white border-zinc-600 hover:bg-zinc-700"
                     disabled={isCreating}
                   >
                     Cancel
                   </Button>
                   <Button
                     onClick={onCreate}
-                    className="bg-indigo-500 hover:bg-indigo-600 text-white"
+                    className="bg-teal-500 hover:bg-teal-600 text-white"
                     disabled={isCreating}
                   >
                     {isCreating ? (

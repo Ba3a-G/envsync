@@ -4,7 +4,7 @@
 /* eslint-disable */
 export type IssueMemberCertRequest = {
     member_email: string;
-    role: string;
+    role?: string;
     description?: string;
     metadata?: Record<string, string>;
 };

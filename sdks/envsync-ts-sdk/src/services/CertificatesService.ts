@@ -7,6 +7,7 @@ import type { CRLResponse } from '../models/CRLResponse';
 import type { InitOrgCARequest } from '../models/InitOrgCARequest';
 import type { IssueMemberCertRequest } from '../models/IssueMemberCertRequest';
 import type { MemberCertResponse } from '../models/MemberCertResponse';
+import type { MyCertificateBundleResponse } from '../models/MyCertificateBundleResponse';
 import type { OCSPResponse } from '../models/OCSPResponse';
 import type { OrgCAResponse } from '../models/OrgCAResponse';
 import type { RenewCertRequest } from '../models/RenewCertRequest';
@@ -100,6 +101,21 @@ export class CertificatesService {
             url: '/api/certificate/crl',
             errors: {
                 500: `Internal server error`,
+            },
+        });
+    }
+    /**
+     * Get Current User Certificate Bundle
+     * Retrieve the current user's active system-generated certificate bundle
+     * @returns MyCertificateBundleResponse Certificate bundle retrieved successfully
+     * @throws ApiError
+     */
+    public getMyCertificateBundle(): CancelablePromise<MyCertificateBundleResponse> {
+        return this.httpRequest.request({
+            method: 'GET',
+            url: '/api/certificate/me',
+            errors: {
+                404: `Certificate bundle not found`,
             },
         });
     }

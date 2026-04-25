@@ -96,7 +96,7 @@ const ProjectAccess = () => {
 
   if (!appId || !project) {
     return (
-      <div className="animate-page-enter rounded-lg border border-dashed border-gray-800 bg-gray-950/60 p-8 text-center text-gray-400">
+      <div className="animate-page-enter rounded-lg border border-dashed border-zinc-800 bg-zinc-950/60 p-8 text-center text-zinc-400">
         Project not found.
       </div>
     );
@@ -109,7 +109,7 @@ const ProjectAccess = () => {
         description={`Direct project grants, team-based access, and org-derived visibility for ${project.name}.`}
         icon={LockKeyhole}
         actions={
-          <Button asChild variant="outline" className="border-gray-700 text-gray-200">
+          <Button asChild variant="outline" className="border-zinc-700 text-zinc-200">
             <Link to={appDetailPath(appId)}>Back to project</Link>
           </Button>
         }
@@ -122,10 +122,10 @@ const ProjectAccess = () => {
         secondaryNav={
           <Tabs data-testid="project-access-tabs" value={activeSection} onValueChange={handleSectionChange}>
             <TabsList className="h-auto bg-transparent p-0">
-              <TabsTrigger data-testid="project-access-tab-control" value="access" className="rounded-xl bg-violet-500/12 text-white data-[state=active]:bg-violet-500/18 data-[state=active]:text-white">
+              <TabsTrigger data-testid="project-access-tab-control" value="access" className="rounded-xl bg-emerald-500/12 text-white data-[state=active]:bg-emerald-500/18 data-[state=active]:text-white">
                 Access Control
               </TabsTrigger>
-              <TabsTrigger data-testid="project-access-tab-effective" value="effective" className="rounded-xl text-gray-300 data-[state=active]:bg-violet-500/18 data-[state=active]:text-white">
+              <TabsTrigger data-testid="project-access-tab-effective" value="effective" className="rounded-xl text-zinc-300 data-[state=active]:bg-emerald-500/18 data-[state=active]:text-white">
                 Effective Permissions
               </TabsTrigger>
             </TabsList>
@@ -134,31 +134,31 @@ const ProjectAccess = () => {
       >
       {activeSection === "access" ? (
         <div data-testid="project-access-panel-control" className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-          <Card className="border-gray-800 bg-gray-950/70">
+          <Card className="border-zinc-800 bg-zinc-950/70">
             <CardHeader>
               <CardTitle className="text-white">Grant Access</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="space-y-2">
-                  <p className="text-sm text-gray-400">Subject type</p>
+                  <p className="text-sm text-zinc-400">Subject type</p>
                   <Select value={subjectType} onValueChange={(value) => setSubjectType(value as "user" | "team")}>
-                    <SelectTrigger className="border-gray-700 bg-gray-950 text-white">
+                    <SelectTrigger className="border-zinc-700 bg-zinc-950 text-white">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="border-gray-700 bg-gray-900">
+                    <SelectContent className="border-zinc-700 bg-zinc-900">
                       <SelectItem value="user" className="text-white">User</SelectItem>
                       <SelectItem value="team" className="text-white">Team</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2 md:col-span-2">
-                  <p className="text-sm text-gray-400">Subject</p>
+                  <p className="text-sm text-zinc-400">Subject</p>
                   <Select value={subjectId} onValueChange={setSubjectId}>
-                      <SelectTrigger className="border-gray-700 bg-gray-950 text-white">
+                      <SelectTrigger className="border-zinc-700 bg-zinc-950 text-white">
                         <SelectValue placeholder={`Select ${subjectType}`} />
                       </SelectTrigger>
-                    <SelectContent className="border-gray-700 bg-gray-900">
+                    <SelectContent className="border-zinc-700 bg-zinc-900">
                       {subjectOptions.map((option) => (
                         <SelectItem key={option.id} value={option.id} className="text-white">
                           {option.label}
@@ -171,12 +171,12 @@ const ProjectAccess = () => {
 
               <div className="grid gap-4 md:grid-cols-[1fr_auto]">
                 <div className="space-y-2">
-                  <p className="text-sm text-gray-400">Access level</p>
+                  <p className="text-sm text-zinc-400">Access level</p>
                   <Select value={relation} onValueChange={(value) => setRelation(value as "viewer" | "editor" | "admin")}>
-                    <SelectTrigger className="border-gray-700 bg-gray-950 text-white">
+                    <SelectTrigger className="border-zinc-700 bg-zinc-950 text-white">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="border-gray-700 bg-gray-900">
+                    <SelectContent className="border-zinc-700 bg-zinc-900">
                       <SelectItem value="viewer" className="text-white">Viewer</SelectItem>
                       <SelectItem value="editor" className="text-white">Editor</SelectItem>
                       <SelectItem value="admin" className="text-white">Admin</SelectItem>
@@ -184,7 +184,7 @@ const ProjectAccess = () => {
                   </Select>
                 </div>
                 <Button
-                  className="mt-6 bg-violet-500 hover:bg-violet-600"
+                  className="mt-6 bg-emerald-500 hover:bg-emerald-600"
                   onClick={handleGrant}
                   disabled={!canManage || !subjectId}
                 >
@@ -194,18 +194,18 @@ const ProjectAccess = () => {
             </CardContent>
           </Card>
 
-          <Card className="border-gray-800 bg-gray-950/70">
+          <Card className="border-zinc-800 bg-zinc-950/70">
             <CardHeader>
               <CardTitle className="text-white">Direct Grants</CardTitle>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
-                  <TableRow className="border-gray-800 hover:bg-transparent">
-                    <TableHead className="text-gray-400">Subject</TableHead>
-                    <TableHead className="text-gray-400">Type</TableHead>
-                    <TableHead className="text-gray-400">Relation</TableHead>
-                    <TableHead className="text-right text-gray-400">Actions</TableHead>
+                  <TableRow className="border-zinc-800 hover:bg-transparent">
+                    <TableHead className="text-zinc-400">Subject</TableHead>
+                    <TableHead className="text-zinc-400">Type</TableHead>
+                    <TableHead className="text-zinc-400">Relation</TableHead>
+                    <TableHead className="text-right text-zinc-400">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -215,13 +215,13 @@ const ProjectAccess = () => {
                       : teams.find((entry) => entry.id === grant.subject_id)?.name || grant.subject_id;
 
                     return (
-                      <TableRow key={`${grant.subject_type}-${grant.subject_id}-${grant.relation}`} className="border-gray-800">
+                      <TableRow key={`${grant.subject_type}-${grant.subject_id}-${grant.relation}`} className="border-zinc-800">
                         <TableCell className="text-white">
                           <span className={grant.subject_type === "user" ? "hdx-mask" : undefined}>{label}</span>
                         </TableCell>
-                        <TableCell className="text-gray-300 capitalize">{grant.subject_type}</TableCell>
+                        <TableCell className="text-zinc-300 capitalize">{grant.subject_type}</TableCell>
                         <TableCell>
-                          <Badge variant="secondary" className="bg-violet-500/10 text-violet-300">
+                          <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-300">
                             {grant.relation}
                           </Badge>
                         </TableCell>
@@ -251,21 +251,21 @@ const ProjectAccess = () => {
         </div>
       ) : (
         <div data-testid="project-access-panel-effective" className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-          <Card data-testid="project-access-effective-users" className="border-gray-800 bg-gray-950/70">
+          <Card data-testid="project-access-effective-users" className="border-zinc-800 bg-zinc-950/70">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-white">
-                <Users className="size-5 text-violet-400" />
+                <Users className="size-5 text-emerald-400" />
                 Effective User Access
               </CardTitle>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
-                  <TableRow className="border-gray-800 hover:bg-transparent">
-                    <TableHead className="text-gray-400">User</TableHead>
-                    <TableHead className="text-gray-400">Effective Role</TableHead>
-                    <TableHead className="text-gray-400">Source</TableHead>
-                    <TableHead className="text-gray-400">Inherited Teams</TableHead>
+                  <TableRow className="border-zinc-800 hover:bg-transparent">
+                    <TableHead className="text-zinc-400">User</TableHead>
+                    <TableHead className="text-zinc-400">Effective Role</TableHead>
+                    <TableHead className="text-zinc-400">Source</TableHead>
+                    <TableHead className="text-zinc-400">Inherited Teams</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -273,17 +273,17 @@ const ProjectAccess = () => {
                     .slice()
                     .sort((a, b) => (relationPriority[b.relation || "viewer"] || 0) - (relationPriority[a.relation || "viewer"] || 0))
                     .map((entry) => (
-                      <TableRow key={entry.user_id} className="border-gray-800">
+                      <TableRow key={entry.user_id} className="border-zinc-800">
                         <TableCell className="text-white">
                           <span className="hdx-mask">{entry.email}</span>
                         </TableCell>
                         <TableCell>
                           {entry.relation ? (
-                            <Badge variant="secondary" className="bg-violet-500/10 text-violet-300">
+                            <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-300">
                               {entry.relation}
                             </Badge>
                           ) : (
-                            <Badge variant="secondary" className="bg-gray-800 text-gray-400">No access</Badge>
+                            <Badge variant="secondary" className="bg-zinc-800 text-zinc-400">No access</Badge>
                           )}
                         </TableCell>
                         <TableCell>
@@ -298,10 +298,10 @@ const ProjectAccess = () => {
                                 ))}
                             </div>
                           ) : (
-                            <span className="text-gray-500">-</span>
+                            <span className="text-zinc-500">-</span>
                           )}
                         </TableCell>
-                        <TableCell className="text-gray-300">
+                        <TableCell className="text-zinc-300">
                           {entry.teams.length ? entry.teams.join(", ") : "-"}
                         </TableCell>
                       </TableRow>
@@ -311,7 +311,7 @@ const ProjectAccess = () => {
             </CardContent>
           </Card>
 
-          <Card data-testid="project-access-effective-teams" className="border-gray-800 bg-gray-950/70">
+          <Card data-testid="project-access-effective-teams" className="border-zinc-800 bg-zinc-950/70">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-white">
                 <ShieldCheck className="size-5 text-blue-400" />
@@ -321,28 +321,28 @@ const ProjectAccess = () => {
             <CardContent>
               <Table>
                 <TableHeader>
-                  <TableRow className="border-gray-800 hover:bg-transparent">
-                    <TableHead className="text-gray-400">Team</TableHead>
-                    <TableHead className="text-gray-400">Granted Role</TableHead>
-                    <TableHead className="text-gray-400">Source</TableHead>
+                  <TableRow className="border-zinc-800 hover:bg-transparent">
+                    <TableHead className="text-zinc-400">Team</TableHead>
+                    <TableHead className="text-zinc-400">Granted Role</TableHead>
+                    <TableHead className="text-zinc-400">Source</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {effectiveTeamAccess.length ? (
                     effectiveTeamAccess.map((grant) => (
-                      <TableRow key={`${grant.subject_id}-${grant.relation}`} className="border-gray-800">
+                      <TableRow key={`${grant.subject_id}-${grant.relation}`} className="border-zinc-800">
                         <TableCell className="text-white">{grant.teamName}</TableCell>
                         <TableCell>
-                          <Badge variant="secondary" className="bg-violet-500/10 text-violet-300">
+                          <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-300">
                             {grant.relation}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-gray-300">{grant.source}</TableCell>
+                        <TableCell className="text-zinc-300">{grant.source}</TableCell>
                       </TableRow>
                     ))
                   ) : (
-                    <TableRow className="border-gray-800">
-                      <TableCell colSpan={3} className="py-8 text-center text-gray-500">
+                    <TableRow className="border-zinc-800">
+                      <TableCell colSpan={3} className="py-8 text-center text-zinc-500">
                         No team grants in effect.
                       </TableCell>
                     </TableRow>

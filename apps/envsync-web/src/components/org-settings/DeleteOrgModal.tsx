@@ -34,13 +34,13 @@ export const DeleteOrgModal = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-gray-800 border-gray-700">
+      <DialogContent className="bg-zinc-800 border-zinc-700">
         <DialogHeader>
           <DialogTitle className="text-white flex items-center">
             <AlertTriangle className="w-5 h-5 text-red-500 mr-2" />
             Delete Organization
           </DialogTitle>
-          <DialogDescription className="text-gray-400">
+          <DialogDescription className="text-zinc-400">
             This action cannot be undone. This will permanently delete the{" "}
             <strong className="text-white">{orgName}</strong> organization and all associated data.
           </DialogDescription>
@@ -66,13 +66,13 @@ export const DeleteOrgModal = ({
 
           <div className="space-y-2">
             <Label htmlFor="delete-confirm" className="text-white">
-              Type <code className="bg-gray-700 px-1 rounded text-red-400">{orgName}</code> to confirm:
+              Type <code className="bg-zinc-700 px-1 rounded text-red-400">{orgName}</code> to confirm:
             </Label>
             <Input
               id="delete-confirm"
               value={confirmText}
               onChange={(e) => onConfirmTextChange(e.target.value)}
-              className="bg-gray-900 border-gray-700 text-white"
+              className="bg-zinc-900 border-zinc-700 text-white"
               placeholder="Enter organization name"
               disabled={isDeleting}
             />
@@ -83,7 +83,7 @@ export const DeleteOrgModal = ({
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
-            className="text-white border-gray-600 hover:bg-gray-700"
+            className="text-white border-zinc-600 hover:bg-zinc-700"
             disabled={isDeleting}
           >
             Cancel

@@ -71,11 +71,11 @@ interface FormErrors {
 
 // Constants
 const ENVIRONMENT_COLORS = [
-  "bg-indigo-500",
-  "bg-violet-500",
+  "bg-teal-500",
+  "bg-emerald-500",
   "bg-veronica-500",
   "bg-magenta-500",
-  "bg-indigo-500",
+  "bg-teal-500",
   "bg-green-500",
   "bg-yellow-500",
 ] as const;
@@ -529,7 +529,7 @@ export const ProjectEnvironments = ({
   if (!user) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center text-gray-400">Loading user data...</div>
+        <div className="text-center text-zinc-400">Loading user data...</div>
       </div>
     );
   }
@@ -541,7 +541,7 @@ export const ProjectEnvironments = ({
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="flex flex-col items-center space-y-4">
-          <div className="size-12 border-4 border-t-violet-500 border-gray-700 rounded-full animate-spin"></div>
+          <div className="size-12 border-4 border-t-emerald-500 border-zinc-700 rounded-full animate-spin"></div>
           <div className="text-white">Loading project...</div>
         </div>
       </div>
@@ -558,14 +558,14 @@ export const ProjectEnvironments = ({
             <h3 className="text-lg font-semibold mb-2">
               Failed to load project
             </h3>
-            <p className="text-sm text-gray-400 mb-4">
+            <p className="text-sm text-zinc-400 mb-4">
               {projectError instanceof Error
                 ? projectError.message
                 : "Unknown error occurred"}
             </p>
             <Button
               onClick={() => window.location.reload()}
-              className="bg-violet-500 hover:bg-violet-600 text-white"
+              className="bg-emerald-500 hover:bg-emerald-600 text-white"
             >
               <RefreshCw className="w-4 h-4 mr-2" />
               Retry
@@ -580,17 +580,17 @@ export const ProjectEnvironments = ({
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center">
-          <AlertTriangle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+          <AlertTriangle className="w-12 h-12 text-zinc-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-white mb-2">
             No Project Data
           </h3>
-          <p className="text-gray-400 mb-4">
+          <p className="text-zinc-400 mb-4">
             Unable to load project information
           </p>
           <Button
             onClick={onBack}
             variant="outline"
-            className="text-white border-gray-600 hover:bg-gray-700"
+            className="text-white border-zinc-600 hover:bg-zinc-700"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Go Back
@@ -605,11 +605,11 @@ export const ProjectEnvironments = ({
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="flex flex-col items-center text-center max-w-md">
-          <Settings className="w-12 h-12 text-gray-500 mb-4" />
+          <Settings className="w-12 h-12 text-zinc-500 mb-4" />
           <h3 className="text-lg font-medium text-white mb-2">
             No Environment Types
           </h3>
-          <p className="text-gray-400 mb-6">
+          <p className="text-zinc-400 mb-6">
             Create at least one environment type (e.g. Development, Staging,
             Production) before adding variables.
           </p>
@@ -617,7 +617,7 @@ export const ProjectEnvironments = ({
             <Button
               onClick={onBack}
               variant="outline"
-              className="text-white border-gray-600 hover:bg-gray-700"
+              className="text-white border-zinc-600 hover:bg-zinc-700"
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back
@@ -626,7 +626,7 @@ export const ProjectEnvironments = ({
               onClick={() =>
                 navigate(`/applications/${projectNameId}/manage-environments`)
               }
-              className="bg-violet-500 hover:bg-violet-600 text-white"
+              className="bg-emerald-500 hover:bg-emerald-600 text-white"
             >
               <Settings className="w-4 h-4 mr-2" />
               Create Environment Type
@@ -646,7 +646,7 @@ export const ProjectEnvironments = ({
             onClick={onBack}
             variant="ghost"
             size="sm"
-            className="text-gray-400 hover:text-white"
+            className="text-zinc-400 hover:text-white"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back
@@ -655,7 +655,7 @@ export const ProjectEnvironments = ({
             <h1 className="text-2xl font-bold text-white">
               {projectData.project.name}
             </h1>
-            <p className="text-gray-400">Variables</p>
+            <p className="text-zinc-400">Variables</p>
           </div>
         </div>
         {can_edit && (
@@ -663,7 +663,7 @@ export const ProjectEnvironments = ({
             <Button
               onClick={() => setShowBulkImportDialog(true)}
               variant="outline"
-              className="text-white border-gray-600 hover:bg-gray-700"
+              className="text-white border-zinc-600 hover:bg-zinc-700"
               disabled={!selectedEnv}
             >
               <Upload className="w-4 h-4 mr-2" />
@@ -671,7 +671,7 @@ export const ProjectEnvironments = ({
             </Button>
             <Button
               onClick={() => setShowAddEnvVarDialog(true)}
-              className="bg-violet-500 hover:bg-violet-600 text-white"
+              className="bg-emerald-500 hover:bg-emerald-600 text-white"
               disabled={!selectedEnv || addEnvVarMutation.isPending}
             >
               <Plus className="w-4 h-4 mr-2" />
@@ -682,19 +682,19 @@ export const ProjectEnvironments = ({
       </div>
 
       {/* Environment Selection and Search */}
-      <Card className="bg-gray-800 border-gray-700">
+      <Card className="bg-zinc-800 border-zinc-700">
         <CardContent className="p-6">
           <div className="flex flex-col sm:flex-row gap-4">
             {/* Environment Selector */}
             <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-zinc-300 mb-2">
                 Environment
               </label>
               <Select value={selectedEnv} onValueChange={setSelectedEnv}>
-                <SelectTrigger className="bg-gray-900 border-gray-700 text-white">
+                <SelectTrigger className="bg-zinc-900 border-zinc-700 text-white">
                   <SelectValue placeholder="Select environment" />
                 </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-700">
+                <SelectContent className="bg-zinc-800 border-zinc-700">
                   {filteredEnvironments.map((env) => (
                     <SelectItem
                       key={env.id}
@@ -715,21 +715,21 @@ export const ProjectEnvironments = ({
 
             {/* Search Variables */}
             <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-300 mb-2">
+              <label className="block text-sm font-medium text-zinc-300 mb-2">
                 Search Variables
               </label>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-400 w-4 h-4" />
                 <Input
                   placeholder="Search by key name..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 bg-gray-900 border-gray-700 text-white"
+                  className="pl-10 bg-zinc-900 border-zinc-700 text-white"
                 />
                 {searchQuery && (
                   <button
                     onClick={() => setSearchQuery("")}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-zinc-400 hover:text-white"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -741,7 +741,7 @@ export const ProjectEnvironments = ({
       </Card>
 
       {/* Environment Variables List */}
-      <Card className="bg-gray-800 border-gray-700">
+      <Card className="bg-zinc-800 border-zinc-700">
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-white flex items-center">
@@ -762,7 +762,7 @@ export const ProjectEnvironments = ({
                 onClick={() => refetchEnvVars()}
                 variant="outline"
                 size="sm"
-                className="text-gray-400 border-gray-600 hover:bg-gray-700"
+                className="text-zinc-400 border-zinc-600 hover:bg-zinc-700"
                 disabled={isEnvVarsLoading}
               >
                 <RefreshCw
@@ -779,8 +779,8 @@ export const ProjectEnvironments = ({
           {isEnvVarsLoading && (
             <div className="flex items-center justify-center py-8">
               <div className="flex flex-col items-center space-y-2">
-                <div className="size-8 border-4 border-t-violet-500 border-gray-700 rounded-full animate-spin"></div>
-                <p className="text-gray-400 text-sm">Loading variables...</p>
+                <div className="size-8 border-4 border-t-emerald-500 border-zinc-700 rounded-full animate-spin"></div>
+                <p className="text-zinc-400 text-sm">Loading variables...</p>
               </div>
             </div>
           )}
@@ -797,7 +797,7 @@ export const ProjectEnvironments = ({
                   onClick={() => refetchEnvVars()}
                   variant="outline"
                   size="sm"
-                  className="text-gray-400 border-gray-600 hover:bg-gray-700"
+                  className="text-zinc-400 border-zinc-600 hover:bg-zinc-700"
                 >
                   <RefreshCw className="w-4 h-4 mr-2" />
                   Retry
@@ -809,15 +809,15 @@ export const ProjectEnvironments = ({
           {/* Empty State */}
           {!isEnvVarsLoading && !envVarsError && filteredVars.length === 0 && (
             <div className="text-center py-8">
-              <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Database className="w-8 h-8 text-gray-400" />
+              <div className="w-16 h-16 bg-zinc-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Database className="w-8 h-8 text-zinc-400" />
               </div>
               <h3 className="text-lg font-medium text-white mb-2">
                 {searchQuery
                   ? "No variables found"
                   : "No variables"}
               </h3>
-              <p className="text-gray-400 mb-4">
+              <p className="text-zinc-400 mb-4">
                 {searchQuery
                   ? `No variables match "${searchQuery}"`
                   : selectedEnv
@@ -829,7 +829,7 @@ export const ProjectEnvironments = ({
               {selectedEnv && !searchQuery && can_edit && (
                 <Button
                   onClick={() => setShowAddEnvVarDialog(true)}
-                  className="bg-violet-500 hover:bg-violet-600 text-white"
+                  className="bg-emerald-500 hover:bg-emerald-600 text-white"
                 >
                   <Plus className="w-4 h-4 mr-2" />
                   Add Variable
@@ -843,14 +843,14 @@ export const ProjectEnvironments = ({
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-gray-700">
-                    <th className="text-left py-3 px-4 text-gray-400 font-medium">
+                  <tr className="border-b border-zinc-700">
+                    <th className="text-left py-3 px-4 text-zinc-400 font-medium">
                       Key
                     </th>
-                    <th className="text-left py-3 px-4 text-gray-400 font-medium">
+                    <th className="text-left py-3 px-4 text-zinc-400 font-medium">
                       Value
                     </th>
-                    <th className="text-right py-3 px-4 text-gray-400 font-medium">
+                    <th className="text-right py-3 px-4 text-zinc-400 font-medium">
                       Actions
                     </th>
                   </tr>
@@ -859,11 +859,11 @@ export const ProjectEnvironments = ({
                   {filteredVars.map((envVar) => (
                     <tr
                       key={envVar.key}
-                      className="border-b border-gray-700 hover:bg-gray-800 transition-colors"
+                      className="border-b border-zinc-700 hover:bg-zinc-800 transition-colors"
                     >
                       <td className="py-4 px-4">
                         <div className="flex items-center space-x-2">
-                          <code className="text-sm font-mono text-gray-300 bg-gray-900 px-2 py-1 rounded">
+                          <code className="text-sm font-mono text-zinc-300 bg-zinc-900 px-2 py-1 rounded">
                             {envVar.key}
                           </code>
                           {envVar.sensitive && (
@@ -875,7 +875,7 @@ export const ProjectEnvironments = ({
                       </td>
                       <td className="py-4 px-4">
                         <div className="flex items-center space-x-2">
-                          <code className="text-sm font-mono text-gray-300 bg-gray-900 px-2 py-1 rounded max-w-xs truncate">
+                          <code className="text-sm font-mono text-zinc-300 bg-zinc-900 px-2 py-1 rounded max-w-xs truncate">
                             {showValues[envVar.key]
                               ? envVar.value
                               : maskValue(envVar.value)}
@@ -884,7 +884,7 @@ export const ProjectEnvironments = ({
                             onClick={() => toggleValueVisibility(envVar.key)}
                             variant="ghost"
                             size="sm"
-                            className="text-gray-400 hover:text-white p-1"
+                            className="text-zinc-400 hover:text-white p-1"
                           >
                             {showValues[envVar.key] ? (
                               <EyeOff className="w-4 h-4" />
@@ -902,7 +902,7 @@ export const ProjectEnvironments = ({
                             }
                             variant="ghost"
                             size="sm"
-                            className="text-gray-400 hover:text-white p-2"
+                            className="text-zinc-400 hover:text-white p-2"
                             title="Copy value"
                           >
                             {copiedKey === envVar.key ? (
@@ -915,7 +915,7 @@ export const ProjectEnvironments = ({
                             onClick={() => handleEditEnvVar(envVar)}
                             variant="ghost"
                             size="sm"
-                            className="text-gray-400 hover:text-white p-2"
+                            className="text-zinc-400 hover:text-white p-2"
                             title="Edit variable"
                             disabled={actionLoadingStates[envVar.key]}
                           >
@@ -928,12 +928,12 @@ export const ProjectEnvironments = ({
                             }}
                             variant="ghost"
                             size="sm"
-                            className="text-gray-400 hover:text-red-400 p-2"
+                            className="text-zinc-400 hover:text-red-400 p-2"
                             title="Delete variable"
                             disabled={actionLoadingStates[envVar.key]}
                           >
                             {actionLoadingStates[envVar.key] ? (
-                              <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                              <div className="w-4 h-4 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" />
                             ) : (
                               <Trash2 className="w-4 h-4" />
                             )}
@@ -951,12 +951,12 @@ export const ProjectEnvironments = ({
 
       {/* Add Environment Variable Dialog */}
       <Dialog open={showAddEnvVarDialog} onOpenChange={setShowAddEnvVarDialog}>
-        <DialogContent className="bg-gray-800 border-gray-700 max-w-md">
+        <DialogContent className="bg-zinc-800 border-zinc-700 max-w-md">
           <DialogHeader>
             <DialogTitle className="text-white">
               Add Variable
             </DialogTitle>
-            <DialogDescription className="text-gray-400">
+            <DialogDescription className="text-zinc-400">
               Add a new variable to {selectedEnvironment?.name}
             </DialogDescription>
           </DialogHeader>
@@ -969,7 +969,7 @@ export const ProjectEnvironments = ({
                 onChange={(e) =>
                   handleFormChange("key", e.target.value.toUpperCase())
                 }
-                className={`bg-gray-900 border-gray-700 text-white ${
+                className={`bg-zinc-900 border-zinc-700 text-white ${
                   formErrors.key ? "border-red-500" : ""
                 }`}
               />
@@ -983,7 +983,7 @@ export const ProjectEnvironments = ({
                 placeholder="Enter value"
                 value={formData.value}
                 onChange={(e) => handleFormChange("value", e.target.value)}
-                className={`bg-gray-900 border-gray-700 text-white ${
+                className={`bg-zinc-900 border-zinc-700 text-white ${
                   formErrors.value ? "border-red-500" : ""
                 }`}
               />
@@ -991,8 +991,8 @@ export const ProjectEnvironments = ({
                 <p className="text-red-400 text-sm">{formErrors.value}</p>
               )}
             </div>
-            <div className="rounded border border-gray-700 bg-gray-900/50 p-3">
-              <p className="text-sm text-gray-300">
+            <div className="rounded border border-zinc-700 bg-zinc-900/50 p-3">
+              <p className="text-sm text-zinc-300">
                 Secrets are managed separately. Use the Secrets page for sensitive values.
               </p>
             </div>
@@ -1001,14 +1001,14 @@ export const ProjectEnvironments = ({
             <Button
               variant="outline"
               onClick={handleCloseAddDialog}
-              className="text-white border-gray-600 hover:bg-gray-700"
+              className="text-white border-zinc-600 hover:bg-zinc-700"
               disabled={addEnvVarMutation.isPending}
             >
               Cancel
             </Button>
             <Button
               onClick={handleAddEnvVar}
-              className="bg-violet-500 hover:bg-violet-600 text-white"
+              className="bg-emerald-500 hover:bg-emerald-600 text-white"
               disabled={addEnvVarMutation.isPending}
             >
               {addEnvVarMutation.isPending ? (
@@ -1029,12 +1029,12 @@ export const ProjectEnvironments = ({
         open={showEditEnvVarDialog}
         onOpenChange={setShowEditEnvVarDialog}
       >
-        <DialogContent className="bg-gray-800 border-gray-700 max-w-md">
+        <DialogContent className="bg-zinc-800 border-zinc-700 max-w-md">
           <DialogHeader>
             <DialogTitle className="text-white">
               Edit Variable
             </DialogTitle>
-            <DialogDescription className="text-gray-400">
+            <DialogDescription className="text-zinc-400">
               Update the value for {editingEnvVar?.key} in{" "}
               {selectedEnvironment?.name}
             </DialogDescription>
@@ -1045,7 +1045,7 @@ export const ProjectEnvironments = ({
               <Input
                 value={formData.key}
                 disabled
-                className="bg-gray-900 border-gray-700 text-gray-400 opacity-50"
+                className="bg-zinc-900 border-zinc-700 text-zinc-400 opacity-50"
               />
             </div>
             <div className="space-y-2">
@@ -1054,7 +1054,7 @@ export const ProjectEnvironments = ({
                 placeholder="Enter value"
                 value={formData.value}
                 onChange={(e) => handleFormChange("value", e.target.value)}
-                className={`bg-gray-900 border-gray-700 text-white ${
+                className={`bg-zinc-900 border-zinc-700 text-white ${
                   formErrors.value ? "border-red-500" : ""
                 }`}
               />
@@ -1062,8 +1062,8 @@ export const ProjectEnvironments = ({
                 <p className="text-red-400 text-sm">{formErrors.value}</p>
               )}
             </div>
-            <div className="rounded border border-gray-700 bg-gray-900/50 p-3">
-              <p className="text-sm text-gray-300">
+            <div className="rounded border border-zinc-700 bg-zinc-900/50 p-3">
+              <p className="text-sm text-zinc-300">
                 Secret/variable type cannot be changed from this env-only editor.
               </p>
             </div>
@@ -1072,14 +1072,14 @@ export const ProjectEnvironments = ({
             <Button
               variant="outline"
               onClick={handleCloseEditDialog}
-              className="text-white border-gray-600 hover:bg-gray-700"
+              className="text-white border-zinc-600 hover:bg-zinc-700"
               disabled={updateEnvVarMutation.isPending}
             >
               Cancel
             </Button>
             <Button
               onClick={handleUpdateEnvVar}
-              className="bg-violet-500 hover:bg-violet-600 text-white"
+              className="bg-emerald-500 hover:bg-emerald-600 text-white"
               disabled={updateEnvVarMutation.isPending}
             >
               {updateEnvVarMutation.isPending ? (
@@ -1100,12 +1100,12 @@ export const ProjectEnvironments = ({
         open={showDeleteEnvVarDialog}
         onOpenChange={setShowDeleteEnvVarDialog}
       >
-        <DialogContent className="bg-gray-800 border-gray-700 max-w-md">
+        <DialogContent className="bg-zinc-800 border-zinc-700 max-w-md">
           <DialogHeader>
             <DialogTitle className="text-white">
               Delete Variable
             </DialogTitle>
-            <DialogDescription className="text-gray-400">
+            <DialogDescription className="text-zinc-400">
               Are you sure you want to delete the variable "
               {editingEnvVar?.key}"? This action cannot be undone.
             </DialogDescription>
@@ -1127,7 +1127,7 @@ export const ProjectEnvironments = ({
             <Button
               variant="outline"
               onClick={handleCloseDeleteDialog}
-              className="text-white border-gray-600 hover:bg-gray-700"
+              className="text-white border-zinc-600 hover:bg-zinc-700"
               disabled={deleteEnvVarMutation.isPending}
             >
               Cancel
@@ -1159,12 +1159,12 @@ export const ProjectEnvironments = ({
         open={showBulkImportDialog}
         onOpenChange={setShowBulkImportDialog}
       >
-        <DialogContent className="bg-gray-800 border-gray-700 max-w-2xl max-h-[80vh] overflow-hidden">
+        <DialogContent className="bg-zinc-800 border-zinc-700 max-w-2xl max-h-[80vh] overflow-hidden">
           <DialogHeader>
             <DialogTitle className="text-white">
               Import Variables
             </DialogTitle>
-            <DialogDescription className="text-gray-400">
+            <DialogDescription className="text-zinc-400">
               Paste your .env file content below. Each line should be in
               KEY=VALUE format.
             </DialogDescription>
@@ -1183,7 +1183,7 @@ DATABASE_URL=postgresql://localhost:5432/mydb
 API_KEY=your-secret-key
 DEBUG=true
 PORT=3000`}
-                className="w-full h-48 bg-gray-900 border-gray-700 text-white rounded-lg p-3 font-mono text-sm resize-none focus:border-violet-500 focus:ring-violet-500/20"
+                className="w-full h-48 bg-zinc-900 border-zinc-700 text-white rounded-lg p-3 font-mono text-sm resize-none focus:border-emerald-500 focus:ring-emerald-500/20"
               />
             </div>
 
@@ -1224,7 +1224,7 @@ PORT=3000`}
                           <span className="text-green-300 font-mono">
                             {envVar.key}
                           </span>
-                          <span className="text-gray-400 font-mono truncate max-w-48">
+                          <span className="text-zinc-400 font-mono truncate max-w-48">
                             {envVar.value.length > 30
                               ? `${envVar.value.substring(0, 30)}...`
                               : envVar.value}
@@ -1242,13 +1242,13 @@ PORT=3000`}
             <Button
               variant="outline"
               onClick={handleCloseBulkImportDialog}
-              className="text-white border-gray-600 hover:bg-gray-700"
+              className="text-white border-zinc-600 hover:bg-zinc-700"
             >
               Cancel
             </Button>
             <Button
               onClick={handleBulkImport}
-              className="bg-violet-500 hover:bg-violet-600 text-white"
+              className="bg-emerald-500 hover:bg-emerald-600 text-white"
               disabled={
                 parsedEnvVars.length === 0 || bulkImportErrors.length > 0
               }

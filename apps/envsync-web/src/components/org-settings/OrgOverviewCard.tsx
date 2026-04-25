@@ -33,37 +33,37 @@ export const OrgOverviewCard = ({ orgData }: OrgOverviewCardProps) => {
   };
 
   return (
-    <Card className="bg-card text-card-foreground bg-gradient-to-br from-gray-900 to-gray-950 border-gray-800/80 shadow-xl rounded-xl">
+    <Card className="bg-card text-card-foreground bg-gradient-to-br from-zinc-900 to-zinc-950 border-zinc-800/80 shadow-xl rounded-xl">
       <CardHeader className="flex flex-row gap-2">
-        <Eye className="size-8 mr-1 bg-violet-400 border border-violet-600 p-2 stroke-[3] text-white rounded-md" />
+        <Eye className="size-8 mr-1 bg-emerald-400 border border-emerald-600 p-2 stroke-[3] text-white rounded-md" />
         <CardTitle className="text-white">Organization Overview</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
-          <div className="bg-gray-900 p-4 rounded-lg">
+          <div className="bg-zinc-900 p-4 rounded-lg">
             <div className="text-2xl font-bold text-white">
               {getDaysActive()}
             </div>
-            <div className="text-sm text-gray-400">Days Active</div>
+            <div className="text-sm text-zinc-400">Days Active</div>
           </div>
-          <div className="bg-gray-900 p-4 rounded-lg">
+          <div className="bg-zinc-900 p-4 rounded-lg">
             <div className="text-2xl select-all font-bold text-white">
               {orgData?.id ? orgData.id.substring(0, 8) : "N/A"}
             </div>
-            <div className="text-sm select-none text-gray-400">Org ID</div>
+            <div className="text-sm select-none text-zinc-400">Org ID</div>
           </div>
         </div>
 
         <div className="space-y-2">
           <Label className="text-white">Created</Label>
-          <div className="text-sm text-gray-300 bg-gray-900 p-2 rounded">
+          <div className="text-sm text-zinc-300 bg-zinc-900 p-2 rounded">
             {formatDate(orgData?.created_at)}
           </div>
         </div>
 
         <div className="space-y-2">
           <Label className="text-white">Last Updated</Label>
-          <div className="text-sm text-gray-300 bg-gray-900 p-2 rounded">
+          <div className="text-sm text-zinc-300 bg-zinc-900 p-2 rounded">
             {formatDate(orgData?.updated_at)}
           </div>
         </div>

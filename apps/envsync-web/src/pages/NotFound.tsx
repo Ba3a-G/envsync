@@ -20,13 +20,13 @@ const NotFound = () => {
 
         {/* 404 illustration */}
         <div className="relative mb-8">
-          <div className="text-[120px] font-bold text-gray-800 leading-none select-none">
+          <div className="text-[120px] font-bold text-zinc-800 leading-none select-none">
             404
           </div>
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-20 h-20 rounded-2xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
+            <div className="w-20 h-20 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
               <svg
-                className="w-10 h-10 text-violet-400"
+                className="w-10 h-10 text-emerald-400"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -42,15 +42,15 @@ const NotFound = () => {
           </div>
         </div>
 
-        <h1 className="text-xl font-semibold text-gray-100 mb-2">
+        <h1 className="text-xl font-semibold text-zinc-100 mb-2">
           Page not found
         </h1>
-        <p className="text-sm text-gray-400 mb-6">
+        <p className="text-sm text-zinc-400 mb-6">
           The page you're looking for doesn't exist or has been moved.
         </p>
         <a
           href="/"
-          className="inline-flex items-center px-5 py-2.5 bg-violet-500 hover:bg-violet-600 text-white text-sm font-medium rounded-lg transition-colors"
+          className="inline-flex items-center px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium rounded-lg transition-colors"
         >
           Return to Dashboard
         </a>

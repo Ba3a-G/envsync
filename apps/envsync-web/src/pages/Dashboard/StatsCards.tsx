@@ -16,16 +16,16 @@ export const statCardConfigs = [
     key: "projectsCount" as const,
     testId: "dashboard-stat-projects",
     icon: Database,
-    gradient: "from-violet-500/20 to-violet-600/20",
-    iconColor: "text-violet-400",
+    gradient: "from-emerald-500/20 to-emerald-600/20",
+    iconColor: "text-emerald-400",
   },
   {
     label: "Variables / Secrets",
     key: "variablesCount" as const,
     testId: "dashboard-stat-config-items",
     icon: Variable,
-    gradient: "from-violet-500/20 to-violet-600/20",
-    iconColor: "text-violet-400",
+    gradient: "from-emerald-500/20 to-emerald-600/20",
+    iconColor: "text-emerald-400",
   },
   {
     label: "Team Members",
@@ -63,8 +63,8 @@ export function BentoStatCard({
   return (
     <div data-testid={testId} className="flex h-full items-start justify-between gap-4">
       <div className="flex min-w-0 flex-col">
-        <p className="text-sm text-gray-400">{label}</p>
-        <p className="mt-2 text-3xl font-bold text-gray-100 tabular-nums">
+        <p className="text-sm text-zinc-400">{label}</p>
+        <p className="mt-2 text-3xl font-bold text-zinc-100 tabular-nums">
           {value}
         </p>
       </div>
@@ -86,13 +86,13 @@ export function StatsCards({ stats }: StatsCardsProps) {
           <Card
             key={card.key}
             data-testid={card.testId}
-            className="bg-card text-card-foreground bg-gradient-to-br from-gray-900 to-gray-950 border-gray-800/80 shadow-xl rounded-xl hover:border-gray-700 transition-colors"
+            className="bg-card text-card-foreground bg-gradient-to-br from-zinc-900 to-zinc-950 border-zinc-800/80 shadow-xl rounded-xl hover:border-zinc-700 transition-colors"
           >
             <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-400">{card.label}</p>
-                  <p className="text-2xl font-bold text-gray-100 mt-1 tabular-nums">
+                  <p className="text-sm text-zinc-400">{card.label}</p>
+                  <p className="text-2xl font-bold text-zinc-100 mt-1 tabular-nums">
                     {stats[card.key]}
                   </p>
                 </div>

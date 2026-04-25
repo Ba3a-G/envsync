@@ -244,9 +244,9 @@ export const ENV_TYPE_COLORS = [
   "#22c55e", // green
   "#06b6d4", // cyan
   "#3b82f6", // blue
-  "#6366f1", // indigo
-  "#8b5cf6", // violet
-  "#a855f7", // purple
+  "#6366f1", // teal
+  "#8b5cf6", // emerald
+  "#a855f7", // emerald
   "#f472b6", // rose
   "#ec4899", // pink
 ] as const;
