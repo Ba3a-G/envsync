@@ -3,12 +3,12 @@ import { describe, expect, test } from "bun:test";
 import { loadApiModules } from "@/modules/load-modules";
 
 describe("API module surface boundaries", () => {
-	test("core surface excludes enterprise-only modules", () => {
+	test("core surface excludes management-only modules while exposing shared onboarding routes", () => {
 		const moduleNames = loadApiModules("core").map(module => module.name);
 
 		expect(moduleNames).toContain("system");
 		expect(moduleNames).toContain("app");
-		expect(moduleNames).not.toContain("onboarding");
+		expect(moduleNames).toContain("onboarding");
 		expect(moduleNames).not.toContain("license");
 		expect(moduleNames).not.toContain("enterprise");
 	});
