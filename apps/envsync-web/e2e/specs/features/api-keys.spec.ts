@@ -13,6 +13,7 @@ test.describe("feature: api keys", () => {
 			method: "POST",
 			pathFragment: "/api/api_key",
 			expectedStatus: 201,
+			failOnUnexpectedStatus: true,
 		});
 		await page.getByRole("button", { name: /Create|Creating/i }).last().click();
 		await createResponse;
@@ -21,4 +22,3 @@ test.describe("feature: api keys", () => {
 		await page.getByRole("button", { name: "Close" }).first().click();
 	});
 });
-

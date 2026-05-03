@@ -100,7 +100,7 @@ export async function waitForTrackedResponse(
 	options: {
 		method: string;
 		pathFragment: string;
-		expectedStatus: number;
+		expectedStatus: number | number[];
 		expectedRequestBody?: ExpectedBodyMatch;
 		expectedResponseBody?: ExpectedBodyMatch;
 		failOnUnexpectedStatus?: boolean;
@@ -110,6 +110,11 @@ export async function waitForTrackedResponse(
 	const timeout = Number.isFinite(options.timeoutMs) ? options.timeoutMs : 30_000;
 	const startAt = Date.now();
 	const method = options.method.toUpperCase();
+	const strictStatus = options.failOnUnexpectedStatus ?? false;
+	const expectedStatuses = Array.isArray(options.expectedStatus)
+		? options.expectedStatus
+		: [options.expectedStatus];
+	let lastMismatchedResponse: TrackedResponse | null = null;
 
 	while (Date.now() - startAt < timeout) {
 		const remaining = timeout - (Date.now() - startAt);
@@ -142,10 +147,15 @@ export async function waitForTrackedResponse(
 			responseBody = null;
 		}
 
-		if (response.status() !== options.expectedStatus) {
-			if (options.failOnUnexpectedStatus) {
+		if (!expectedStatuses.includes(response.status())) {
+			lastMismatchedResponse = {
+				response,
+				requestBody,
+				responseBody,
+			};
+			if (strictStatus) {
 				throw new Error(
-					`Tracked response ${options.method} ${options.pathFragment} returned ${response.status()} instead of ${options.expectedStatus} ` +
+					`Tracked response ${options.method} ${options.pathFragment} returned ${response.status()} instead of ${expectedStatuses.join(" or ")} ` +
 					`for ${response.url()} request=${stringifyBody(requestBody)} response=${stringifyBody(responseBody)}`,
 				);
 			}
@@ -159,5 +169,14 @@ export async function waitForTrackedResponse(
 		return { response, requestBody, responseBody } satisfies TrackedResponse;
 	}
 
-	throw new Error(`Timed out waiting for tracked response ${options.method} ${options.pathFragment} (${options.expectedStatus})`);
+	if (lastMismatchedResponse) {
+		throw new Error(
+			`Timed out waiting for tracked response ${options.method} ${options.pathFragment} (${expectedStatuses.join(" or ")}); ` +
+			`last seen ${lastMismatchedResponse.response.status()} for ${lastMismatchedResponse.response.url()} ` +
+			`request=${stringifyBody(lastMismatchedResponse.requestBody)} ` +
+			`response=${stringifyBody(lastMismatchedResponse.responseBody)}`,
+		);
+	}
+
+	throw new Error(`Timed out waiting for tracked response ${options.method} ${options.pathFragment} (${expectedStatuses.join(" or ")})`);
 }

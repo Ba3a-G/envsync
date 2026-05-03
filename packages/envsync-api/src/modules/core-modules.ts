@@ -47,6 +47,11 @@ export const coreApiModules: ApiModule[] = [
 		createRouter: async () => (await import("@/routes/org.route")).default,
 	},
 	{
+		name: "onboarding",
+		mountPath: "/onboarding",
+		createRouter: async () => (await import("@/routes/onboarding.route")).default,
+	},
+	{
 		name: "secret",
 		mountPath: "/secret",
 		createRouter: async () => (await import("@/routes/secret.route")).default,

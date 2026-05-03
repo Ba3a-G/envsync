@@ -136,7 +136,7 @@ jobs:
       - name: Prepare E2E environment
         run: |
           cp .env.example .env
-          bun run e2e-setup init
+          bun run e2e-setup reset
 
       - name: Build merged UI E2E env
         run: |
@@ -191,6 +191,8 @@ jobs:
         run: bun run --filter envsync-web ui:regression
         env:
           ROOT_ENV_PATH: ${{ github.workspace }}/.env.ui-e2e
+          ENVSYNC_UI_WORKERS: "1"
+          ENVSYNC_UI_REQUIRE_FRESH_LOGIN: "1"
 
       - name: Upload Playwright artifacts
         if: always()

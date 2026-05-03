@@ -23,6 +23,8 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .env.local
 .env.e2e.test
 .env.prod
+.env.ui-e2e
+.env.ui-e2e.base
 
 # caches
 .eslintcache
@@ -44,3 +46,5 @@ integrations
 packages/minikms
 packages/license-server
 test-results
+
+*.log

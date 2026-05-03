@@ -1028,6 +1028,206 @@ async function seedDevWorkspace(orgId: string, orgName: string, userId: string, 
 	await ensureSeededWebhook(orgId, userId, apps["Core Platform"]?.id);
 }
 
+type HarnessIdentity = {
+	email: string;
+	fullName: string;
+	roleName: string;
+	seedWorkspace?: boolean;
+};
+
+const UI_HARNESS_IDENTITIES: HarnessIdentity[] = [
+	{
+		email: "dev@envsync.local",
+		fullName: "EnvSync Dev",
+		roleName: "master",
+		seedWorkspace: true,
+	},
+	{
+		email: "admin-ui@envsync.local",
+		fullName: "EnvSync Admin",
+		roleName: "admin",
+	},
+	{
+		email: "editor-ui@envsync.local",
+		fullName: "EnvSync Editor",
+		roleName: "editor",
+	},
+	{
+		email: "viewer-ui@envsync.local",
+		fullName: "EnvSync Viewer",
+		roleName: "viewer",
+	},
+];
+
+async function ensureUiHarnessMembership(
+	org: { id: string; name: string; slug: string },
+	role: { id: string; name: string; is_master: boolean },
+	identity: HarnessIdentity,
+) {
+	const db = await DB.getInstance();
+	const { UserService } = await import("../src/services/user.service");
+	const password = DEV_USER_PASSWORD;
+	const parts = identity.fullName.trim().split(/\s+/).filter(Boolean);
+
+	let idpUser = await findKeycloakUserByUsername(identity.email);
+	if (!idpUser) {
+		idpUser = await createKeycloakUser({
+			userName: identity.email,
+			email: identity.email,
+			firstName: parts[0] ?? "EnvSync",
+			lastName: parts.slice(1).join(" ") || "User",
+			password,
+		});
+		console.log(`Created Keycloak user for ${identity.email}`);
+	} else {
+		await setKeycloakUserPassword(idpUser.id, password);
+	}
+
+	const memberships = await UserService.listUsersByIdpId(idpUser.id);
+	let targetMembership = memberships.find(user => user.org_id === org.id) ?? null;
+
+	if (!targetMembership) {
+		const legacyTargetMembership = await db
+			.selectFrom("users")
+			.selectAll()
+			.where("org_id", "=", org.id)
+			.where("email", "=", identity.email)
+			.executeTakeFirst();
+
+		if (legacyTargetMembership) {
+			await db
+				.updateTable("users")
+				.set({
+					auth_service_id: idpUser.id,
+					role_id: role.id,
+					full_name: identity.fullName,
+					is_active: true,
+					updated_at: new Date(),
+				})
+				.where("id", "=", legacyTargetMembership.id)
+				.execute();
+			targetMembership = await db
+				.selectFrom("users")
+				.selectAll()
+				.where("id", "=", legacyTargetMembership.id)
+				.executeTakeFirstOrThrow();
+			console.log(`Recovered local membership for ${identity.email} in org ${org.slug}`);
+		} else {
+			const created = await UserService.createMembershipForExistingIdentity({
+				email: identity.email,
+				full_name: identity.fullName,
+				auth_service_id: idpUser.id,
+				org_id: org.id,
+				role_id: role.id,
+				is_active: true,
+			});
+			targetMembership = await db
+				.selectFrom("users")
+				.selectAll()
+				.where("id", "=", created.id)
+				.executeTakeFirstOrThrow();
+			console.log(`Created ${identity.roleName} membership for ${identity.email} in org ${org.slug}`);
+		}
+	}
+
+	if (targetMembership.auth_service_id !== idpUser.id) {
+		await db
+			.updateTable("users")
+			.set({
+				auth_service_id: idpUser.id,
+				updated_at: new Date(),
+			})
+			.where("id", "=", targetMembership.id)
+			.execute();
+	}
+
+	if (targetMembership.full_name !== identity.fullName) {
+		await db
+			.updateTable("users")
+			.set({
+				full_name: identity.fullName,
+				updated_at: new Date(),
+			})
+			.where("id", "=", targetMembership.id)
+			.execute();
+	}
+
+	if (!targetMembership.is_active) {
+		await db
+			.updateTable("users")
+			.set({
+				is_active: true,
+				updated_at: new Date(),
+			})
+			.where("id", "=", targetMembership.id)
+			.execute();
+	}
+
+	if (targetMembership.role_id !== role.id) {
+		await UserService.updateUser(targetMembership.id, { role_id: role.id });
+	}
+
+	await ensureUserRoleAccess(targetMembership.id, org.id, role.id);
+	await UserService.touchLastLogin(targetMembership.id);
+
+	const refreshedMembership = await db
+		.selectFrom("users")
+		.selectAll()
+		.where("id", "=", targetMembership.id)
+		.executeTakeFirstOrThrow();
+
+	if (identity.seedWorkspace) {
+		await seedDevWorkspace(org.id, org.name, refreshedMembership.id, identity.email);
+	}
+
+	return refreshedMembership;
+}
+
+async function bootstrapUiHarness() {
+	const rawArgs = process.argv.slice(3);
+	const orgName = getFlagValue(rawArgs, "org-name") ?? `EnvSync UI ${Date.now()}`;
+	const orgSlug = getFlagValue(rawArgs, "org-slug") ?? `envsync-ui-${Date.now()}`;
+	const db = await DB.getInstance();
+
+	const org = await ensureDevOrg(orgName, orgSlug, {
+		email: UI_HARNESS_IDENTITIES[0]!.email,
+		full_name: UI_HARNESS_IDENTITIES[0]!.fullName,
+		password: DEV_USER_PASSWORD,
+	});
+	const roles = await ensureDefaultRoles(org.id);
+
+	for (const identity of UI_HARNESS_IDENTITIES) {
+		const role = resolveRequestedRole(
+			roles.map(entry => ({ id: entry.id, name: entry.name, is_master: Boolean(entry.is_master) })),
+			identity.roleName,
+		);
+		if (!role) {
+			throw new Error(`Requested role "${identity.roleName}" does not exist in org ${org.id}`);
+		}
+
+		await ensureUiHarnessMembership(org, role, identity);
+	}
+
+	await ensureOrgResourceAccess(org.id);
+
+	const summary = await Promise.all(
+		UI_HARNESS_IDENTITIES.map(async identity => {
+			const keycloakUser = await findKeycloakUserByUsername(identity.email);
+			if (!keycloakUser) {
+				return `${identity.email}: missing`;
+			}
+			const { UserService } = await import("../src/services/user.service");
+			const membership = (await UserService.listUsersByIdpId(keycloakUser.id)).find(user => user.org_id === org.id);
+			return `${identity.email}: ${membership?.id ?? "missing"} (${identity.roleName})`;
+		}),
+	);
+
+	console.log(`UI harness bootstrapped for org ${org.slug}`);
+	for (const line of summary) {
+		console.log(`  ${line}`);
+	}
+}
+
 async function createDevUser() {
 	const rawArgs = process.argv.slice(3);
 	const positional = rawArgs.filter((arg, index) => {
@@ -1212,6 +1412,8 @@ if (cmd === "init") {
 	await init();
 } else if (cmd === "create-dev-user") {
 	await createDevUser();
+} else if (cmd === "bootstrap-ui-harness") {
+	await bootstrapUiHarness();
 } else if (cmd === "bootstrap-org") {
 	const rawArgs = process.argv.slice(3);
 	const orgName = getFlagValue(rawArgs, "org-name") ?? DEV_ORG_NAME;
@@ -1226,6 +1428,6 @@ if (cmd === "init") {
 	});
 	console.log(`Bootstrap completed for org ${org.slug} (${org.id})`);
 } else {
-	console.log("Usage: bun run scripts/cli.ts <init|create-dev-user|bootstrap-org>");
+	console.log("Usage: bun run scripts/cli.ts <init|create-dev-user|bootstrap-ui-harness|bootstrap-org>");
 	process.exit(cmd ? 1 : 0);
 }

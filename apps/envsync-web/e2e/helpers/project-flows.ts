@@ -229,6 +229,7 @@ export async function createProject(page: Page, projectName: string) {
 		method: "POST",
 		pathFragment: "/api/app",
 		expectedStatus: 201,
+		failOnUnexpectedStatus: true,
 	});
 
 	await page.getByRole("button", { name: /Create Project with 3 Environments?/ }).click();
