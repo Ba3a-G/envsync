@@ -65,6 +65,45 @@ export class LicenseStateService {
 	static #heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 	static #testOverrides: LicenseStateTestOverrides | null = null;
 
+	private static async ensurePersistedStateRow() {
+		const db = await DB.getInstance();
+		let state = await db
+			.selectFrom("license_state")
+			.selectAll()
+			.where("id", "=", LICENSE_STATE_ID)
+			.executeTakeFirst();
+
+		if (state) {
+			return state;
+		}
+
+		const now = new Date();
+		await db
+			.insertInto("license_state")
+			.values({
+				id: LICENSE_STATE_ID,
+				status: "unknown",
+				signed_lease: null,
+				lease_expires_at: null,
+				fingerprint: this.getInstallFingerprint() || null,
+				last_verified_at: null,
+				last_error_code: null,
+				last_error_message: null,
+				created_at: now,
+				updated_at: now,
+			})
+			.onConflict((oc) => oc.column("id").doNothing())
+			.execute();
+
+		state = await db
+			.selectFrom("license_state")
+			.selectAll()
+			.where("id", "=", LICENSE_STATE_ID)
+			.executeTakeFirstOrThrow();
+
+		return state;
+	}
+
 	private static getHeartbeatIntervalMs() {
 		return this.#testOverrides?.heartbeat_interval_ms ?? HEARTBEAT_INTERVAL_MS;
 	}
@@ -111,38 +150,7 @@ export class LicenseStateService {
 			return normalizeState(JSON.parse(cached) as Record<string, unknown>);
 		}
 
-		const db = await DB.getInstance();
-		let state = await db
-			.selectFrom("license_state")
-			.selectAll()
-			.where("id", "=", LICENSE_STATE_ID)
-			.executeTakeFirst();
-
-		if (!state) {
-			const now = new Date();
-			await db
-				.insertInto("license_state")
-				.values({
-					id: LICENSE_STATE_ID,
-					status: "unknown",
-					signed_lease: null,
-					lease_expires_at: null,
-					fingerprint: this.getInstallFingerprint() || null,
-					last_verified_at: null,
-					last_error_code: null,
-					last_error_message: null,
-					created_at: now,
-					updated_at: now,
-				})
-				.execute();
-
-			state = await db
-				.selectFrom("license_state")
-				.selectAll()
-				.where("id", "=", LICENSE_STATE_ID)
-				.executeTakeFirstOrThrow();
-		}
-
+		const state = await this.ensurePersistedStateRow();
 		const normalized = normalizeState(state as unknown as Record<string, unknown>);
 		await this.persistCache(normalized);
 		return normalized;
@@ -159,6 +167,7 @@ export class LicenseStateService {
 	}) {
 		const db = await DB.getInstance();
 		await this.getLicenseState();
+		await this.ensurePersistedStateRow();
 		await db
 			.updateTable("license_state")
 			.set({

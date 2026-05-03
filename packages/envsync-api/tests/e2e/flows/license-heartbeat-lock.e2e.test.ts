@@ -11,6 +11,7 @@ import {
 
 import { EditionPolicyService } from "@/services/edition-policy.service";
 import { LicenseStateService } from "@/services/license-state.service";
+import { ApiKeyService } from "@/services/api_key.service";
 
 let seed: E2ESeed;
 let licenseServer: LocalLicenseServer | null = null;
@@ -56,6 +57,11 @@ describe("License Heartbeat Lock E2E", () => {
 	test("heartbeat renews the lease, lock enforcement blocks protected routes, and re-verification recovers both surfaces", async () => {
 		const licenseKey = "envsync-enterprise-heartbeat-e2e";
 		const installFingerprint = "envsync-install-heartbeat-e2e";
+		const masterApiKey = (await ApiKeyService.createKey({
+			user_id: seed.masterUser.id,
+			org_id: seed.org.id,
+			description: "License heartbeat lock E2E",
+		})).key;
 
 		licenseServer = await startLocalLicenseServer({
 			licenseKey,
@@ -133,11 +139,11 @@ describe("License Heartbeat Lock E2E", () => {
 			async () => {
 				const [managementProviders, coreOrg] = await Promise.all([
 					testRequest("/api/enterprise/providers", {
-						token: seed.masterUser.token,
+						apiKey: masterApiKey,
 						surface: "management",
 					}),
 					testRequest("/api/org", {
-						token: seed.masterUser.token,
+						apiKey: masterApiKey,
 					}),
 				]);
 				return {
@@ -187,11 +193,11 @@ describe("License Heartbeat Lock E2E", () => {
 			async () => {
 				const [managementProviders, coreOrg] = await Promise.all([
 					testRequest("/api/enterprise/providers", {
-						token: seed.masterUser.token,
+						apiKey: masterApiKey,
 						surface: "management",
 					}),
 					testRequest("/api/org", {
-						token: seed.masterUser.token,
+						apiKey: masterApiKey,
 					}),
 				]);
 				return {

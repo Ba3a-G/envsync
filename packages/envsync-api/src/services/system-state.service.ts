@@ -30,6 +30,7 @@ export class SystemStateService {
 					created_at: now,
 					updated_at: now,
 				})
+				.onConflict((oc) => oc.column("id").doNothing())
 				.execute();
 
 			state = await db
