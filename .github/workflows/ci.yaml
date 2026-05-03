@@ -87,6 +87,8 @@ jobs:
   test-e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
+    env:
+      ENVSYNC_E2E_SKIP_LOCAL_LICENSE_SERVER: "1"
     steps:
       - uses: actions/checkout@v4
       - name: Setup Bun Runtime

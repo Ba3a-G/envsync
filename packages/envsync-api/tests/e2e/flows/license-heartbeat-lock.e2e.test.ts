@@ -1,7 +1,11 @@
 import { afterEach, beforeAll, describe, expect, test } from "bun:test";
 
 import { testRequest } from "../../helpers/request";
-import { startLocalLicenseServer, type LocalLicenseServer } from "../helpers/license-server";
+import {
+	getLocalLicenseServerAvailability,
+	startLocalLicenseServer,
+	type LocalLicenseServer,
+} from "../helpers/license-server";
 import { startManagementBackgroundHandlers } from "../helpers/management-app";
 import {
 	checkServiceHealth,
@@ -15,6 +19,12 @@ import { ApiKeyService } from "@/services/api_key.service";
 
 let seed: E2ESeed;
 let licenseServer: LocalLicenseServer | null = null;
+const licenseServerAvailability = getLocalLicenseServerAvailability();
+const describeLicenseHeartbeatLock = licenseServerAvailability.available ? describe : describe.skip;
+
+if (!licenseServerAvailability.available) {
+	console.warn(`[E2E] Skipping License Heartbeat Lock E2E: ${licenseServerAvailability.reason}`);
+}
 
 async function pollUntil<T>(fn: () => Promise<T>, predicate: (value: T) => boolean, timeoutMs = 10_000) {
 	const deadline = Date.now() + timeoutMs;
@@ -31,29 +41,29 @@ async function pollUntil<T>(fn: () => Promise<T>, predicate: (value: T) => boole
 	throw new Error(`Timed out waiting for condition. Last value: ${JSON.stringify(lastValue)}`);
 }
 
-beforeAll(async () => {
-	await checkServiceHealth();
-	seed = await seedE2EOrg();
-});
-
-afterEach(async () => {
-	LicenseStateService.stopHeartbeatForTests();
-	LicenseStateService.clearTestOverrides();
-	EditionPolicyService.clearTestOverrides();
-	await LicenseStateService.updateLicenseState({
-		status: "unknown",
-		signed_lease: null,
-		lease_expires_at: null,
-		fingerprint: null,
-		last_verified_at: null,
-		last_error_code: null,
-		last_error_message: null,
+describeLicenseHeartbeatLock("License Heartbeat Lock E2E", () => {
+	beforeAll(async () => {
+		await checkServiceHealth();
+		seed = await seedE2EOrg();
 	});
-	await licenseServer?.stop();
-	licenseServer = null;
-});
 
-describe("License Heartbeat Lock E2E", () => {
+	afterEach(async () => {
+		LicenseStateService.stopHeartbeatForTests();
+		LicenseStateService.clearTestOverrides();
+		EditionPolicyService.clearTestOverrides();
+		await LicenseStateService.updateLicenseState({
+			status: "unknown",
+			signed_lease: null,
+			lease_expires_at: null,
+			fingerprint: null,
+			last_verified_at: null,
+			last_error_code: null,
+			last_error_message: null,
+		});
+		await licenseServer?.stop();
+		licenseServer = null;
+	});
+
 	test("heartbeat renews the lease, lock enforcement blocks protected routes, and re-verification recovers both surfaces", async () => {
 		const licenseKey = "envsync-enterprise-heartbeat-e2e";
 		const installFingerprint = "envsync-install-heartbeat-e2e";

@@ -44,6 +44,11 @@ bun run dev                          # start all services via Turbo
 | `bun run test:mock` | Run unit tests (mocked dependencies) |
 | `bun run test:e2e` | Run e2e tests from the repo root (runs `e2e-setup init` first) |
 
+License heartbeat note:
+- `packages/envsync-api/tests/e2e/flows/license-heartbeat-lock.e2e.test.ts` requires the local ignored `packages/license-server` implementation.
+- Public GitHub CI skips that suite with `ENVSYNC_E2E_SKIP_LOCAL_LICENSE_SERVER=1`.
+- Local runs execute it automatically when `packages/license-server/src/index.ts` exists, and you can force-skip it the same way.
+
 ## Environment variables
 
 Single `.env` file at the repo root. All TS packages read from it via the `load-root-env.ts` helper. Env vars are validated with Zod in `packages/envsync-api/src/utils/env.ts` — add new vars there.

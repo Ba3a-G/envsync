@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createServer } from "node:net";
@@ -36,6 +36,48 @@ export interface LocalLicenseServer {
 	readStore: () => LicenseStore;
 	setLicenseStatus: (status: LicenseStatus) => void;
 	stop: () => Promise<void>;
+}
+
+export interface LocalLicenseServerAvailability {
+	available: boolean;
+	reason: string;
+	entrypointPath: string;
+}
+
+const LICENSE_SERVER_SKIP_ENV = "ENVSYNC_E2E_SKIP_LOCAL_LICENSE_SERVER";
+
+function getRepoRoot() {
+	return path.resolve(import.meta.dir, "../../../../../");
+}
+
+function getLicenseServerEntrypointPath() {
+	return path.join(getRepoRoot(), "packages/license-server/src/index.ts");
+}
+
+export function getLocalLicenseServerAvailability(): LocalLicenseServerAvailability {
+	const entrypointPath = getLicenseServerEntrypointPath();
+
+	if (process.env[LICENSE_SERVER_SKIP_ENV] === "1") {
+		return {
+			available: false,
+			reason: `skipped because ${LICENSE_SERVER_SKIP_ENV}=1`,
+			entrypointPath,
+		};
+	}
+
+	if (!existsSync(entrypointPath)) {
+		return {
+			available: false,
+			reason: `skipped because ${entrypointPath} is not available in this checkout`,
+			entrypointPath,
+		};
+	}
+
+	return {
+		available: true,
+		reason: "",
+		entrypointPath,
+	};
 }
 
 async function findFreePort() {
@@ -102,6 +144,11 @@ export async function startLocalLicenseServer(input: {
 	const port = await findFreePort();
 	const tempRoot = mkdtempSync(path.join(tmpdir(), "envsync-license-server-"));
 	const storePath = path.join(tempRoot, "data", "license-store.json");
+	const availability = getLocalLicenseServerAvailability();
+
+	if (!availability.available) {
+		throw new Error(`Local license server is unavailable: ${availability.reason}`);
+	}
 
 	mkdirSync(path.dirname(storePath), { recursive: true });
 	writeFileSync(storePath, JSON.stringify({
@@ -131,12 +178,11 @@ export async function startLocalLicenseServer(input: {
 		],
 	} satisfies LicenseStore, null, 2));
 
-	const repoRoot = path.resolve(import.meta.dir, "../../../../../");
 	const child = spawn(
 		process.execPath,
-		["run", path.join(repoRoot, "packages/license-server/src/index.ts")],
+		["run", availability.entrypointPath],
 		{
-			cwd: repoRoot,
+			cwd: getRepoRoot(),
 			env: {
 				...process.env,
 				PORT: String(port),
