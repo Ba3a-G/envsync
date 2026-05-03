@@ -4,6 +4,7 @@ import path from "path";
 
 // Load .env from monorepo root (single source of truth)
 const rootDir = path.resolve(__dirname, "../..");
+const dashboardVariant = process.env.VITE_SERVER_LICENSE === "oss" ? "oss" : "enterprise";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
@@ -19,6 +20,12 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "@enterprise-modules": path.resolve(
+        __dirname,
+        dashboardVariant === "enterprise"
+          ? "./src/modules/enterprise-modules.ts"
+          : "./src/modules/enterprise-modules.stub.ts"
+      ),
     },
   },
   optimizeDeps: {

@@ -42,4 +42,5 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .tmp
 integrations
 packages/minikms
+packages/license-server
 test-results

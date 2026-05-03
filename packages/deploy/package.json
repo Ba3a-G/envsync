@@ -1,0 +1,29 @@
+{
+  "name": "@envsync-cloud/deploy",
+  "version": "0.7.8",
+  "type": "module",
+  "bin": {
+    "envsync-deploy": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --out-dir dist",
+    "prepack": "bun run build",
+    "check:pack": "npm pack --dry-run",
+    "test": "bun run build && bun test"
+  },
+  "dependencies": {
+    "@envsync-cloud/deploy-core": "workspace:*",
+    "chalk": "^5.6.2"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

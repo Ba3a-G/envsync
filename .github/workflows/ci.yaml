@@ -72,6 +72,15 @@ jobs:
       - name: Setup Bun Runtime
         uses: oven-sh/setup-bun@v2
       - run: bun i
+      - name: Run deploy planner tests
+        run: bun test src/index.test.ts
+        working-directory: packages/deploy-core
+      - name: Run deploy package tests
+        run: bun test
+        working-directory: packages/deploy
+      - name: Run deploy CLI tests
+        run: bun test
+        working-directory: packages/deploy-cli
       - name: Run mock tests
         run: bun run test:mock
         working-directory: packages/envsync-api
@@ -119,6 +128,9 @@ jobs:
 
       - name: Build TypeScript SDK
         run: bun run --filter @envsync-cloud/envsync-ts-sdk build
+
+      - name: Build Management TypeScript SDK
+        run: bun run --filter @envsync-cloud/envsync-management-ts-sdk build
 
       - name: Prepare E2E environment
         run: |

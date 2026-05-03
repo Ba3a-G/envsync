@@ -2,6 +2,31 @@ import z from "zod";
 import "zod-openapi/extend";
 import { roleResponseSchema } from "./role.validator";
 
+export const membershipSummarySchema = z.object({
+	user_id: z.string().openapi({ example: "user_123" }),
+	org_id: z.string().openapi({ example: "org_123" }),
+	org_name: z.string().openapi({ example: "My Organization" }),
+	org_slug: z.string().openapi({ example: "my-organization" }),
+	role_id: z.string().openapi({ example: "role_123" }),
+	role_name: z.string().openapi({ example: "Org Admin" }),
+	is_admin: z.boolean().openapi({ example: true }),
+	is_master: z.boolean().openapi({ example: true }),
+	is_active: z.boolean().openapi({ example: true }),
+});
+
+export const switchOrgRequestSchema = z.object({
+	org_id: z.string().openapi({ example: "org_123" }),
+});
+
+export const createWorkspaceRequestSchema = z.object({
+	name: z
+		.string()
+		.trim()
+		.min(1, "Workspace name is required")
+		.max(120, "Workspace name must be 120 characters or fewer")
+		.openapi({ example: "Acme Platform" }),
+});
+
 export const whoAmIResponseSchema = z
 	.object({
 		user: z.object({
@@ -30,5 +55,7 @@ export const whoAmIResponseSchema = z
 			updated_at: z.string().openapi({ example: "2023-01-01T00:00:00Z" }),
 		}),
 		role: roleResponseSchema,
+		memberships: z.array(membershipSummarySchema),
+		active_membership_user_id: z.string().openapi({ example: "user_123" }),
 	})
 	.openapi({ ref: "WhoAmIResponse" });

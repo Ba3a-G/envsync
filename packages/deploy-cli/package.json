@@ -18,7 +18,8 @@
     "build": "tsup --config tsup.config.ts",
     "prepack": "bun run build",
     "check:pack": "npm pack --dry-run",
-    "start": "bun run src/index.ts"
+    "start": "bun run src/index.ts",
+    "test": "bun run build && bun test"
   },
   "repository": {
     "type": "git",
@@ -40,6 +41,7 @@
     "secrets"
   ],
   "dependencies": {
+    "@envsync-cloud/deploy-core": "workspace:*",
     "chalk": "^5.6.2",
     "yaml": "^1.10.2"
   },
@@ -48,6 +50,6 @@
     "typescript": "^5.9.2"
   },
   "publishConfig": {
-    "access": "public"
+    "registry": "https://npm.pkg.github.com"
   }
 }

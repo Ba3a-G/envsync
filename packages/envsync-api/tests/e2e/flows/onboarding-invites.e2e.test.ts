@@ -38,6 +38,7 @@ describe("Onboarding Invites E2E", () => {
 		orgInviteEmail = `org-invite-${Date.now()}@test.local`;
 		const res = await testRequest("/api/onboarding/org", {
 			method: "POST",
+			surface: "management",
 			body: { email: orgInviteEmail },
 		});
 		expect(res.status).toBe(201);
@@ -55,13 +56,17 @@ describe("Onboarding Invites E2E", () => {
 		if (!orgInviteCode) {
 			// The creation endpoint may not return the code directly.
 			// In that case, we test the route with a known dummy code and expect 404/200.
-			const res = await testRequest("/api/onboarding/org/nonexistent-code", {});
+			const res = await testRequest("/api/onboarding/org/nonexistent-code", {
+				surface: "management",
+			});
 			// Route should exist and return 404 or similar for unknown code
 			expect([200, 404, 500]).toContain(res.status);
 			return;
 		}
 
-		const res = await testRequest(`/api/onboarding/org/${orgInviteCode}`, {});
+		const res = await testRequest(`/api/onboarding/org/${orgInviteCode}`, {
+			surface: "management",
+		});
 		expect(res.status).toBe(200);
 
 		const body = await res.json<{ email?: string }>();
@@ -72,6 +77,7 @@ describe("Onboarding Invites E2E", () => {
 		const res = await testRequest("/api/onboarding/user", {
 			method: "POST",
 			token: seed.masterUser.token,
+			surface: "management",
 			body: {
 				email: "user-invite-e2e@test.local",
 				role_id: seed.roles.developer.id,
@@ -86,6 +92,7 @@ describe("Onboarding Invites E2E", () => {
 	test("list user invites", async () => {
 		const res = await testRequest("/api/onboarding/user", {
 			token: seed.masterUser.token,
+			surface: "management",
 		});
 		expect(res.status).toBe(200);
 
@@ -105,7 +112,9 @@ describe("Onboarding Invites E2E", () => {
 	test("get user invite by code", async () => {
 		const res = await testRequest(
 			`/api/onboarding/user/${userInviteCode}`,
-			{},
+			{
+				surface: "management",
+			},
 		);
 		expect(res.status).toBe(200);
 
@@ -120,6 +129,7 @@ describe("Onboarding Invites E2E", () => {
 			{
 				method: "PATCH",
 				token: seed.masterUser.token,
+				surface: "management",
 				body: { role_id: seed.roles.viewer.id },
 			},
 		);
@@ -132,6 +142,7 @@ describe("Onboarding Invites E2E", () => {
 			{
 				method: "DELETE",
 				token: seed.masterUser.token,
+				surface: "management",
 			},
 		);
 		expect(res.status).toBe(200);
@@ -141,6 +152,7 @@ describe("Onboarding Invites E2E", () => {
 		const res = await testRequest("/api/onboarding/user", {
 			method: "POST",
 			token: viewerUser.token,
+			surface: "management",
 			body: {
 				email: "should-fail@test.local",
 				role_id: seed.roles.viewer.id,

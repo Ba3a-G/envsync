@@ -5,6 +5,9 @@ import path from "node:path";
 import readline from "node:readline";
 import chalk from "chalk";
 import YAML from "yaml";
+import { formatDeploymentPlan, loadDeploymentPlanFromFile } from "@envsync-cloud/deploy-core";
+import * as renderHelpers from "./render";
+import * as staticBundleHelpers from "./static-bundle";
 
 interface DeployConfig {
 	source: {
@@ -148,6 +151,17 @@ const OTEL_AGENT_CONF = path.join(DEPLOY_ROOT, "otel-agent.yaml");
 const CLICKSTACK_CLICKHOUSE_CONF = path.join(DEPLOY_ROOT, "clickhouse-listen.xml");
 const INTERNAL_CONFIG_JSON = path.join(DEPLOY_ROOT, "config.json");
 const UPGRADE_BACKUPS_ROOT = path.join(BACKUPS_ROOT, "upgrade");
+const DEPLOY_RENDER_PATHS = {
+	traefikStateRoot: TRAEFIK_STATE_ROOT,
+	deployRoot: DEPLOY_ROOT,
+	releasesRoot: RELEASES_ROOT,
+	keycloakRealmFile: KEYCLOAK_REALM_FILE,
+	clickstackClickhouseConf: CLICKSTACK_CLICKHOUSE_CONF,
+	otelAgentConf: OTEL_AGENT_CONF,
+	nginxLandingConf: NGINX_LANDING_CONF,
+	nginxWebConf: NGINX_WEB_CONF,
+	nginxApiMaintenanceConf: NGINX_API_MAINTENANCE_CONF,
+} as const;
 
 const STACK_VOLUMES = [
 	"postgres_data",
@@ -238,6 +252,23 @@ function logWarn(message: string) {
 
 function logDryRun(message: string) {
 	console.log(`${chalk.magenta("[dry-run]")} ${message}`);
+}
+
+function cmdEnterpriseTopologyPlan(configPath = DEPLOY_YAML, json = false) {
+	const plan = loadDeploymentPlanFromFile(configPath, "enterprise");
+	console.log(formatDeploymentPlan(plan, json ? "json" : "yaml"));
+}
+
+function cmdEnterpriseTopologyValidate(configPath = DEPLOY_YAML, json = false) {
+	const plan = loadDeploymentPlanFromFile(configPath, "enterprise");
+	if (json) {
+		console.log(JSON.stringify({ valid: true, edition: plan.edition, warnings: plan.warnings }, null, 2));
+		return;
+	}
+	logSuccess("Enterprise topology is valid.");
+	for (const warning of plan.warnings) {
+		logWarn(warning);
+	}
 }
 
 function logCommand(cmd: string, args: string[]) {
@@ -493,6 +524,8 @@ function renderHelpBlock() {
 		"  promote [blue|green] Promote the requested or inactive API slot",
 		"  rollback             Switch traffic back to the previous API slot",
 		"  health [--json]      Show operator health or machine-readable health JSON",
+		"  plan-topology [file] Render the Enterprise topology plan from deploy.yaml",
+		"  validate-topology    Validate Enterprise edition topology rules",
 		"  upgrade [version]    Pin a target release and deploy it",
 		"  upgrade-deps         Refresh dependency images and redeploy",
 		"  backup               Create a managed self-host backup archive",
@@ -585,6 +618,7 @@ function printOperatorOverview() {
 		"`envsync-deploy deploy`",
 		"`envsync-deploy upgrade`",
 		"`envsync-deploy health --json`",
+		"`envsync-deploy plan-topology --json`",
 		"`envsync-deploy backup`",
 		"`envsync-deploy restore <archive>`",
 		"`envsync-deploy promote`",
@@ -1767,24 +1801,24 @@ configs:
 }
 
 function writeDeployArtifacts(config: DeployConfig, generated: DeployGeneratedState) {
-	const runtimeEnv = buildRuntimeEnv(config, generated);
+	const runtimeEnv = renderHelpers.buildRuntimeEnv(config, generated);
 	logStep("Rendering deploy artifacts");
-	writeFileMaybe(DEPLOY_ENV, renderEnvFile(runtimeEnv), 0o600);
+	writeFileMaybe(DEPLOY_ENV, renderHelpers.renderEnvFile(runtimeEnv), 0o600);
 	writeFileMaybe(
 		INTERNAL_CONFIG_JSON,
 		JSON.stringify({ config, generated: mergeGeneratedState(runtimeEnv, generated) }, null, 2) + "\n",
 	);
 	writeFileMaybe(VERSIONS_LOCK, JSON.stringify(config.images, null, 2) + "\n");
-	writeFileMaybe(KEYCLOAK_REALM_FILE, renderKeycloakRealm(config, runtimeEnv));
-	writeFileMaybe(TRAEFIK_DYNAMIC_FILE, renderTraefikDynamicConfig(config, generated));
-	writeFileMaybe(BOOTSTRAP_BASE_STACK_FILE, renderStack(config, runtimeEnv, generated, "base"));
-	writeFileMaybe(BOOTSTRAP_STACK_FILE, renderStack(config, runtimeEnv, generated, "bootstrap"));
-	writeFileMaybe(STACK_FILE, renderStack(config, runtimeEnv, generated, "full"));
-	writeFileMaybe(NGINX_WEB_CONF, renderNginxConf("web"));
-	writeFileMaybe(NGINX_LANDING_CONF, renderNginxConf("landing"));
-	writeFileMaybe(NGINX_API_MAINTENANCE_CONF, renderApiMaintenanceConf());
-	writeFileMaybe(OTEL_AGENT_CONF, renderOtelAgentConfig(config));
-	writeFileMaybe(CLICKSTACK_CLICKHOUSE_CONF, renderClickstackClickHouseConfig());
+	writeFileMaybe(KEYCLOAK_REALM_FILE, renderHelpers.renderKeycloakRealm(config, runtimeEnv));
+	writeFileMaybe(TRAEFIK_DYNAMIC_FILE, renderHelpers.renderTraefikDynamicConfig(config, generated));
+	writeFileMaybe(BOOTSTRAP_BASE_STACK_FILE, renderHelpers.renderStack(config, runtimeEnv, generated, "base", DEPLOY_RENDER_PATHS));
+	writeFileMaybe(BOOTSTRAP_STACK_FILE, renderHelpers.renderStack(config, runtimeEnv, generated, "bootstrap", DEPLOY_RENDER_PATHS));
+	writeFileMaybe(STACK_FILE, renderHelpers.renderStack(config, runtimeEnv, generated, "full", DEPLOY_RENDER_PATHS));
+	writeFileMaybe(NGINX_WEB_CONF, renderHelpers.renderNginxConf("web"));
+	writeFileMaybe(NGINX_LANDING_CONF, renderHelpers.renderNginxConf("landing"));
+	writeFileMaybe(NGINX_API_MAINTENANCE_CONF, renderHelpers.renderApiMaintenanceConf());
+	writeFileMaybe(OTEL_AGENT_CONF, renderHelpers.renderOtelAgentConfig(config));
+	writeFileMaybe(CLICKSTACK_CLICKHOUSE_CONF, renderHelpers.renderClickstackClickHouseConfig());
 	logSuccess(currentOptions.dryRun ? "Deploy artifacts previewed" : "Deploy artifacts written");
 }
 
@@ -1842,8 +1876,8 @@ function extractStaticBundle(kind: "web" | "landing", image: string, targetDir: 
 	} finally {
 		run("docker", ["rm", "-f", containerId], { quiet: true });
 	}
-	normalizeExtractedStaticBundle(kind, targetDir);
-	validateStaticBundle(kind, targetDir);
+	staticBundleHelpers.normalizeExtractedStaticBundle(kind, targetDir);
+	staticBundleHelpers.validateStaticBundle(kind, targetDir);
 	logSuccess(`${kind} static bundle extracted to ${targetDir}`);
 }
 
@@ -1901,11 +1935,11 @@ function activateFrontendRelease(kind: "web" | "landing", version: string, runti
 	if (!exists(stagedDir)) {
 		throw new Error(`Missing staged ${kind} release at ${stagedDir}`);
 	}
-	validateStaticBundle(kind, stagedDir);
+	staticBundleHelpers.validateStaticBundle(kind, stagedDir);
 	writeFrontendRuntimeConfig(stagedDir, runtimeConfig);
 	ensureDir(currentDir);
 	syncFrontendReleaseContents(stagedDir, currentDir);
-	validateStaticBundle(kind, currentDir);
+	staticBundleHelpers.validateStaticBundle(kind, currentDir);
 }
 
 function normalizeExtractedStaticBundle(kind: "web" | "landing", targetDir: string) {
@@ -1997,8 +2031,8 @@ function restoreApiDbUpgradeBackup(config: DeployConfig, backupPath: string) {
 
 function activateFrontendReleaseForState(config: DeployConfig, state: DeployGeneratedState, fallbackVersion = config.release.version) {
 	const version = state.deployment.slots[state.deployment.active_slot].release_version || fallbackVersion;
-	activateFrontendRelease("web", version, renderFrontendRuntimeConfig(config, state));
-	activateFrontendRelease("landing", version, renderFrontendRuntimeConfig(config, state));
+	activateFrontendRelease("web", version, renderHelpers.renderFrontendRuntimeConfig(config, state));
+	activateFrontendRelease("landing", version, renderHelpers.renderFrontendRuntimeConfig(config, state));
 }
 
 function buildKeycloakImage(imageTag: string, repoRoot = REPO_ROOT) {
@@ -3129,7 +3163,7 @@ async function cmdBootstrap() {
 	logSection("Bootstrap");
 	const { config, generated } = loadState();
 	const nextGenerated = ensureGeneratedRuntimeState(config, resetBootstrapGeneratedState(generated));
-	const runtimeEnv = buildRuntimeEnv(config, nextGenerated);
+	const runtimeEnv = renderHelpers.buildRuntimeEnv(config, nextGenerated);
 	logReleaseContext(config);
 	assertSwarmManager();
 	if (currentOptions.dryRun) {
@@ -3881,6 +3915,12 @@ async function main() {
 			break;
 		case "health":
 			await cmdHealth(positionals[0] === "--json");
+			break;
+		case "plan-topology":
+			cmdEnterpriseTopologyPlan(positionals[0], positionals.includes("--json"));
+			break;
+		case "validate-topology":
+			cmdEnterpriseTopologyValidate(positionals[0], positionals.includes("--json"));
 			break;
 		case "upgrade":
 			await cmdUpgrade(positionals[0]);

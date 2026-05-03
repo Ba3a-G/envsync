@@ -12,6 +12,7 @@ export interface TestRequestOptions {
 	token?: string;
 	apiKey?: string;
 	query?: Record<string, string>;
+	surface?: "core" | "management";
 }
 
 export interface TestResponse {
@@ -30,8 +31,10 @@ export async function testRequest(
 		const { ensureE2EEnv } = await import("../e2e/helpers/bootstrap-env");
 		ensureE2EEnv();
 	}
-	const { app } = await import("@/app");
-	const { method = "GET", headers = {}, body, token, apiKey, query } = options;
+	const { surface = "core", method = "GET", headers = {}, body, token, apiKey, query } = options;
+	const app = surface === "management"
+		? (await import("@/app/management")).managementApp
+		: (await import("@/app")).app;
 
 	const reqHeaders: Record<string, string> = { ...headers };
 	if (token) reqHeaders["Authorization"] = `Bearer ${token}`;

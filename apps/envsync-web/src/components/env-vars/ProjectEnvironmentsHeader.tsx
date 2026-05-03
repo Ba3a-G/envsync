@@ -18,6 +18,7 @@ import {
   LockKeyhole,
   FolderKanban,
   DatabaseBackup,
+  PlugZap,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -25,7 +26,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { appAccessPath, appDetailPath, appPointInTimePath, appSecretsPath } from "@/lib/app-routes";
+import { appAccessPath, appDetailPath, appIntegrationsPath, appPointInTimePath, appSecretsPath } from "@/lib/app-routes";
+import { isEnterpriseDashboard } from "@/utils/runtime-config";
 
 interface ProjectEnvironmentsHeaderProps {
   projectName: string;
@@ -70,18 +72,21 @@ export const ProjectEnvironmentsHeader = ({
   const isManageEnvironmentPage = location.pathname.includes("/manage-environments");
   const isAccessPage = location.pathname.includes("/access");
   const isPointInTimePage = location.pathname.includes("/pit/");
+  const isIntegrationsPage = location.pathname.includes("/integrations");
   const currentSection = isSecretsPage
     ? "Secrets"
     : isManageEnvironmentPage
       ? "Environments"
       : isAccessPage
         ? "Access"
+        : isIntegrationsPage
+          ? "Integrations"
         : isPointInTimePage
           ? "Recovery"
           : "Variables";
 
   const handleSectionChange = (
-    section: "variables" | "secrets" | "environments" | "access" | "pit"
+    section: "variables" | "secrets" | "environments" | "access" | "pit" | "integrations"
   ) => {
     if (!appId) return;
 
@@ -89,6 +94,7 @@ export const ProjectEnvironmentsHeader = ({
     if (section === "secrets") targetPath = appSecretsPath(appId);
     if (section === "environments") targetPath = `${appDetailPath(appId)}/manage-environments`;
     if (section === "access") targetPath = appAccessPath(appId);
+    if (section === "integrations") targetPath = appIntegrationsPath(appId);
     if (section === "pit") {
       targetPath = appPointInTimePath(appId);
       const envParam = environmentName?.toLowerCase() || environmentId;
@@ -282,6 +288,13 @@ export const ProjectEnvironmentsHeader = ({
                 active: isAccessPage,
               },
               {
+                key: "integrations",
+                label: "Integrations",
+                icon: PlugZap,
+                hidden: !isEnterpriseDashboard,
+                active: isIntegrationsPage,
+              },
+              {
                 key: "pit",
                 label: "Recovery",
                 icon: DatabaseBackup,
@@ -297,7 +310,7 @@ export const ProjectEnvironmentsHeader = ({
                     key={item.key}
                     type="button"
                     variant="ghost"
-                    onClick={() => handleSectionChange(item.key as "variables" | "secrets" | "environments" | "access" | "pit")}
+                    onClick={() => handleSectionChange(item.key as "variables" | "secrets" | "environments" | "access" | "pit" | "integrations")}
                     className={cn(
                       "rounded-xl px-4 text-sm",
                       item.active

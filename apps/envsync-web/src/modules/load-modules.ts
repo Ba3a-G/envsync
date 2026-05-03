@@ -1,8 +1,14 @@
 import { coreWebModules } from "./core-modules";
+import { enterpriseWebModules } from "@enterprise-modules";
 import { externalWebModules } from "./external-modules";
 import type { ScopeRule, SettingsSection, WebModule, WebNavGroup, WebNavItem, WebRouteDefinition } from "./types";
+import { isEnterpriseDashboard } from "@/utils/runtime-config";
 
-const webModules = [...coreWebModules, ...externalWebModules];
+const webModules = [
+  ...coreWebModules,
+  ...(isEnterpriseDashboard ? enterpriseWebModules : []),
+  ...externalWebModules,
+];
 
 function dedupeByKey<T>(items: T[], getKey: (item: T) => string) {
   const seen = new Set<string>();

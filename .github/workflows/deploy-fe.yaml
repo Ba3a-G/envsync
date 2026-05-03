@@ -27,8 +27,11 @@ jobs:
       - name: Build SDK
         run: bun run --filter @envsync-cloud/envsync-ts-sdk build
 
+      - name: Build Management SDK
+        run: bun run --filter @envsync-cloud/envsync-management-ts-sdk build
+
       - name: Build
-        run: bun run --filter envsync-web build
+        run: bun run --filter envsync-web build:oss
         env:
           VITE_API_BASE_URL: ${{ secrets.ENVSYNC_API_URL }}
 

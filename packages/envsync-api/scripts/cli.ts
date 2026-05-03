@@ -87,9 +87,10 @@ async function ensureKeycloakRealmSessionSettings(token: string) {
 	const lookup = await fetch(base, {
 		headers: { Authorization: `Bearer ${token}` },
 	});
-	if (!lookup.ok) throw new Error(`Keycloak realm lookup failed: ${lookup.status} ${await lookup.text()}`);
+	if (!lookup.ok)
+		throw new Error(`Keycloak realm lookup failed: ${lookup.status} ${await lookup.text()}`);
 
-	const realm = await lookup.json() as Record<string, unknown>;
+	const realm = (await lookup.json()) as Record<string, unknown>;
 	const updateRes = await fetch(base, {
 		method: "PUT",
 		headers: {
@@ -152,7 +153,8 @@ async function ensureKeycloakClient(
 	const lookup = await fetch(`${base}/clients?clientId=${encodeURIComponent(clientId)}`, {
 		headers: { Authorization: `Bearer ${token}` },
 	});
-	if (!lookup.ok) throw new Error(`Keycloak client lookup failed: ${lookup.status} ${await lookup.text()}`);
+	if (!lookup.ok)
+		throw new Error(`Keycloak client lookup failed: ${lookup.status} ${await lookup.text()}`);
 	const existing = ((await lookup.json()) as Array<{ id: string }>)[0];
 	if (existing?.id) {
 		const updateRes = await fetch(`${base}/clients/${existing.id}`, {
@@ -178,7 +180,9 @@ async function ensureKeycloakClient(
 			}),
 		});
 		if (!updateRes.ok && updateRes.status !== 204) {
-			throw new Error(`Keycloak client update failed: ${updateRes.status} ${await updateRes.text()}`);
+			throw new Error(
+				`Keycloak client update failed: ${updateRes.status} ${await updateRes.text()}`,
+			);
 		}
 		if (opts.publicClient) return { clientId, clientSecret: "" };
 		const secretRes = await fetch(`${base}/clients/${existing.id}/client-secret`, {
@@ -228,7 +232,11 @@ async function initKeycloakClients() {
 		const webCallbackOrigin = new URL(config.KEYCLOAK_WEB_CALLBACK_URL).origin;
 		web = await ensureKeycloakClient(access_token, config.KEYCLOAK_WEB_CLIENT_ID, {
 			publicClient: false,
-			redirectUris: [config.KEYCLOAK_WEB_REDIRECT_URI, config.KEYCLOAK_WEB_CALLBACK_URL, webCallbackOrigin],
+			redirectUris: [
+				config.KEYCLOAK_WEB_REDIRECT_URI,
+				config.KEYCLOAK_WEB_CALLBACK_URL,
+				webCallbackOrigin,
+			],
 			standardFlowEnabled: true,
 			directAccessGrantsEnabled: true,
 			webOrigins: [webCallbackOrigin],
@@ -253,7 +261,9 @@ async function initKeycloakClients() {
 		web = imported.web;
 		api = imported.api;
 		cli = imported.cli;
-		console.log("Keycloak: admin bootstrap unavailable locally, using imported realm client definitions.");
+		console.log(
+			"Keycloak: admin bootstrap unavailable locally, using imported realm client definitions.",
+		);
 	}
 
 	updateRootEnv({
@@ -277,28 +287,81 @@ const DEV_ORG_SLUG = "envsync-dev";
 const DEV_USER_PASSWORD = "Test@1234";
 
 function isSeededVaultRepairFailure(error: unknown) {
-	return error instanceof Error && error.message.includes("Seed vault access still invalid after certificate/session repair");
+	return (
+		error instanceof Error &&
+		error.message.includes("Seed vault access still invalid after certificate/session repair")
+	);
 }
 
 function buildRecoveryOrgSlug(baseSlug: string) {
 	return `${baseSlug}-${Date.now().toString(36)}`;
 }
 
-async function ensureDevOrg(orgName = DEV_ORG_NAME, orgSlug = DEV_ORG_SLUG) {
+function buildTemporaryBootstrapEmail(email: string) {
+	const [localPart, domainPart] = email.split("@");
+	const normalizedLocalPart = (localPart || "envsync").replace(/[^a-zA-Z0-9._-]+/g, "-");
+	const normalizedDomainPart = domainPart || "envsync.local";
+	return `${normalizedLocalPart}-bootstrap-${Date.now().toString(36)}@${normalizedDomainPart}`;
+}
+
+async function ensureDevOrg(
+	orgName = DEV_ORG_NAME,
+	orgSlug = DEV_ORG_SLUG,
+	bootstrapUser: {
+		email: string;
+		full_name: string;
+		password: string;
+	} = {
+		email: "dev@envsync.local",
+		full_name: "EnvSync Dev",
+		password: DEV_USER_PASSWORD,
+	},
+) {
 	const db = await DB.getInstance();
 	let org = await db.selectFrom("orgs").selectAll().where("slug", "=", orgSlug).executeTakeFirst();
 	if (!org) {
-		const id = randomUUID();
-		await db.insertInto("orgs").values({
-			id,
-			name: orgName,
-			slug: orgSlug,
-			metadata: { seeded_by: "cli" },
-			created_at: new Date(),
-			updated_at: new Date(),
-		}).execute();
-		org = await db.selectFrom("orgs").selectAll().where("id", "=", id).executeTakeFirstOrThrow();
-		console.log(`Created org "${orgName}" (${id})`);
+		const localBootstrapUser = await db
+			.selectFrom("users")
+			.select(["id"])
+			.where("email", "=", bootstrapUser.email)
+			.executeTakeFirst();
+		const existingKeycloakBootstrapUser = localBootstrapUser
+			? null
+			: await findKeycloakUserByUsername(bootstrapUser.email);
+		const shouldUseTemporaryBootstrapUser = Boolean(
+			localBootstrapUser || existingKeycloakBootstrapUser,
+		);
+		const provisioningBootstrapUser = shouldUseTemporaryBootstrapUser
+			? {
+					email: buildTemporaryBootstrapEmail(bootstrapUser.email),
+					full_name: `${bootstrapUser.full_name} Bootstrap`,
+					password: bootstrapUser.password,
+				}
+			: bootstrapUser;
+		if (shouldUseTemporaryBootstrapUser) {
+			const collisionReason = localBootstrapUser
+				? "already exists locally"
+				: "already exists in Keycloak without a local user row";
+			console.warn(
+				`Bootstrap user ${bootstrapUser.email} ${collisionReason}; provisioning org ${orgSlug} with temporary bootstrap user ${provisioningBootstrapUser.email}.`,
+			);
+		}
+		const { OrgProvisioningService } = await import("../src/services/org-provisioning.service");
+		const provisioned = await OrgProvisioningService.provisionOrganization({
+			org: {
+				name: orgName,
+				slug: orgSlug,
+				metadata: { seeded_by: "cli" },
+			},
+			adminUser: provisioningBootstrapUser,
+			source: "cli_bootstrap",
+		});
+		org = await db
+			.selectFrom("orgs")
+			.selectAll()
+			.where("id", "=", provisioned.org_id)
+			.executeTakeFirstOrThrow();
+		console.log(`Created org "${orgName}" (${org.id})`);
 	}
 
 	return org;
@@ -318,11 +381,7 @@ async function ensureDefaultRoles(orgId: string) {
 		console.log("Created default roles");
 	}
 
-	return db
-		.selectFrom("org_role")
-		.selectAll()
-		.where("org_id", "=", orgId)
-		.execute();
+	return db.selectFrom("org_role").selectAll().where("org_id", "=", orgId).execute();
 }
 
 function getFlagValue(rawArgs: string[], flagName: string) {
@@ -341,7 +400,10 @@ function getFlagValue(rawArgs: string[], flagName: string) {
 }
 
 function normalizeRoleName(value: string) {
-	return value.trim().toLowerCase().replace(/[\s_-]+/g, " ");
+	return value
+		.trim()
+		.toLowerCase()
+		.replace(/[\s_-]+/g, " ");
 }
 
 function resolveRequestedRole(
@@ -380,7 +442,11 @@ async function ensureOrgResourceAccess(orgId: string) {
 
 	const [apps, envTypes] = await Promise.all([
 		db.selectFrom("app").select(["id", "org_id"]).where("org_id", "=", orgId).execute(),
-		db.selectFrom("env_type").select(["id", "app_id", "org_id"]).where("org_id", "=", orgId).execute(),
+		db
+			.selectFrom("env_type")
+			.select(["id", "app_id", "org_id"])
+			.where("org_id", "=", orgId)
+			.execute(),
 	]);
 
 	for (const app of apps) {
@@ -391,11 +457,17 @@ async function ensureOrgResourceAccess(orgId: string) {
 		await AuthorizationService.writeEnvTypeRelations(envType.id, envType.app_id, envType.org_id);
 	}
 
-	console.log(`OpenFGA resource relations synced for ${apps.length} apps and ${envTypes.length} env types`);
+	console.log(
+		`OpenFGA resource relations synced for ${apps.length} apps and ${envTypes.length} env types`,
+	);
 }
 
 function isMissingOrgCAError(error: unknown) {
-	return error instanceof Error && error.message.includes("org CA") && error.message.includes("not found");
+	return (
+		error instanceof Error &&
+		error.message.includes("org CA") &&
+		error.message.includes("not found")
+	);
 }
 
 async function repairSeededOrgCertificates(orgId: string) {
@@ -431,7 +503,8 @@ async function repairSeededOrgCertificates(orgId: string) {
 
 async function refreshVaultSession(userId: string, orgId: string) {
 	const { KMSClient } = await import("../src/libs/kms/client");
-	const { getVaultSessionToken, invalidateSessionToken } = await import("../src/libs/kms/session-manager");
+	const { getVaultSessionToken, invalidateSessionToken } =
+		await import("../src/libs/kms/session-manager");
 
 	const kms = await KMSClient.getInstance();
 	await kms.revokeMemberSessions(userId, orgId).catch(() => 0);
@@ -447,14 +520,20 @@ async function refreshVaultSession(userId: string, orgId: string) {
 	return sessionToken;
 }
 
-async function moveUserToOrg(userId: string, nextOrgId: string, roleId: string, previousOrgId?: string) {
+async function moveUserToOrg(
+	userId: string,
+	nextOrgId: string,
+	roleId: string,
+	previousOrgId?: string,
+) {
 	const { invalidateSessionToken } = await import("../src/libs/kms/session-manager");
 	const db = await DB.getInstance();
 	if (previousOrgId) {
 		invalidateSessionToken(userId, previousOrgId);
 	}
 	invalidateSessionToken(userId, nextOrgId);
-	await db.updateTable("users")
+	await db
+		.updateTable("users")
 		.set({
 			org_id: nextOrgId,
 			role_id: roleId,
@@ -464,15 +543,22 @@ async function moveUserToOrg(userId: string, nextOrgId: string, roleId: string, 
 		.execute();
 }
 
-async function ensureOrgCertificates(orgId: string, orgName: string, userId: string, email: string) {
+async function ensureOrgCertificates(
+	orgId: string,
+	orgName: string,
+	userId: string,
+	email: string,
+) {
 	const { CertificateService } = await import("../src/services/certificate.service");
 	const { CertificateRoleMapper } = await import("../src/services/certificate-role.mapper");
 	const { KMSClient } = await import("../src/libs/kms/client");
-	const { getVaultSessionToken, invalidateSessionToken } = await import("../src/libs/kms/session-manager");
+	const { getVaultSessionToken, invalidateSessionToken } =
+		await import("../src/libs/kms/session-manager");
 	const { RoleService } = await import("../src/services/role.service");
 	const db = await DB.getInstance();
 
-	let orgCA: Awaited<ReturnType<typeof CertificateService.getOrgCA>> | null = await CertificateService.getOrgCA(orgId);
+	let orgCA: Awaited<ReturnType<typeof CertificateService.getOrgCA>> | null =
+		await CertificateService.getOrgCA(orgId);
 	if (orgCA) {
 		try {
 			const kms = await KMSClient.getInstance();
@@ -504,7 +590,11 @@ async function ensureOrgCertificates(orgId: string, orgName: string, userId: str
 		.executeTakeFirst();
 
 	if (!memberCert) {
-		const user = await db.selectFrom("users").select(["role_id"]).where("id", "=", userId).executeTakeFirstOrThrow();
+		const user = await db
+			.selectFrom("users")
+			.select(["role_id"])
+			.where("id", "=", userId)
+			.executeTakeFirstOrThrow();
 		const role = await RoleService.getRole(user.role_id);
 		await CertificateService.issueMemberCert({
 			org_id: orgId,
@@ -535,7 +625,11 @@ async function ensureOrgCertificates(orgId: string, orgName: string, userId: str
 		}
 	} catch {
 		invalidateSessionToken(userId, orgId);
-		const user = await db.selectFrom("users").select(["role_id"]).where("id", "=", userId).executeTakeFirstOrThrow();
+		const user = await db
+			.selectFrom("users")
+			.select(["role_id"])
+			.where("id", "=", userId)
+			.executeTakeFirstOrThrow();
 		const role = await RoleService.getRole(user.role_id);
 		await CertificateService.issueMemberCert({
 			org_id: orgId,
@@ -597,14 +691,18 @@ async function ensureSeededApps(orgId: string) {
 			.where("name", "=", definition.name)
 			.executeTakeFirst();
 
-		const appId = existingApp?.id ?? (await AppService.createApp({
-				name: definition.name,
-				org_id: orgId,
-				description: definition.description,
-				metadata: { seeded_by: "cli", preset: "local-dev" },
-				enable_secrets: definition.enable_secrets,
-				is_managed_secret: definition.is_managed_secret,
-			})).id;
+		const appId =
+			existingApp?.id ??
+			(
+				await AppService.createApp({
+					name: definition.name,
+					org_id: orgId,
+					description: definition.description,
+					metadata: { seeded_by: "cli", preset: "local-dev" },
+					enable_secrets: definition.enable_secrets,
+					is_managed_secret: definition.is_managed_secret,
+				})
+			).id;
 		if (!existingApp) {
 			console.log(`Seeded app "${definition.name}"`);
 		}
@@ -640,7 +738,11 @@ async function ensureSeededApps(orgId: string) {
 	return seededApps;
 }
 
-async function ensureSeededSecrets(orgId: string, userId: string, apps: Record<string, { id: string; envs: Record<string, { id: string }> }>) {
+async function ensureSeededSecrets(
+	orgId: string,
+	userId: string,
+	apps: Record<string, { id: string; envs: Record<string, { id: string }> }>,
+) {
 	const { SecretService } = await import("../src/services/secret.service");
 	const { SecretStorePiTService } = await import("../src/services/secret_store_pit.service");
 
@@ -741,7 +843,9 @@ async function ensureSeededSecrets(orgId: string, userId: string, apps: Record<s
 					},
 				],
 			});
-			console.log(`Backfilled PiT for seeded secret ${definition.key} in ${definition.appName}/${definition.envName}`);
+			console.log(
+				`Backfilled PiT for seeded secret ${definition.key} in ${definition.appName}/${definition.envName}`,
+			);
 		}
 	}
 }
@@ -757,12 +861,16 @@ async function ensureSeededTeam(orgId: string, userId: string) {
 		.where("name", "=", "Platform")
 		.executeTakeFirst();
 
-	const teamId = existingTeam?.id ?? (await TeamService.createTeam({
-			name: "Platform",
-			org_id: orgId,
-			description: "Seeded platform team for local development.",
-			color: "#0f766e",
-		}) as { id: string }).id;
+	const teamId =
+		existingTeam?.id ??
+		(
+			(await TeamService.createTeam({
+				name: "Platform",
+				org_id: orgId,
+				description: "Seeded platform team for local development.",
+				color: "#0f766e",
+			})) as { id: string }
+		).id;
 	if (!existingTeam) {
 		console.log('Seeded team "Platform"');
 	}
@@ -858,7 +966,9 @@ async function verifySeededVaultRoundTrip(
 		});
 
 		if (!roundTrip || roundTrip.value !== value) {
-			throw new Error(`Seed vault round-trip returned ${roundTrip ? "unexpected value" : "no value"}`);
+			throw new Error(
+				`Seed vault round-trip returned ${roundTrip ? "unexpected value" : "no value"}`,
+			);
 		}
 	} finally {
 		await EnvService.deleteEnv({
@@ -935,42 +1045,62 @@ async function createDevUser() {
 	const password = DEV_USER_PASSWORD;
 	const db = await DB.getInstance();
 
-	let org = await ensureDevOrg(requestedOrgName, requestedOrgSlug);
+	let org = await ensureDevOrg(requestedOrgName, requestedOrgSlug, {
+		email,
+		full_name: fullName,
+		password,
+	});
 	let roles = await ensureDefaultRoles(org.id);
 	let role = resolveRequestedRole(
 		roles.map(entry => ({ id: entry.id, name: entry.name, is_master: Boolean(entry.is_master) })),
 		requestedRole,
 	);
 	if (!role) {
-		throw new Error(`Requested role "${requestedRole ?? "master"}" does not exist in org ${org.id}`);
+		throw new Error(
+			`Requested role "${requestedRole ?? "master"}" does not exist in org ${org.id}`,
+		);
 	}
 
 	let user = await db.selectFrom("users").selectAll().where("email", "=", email).executeTakeFirst();
 
 	if (!user) {
 		const parts = fullName.trim().split(/\s+/).filter(Boolean);
-		const idp = await createKeycloakUser({
-			userName: email,
-			email,
-			firstName: parts[0] ?? "EnvSync",
-			lastName: parts.slice(1).join(" ") || "Dev",
-			password,
-		});
+		const existingIdpUser = await findKeycloakUserByUsername(email);
+		const idp =
+			existingIdpUser ??
+			(await createKeycloakUser({
+				userName: email,
+				email,
+				firstName: parts[0] ?? "EnvSync",
+				lastName: parts.slice(1).join(" ") || "Dev",
+				password,
+			}));
+		if (existingIdpUser) {
+			await setKeycloakUserPassword(existingIdpUser.id, password);
+			console.log("Recovered existing Keycloak-only dev user into local database");
+		}
 
 		const userId = randomUUID();
-		await db.insertInto("users").values({
-			id: userId,
-			email,
-			org_id: org.id,
-			role_id: role.id,
-			auth_service_id: idp.id,
-			full_name: fullName,
-			is_active: true,
-			profile_picture_url: null,
-			created_at: new Date(),
-			updated_at: new Date(),
-		}).execute();
-		user = await db.selectFrom("users").selectAll().where("id", "=", userId).executeTakeFirstOrThrow();
+		await db
+			.insertInto("users")
+			.values({
+				id: userId,
+				email,
+				org_id: org.id,
+				role_id: role.id,
+				auth_service_id: idp.id,
+				full_name: fullName,
+				is_active: true,
+				profile_picture_url: null,
+				created_at: new Date(),
+				updated_at: new Date(),
+			})
+			.execute();
+		user = await db
+			.selectFrom("users")
+			.selectAll()
+			.where("id", "=", userId)
+			.executeTakeFirstOrThrow();
 		console.log(`Dev user created: ${email} / ${password}`);
 	} else {
 		console.log(`Dev user already exists: ${email}`);
@@ -991,24 +1121,37 @@ async function createDevUser() {
 			console.log("Recreated missing Keycloak user for existing dev account");
 		}
 		if (user.auth_service_id !== idpUser.id) {
-			await db.updateTable("users")
+			await db
+				.updateTable("users")
 				.set({ auth_service_id: idpUser.id, updated_at: new Date() })
 				.where("id", "=", user.id)
 				.execute();
-			user = await db.selectFrom("users").selectAll().where("id", "=", user.id).executeTakeFirstOrThrow();
+			user = await db
+				.selectFrom("users")
+				.selectAll()
+				.where("id", "=", user.id)
+				.executeTakeFirstOrThrow();
 			console.log("Synced dev user auth_service_id with Keycloak");
 		}
 		await setKeycloakUserPassword(idpUser.id, password);
 		console.log(`Dev user login reset: ${email} / ${password}`);
 		if (user.org_id !== org.id) {
 			await moveUserToOrg(user.id, org.id, role.id, user.org_id);
-			user = await db.selectFrom("users").selectAll().where("id", "=", user.id).executeTakeFirstOrThrow();
+			user = await db
+				.selectFrom("users")
+				.selectAll()
+				.where("id", "=", user.id)
+				.executeTakeFirstOrThrow();
 			console.log(`Moved dev user into org ${org.slug}`);
 		}
 		if (user.role_id !== role.id) {
 			const { UserService } = await import("../src/services/user.service");
 			await UserService.updateUser(user.id, { role_id: role.id });
-			user = await db.selectFrom("users").selectAll().where("id", "=", user.id).executeTakeFirstOrThrow();
+			user = await db
+				.selectFrom("users")
+				.selectAll()
+				.where("id", "=", user.id)
+				.executeTakeFirstOrThrow();
 			console.log(`Updated dev user role to ${role.name}`);
 		}
 	}
@@ -1028,17 +1171,31 @@ async function createDevUser() {
 			console.warn(
 				`Local vault state for org ${requestedOrgSlug} remains invalid after repair. Creating replacement org ${recoveryOrgSlug}.`,
 			);
-			org = await ensureDevOrg(requestedOrgName, recoveryOrgSlug);
+			org = await ensureDevOrg(requestedOrgName, recoveryOrgSlug, {
+				email,
+				full_name: fullName,
+				password,
+			});
 			roles = await ensureDefaultRoles(org.id);
 			role = resolveRequestedRole(
-				roles.map(entry => ({ id: entry.id, name: entry.name, is_master: Boolean(entry.is_master) })),
+				roles.map(entry => ({
+					id: entry.id,
+					name: entry.name,
+					is_master: Boolean(entry.is_master),
+				})),
 				requestedRole,
 			);
 			if (!role) {
-				throw new Error(`Requested role "${requestedRole ?? "master"}" does not exist in recovery org ${org.id}`);
+				throw new Error(
+					`Requested role "${requestedRole ?? "master"}" does not exist in recovery org ${org.id}`,
+				);
 			}
 			await moveUserToOrg(user.id, org.id, role.id, user.org_id);
-			user = await db.selectFrom("users").selectAll().where("id", "=", user.id).executeTakeFirstOrThrow();
+			user = await db
+				.selectFrom("users")
+				.selectAll()
+				.where("id", "=", user.id)
+				.executeTakeFirstOrThrow();
 			console.log(`Moved dev user into recovery org ${org.slug}`);
 			await ensureUserRoleAccess(user.id, org.id, role.id);
 			console.log("Dev user permissions synced in recovery org");
@@ -1055,7 +1212,20 @@ if (cmd === "init") {
 	await init();
 } else if (cmd === "create-dev-user") {
 	await createDevUser();
+} else if (cmd === "bootstrap-org") {
+	const rawArgs = process.argv.slice(3);
+	const orgName = getFlagValue(rawArgs, "org-name") ?? DEV_ORG_NAME;
+	const orgSlug = getFlagValue(rawArgs, "org-slug") ?? DEV_ORG_SLUG;
+	const email = getFlagValue(rawArgs, "email") ?? "admin@envsync.local";
+	const fullName = getFlagValue(rawArgs, "full-name") ?? "EnvSync Admin";
+	const password = getFlagValue(rawArgs, "password") ?? DEV_USER_PASSWORD;
+	const org = await ensureDevOrg(orgName, orgSlug, {
+		email,
+		full_name: fullName,
+		password,
+	});
+	console.log(`Bootstrap completed for org ${org.slug} (${org.id})`);
 } else {
-	console.log("Usage: bun run scripts/cli.ts <init|create-dev-user>");
+	console.log("Usage: bun run scripts/cli.ts <init|create-dev-user|bootstrap-org>");
 	process.exit(cmd ? 1 : 0);
 }

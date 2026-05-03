@@ -10,9 +10,12 @@ export const validateAccess = async ({
 	type: "JWT" | "API_KEY";
 }): Promise<{
 	user_id: string;
+	auth_service_id?: string;
+	auth_type: "JWT" | "API_KEY";
 }> => {
 	try {
 		let userId: string = "";
+		let authServiceId: string | undefined;
 
 		if (type === "JWT") {
 			const decoded = await verifyJWTToken(token);
@@ -20,6 +23,7 @@ export const validateAccess = async ({
 			if (!idpSub) {
 				throw new Error("JWT subject claim is missing");
 			}
+			authServiceId = idpSub;
 			let user;
 			try {
 				user = await UserService.getUserByIdpId(idpSub);
@@ -48,6 +52,8 @@ export const validateAccess = async ({
 
 		return {
 			user_id: userId,
+			auth_service_id: authServiceId,
+			auth_type: type,
 		};
 	} catch (error) {
 		throw new Error(
