@@ -31,6 +31,7 @@ type LicenseStore = {
 
 export interface LocalLicenseServer {
 	baseUrl: string;
+	accessKey: string;
 	storePath: string;
 	readStore: () => LicenseStore;
 	setLicenseStatus: (status: LicenseStatus) => void;
@@ -87,11 +88,13 @@ async function waitForHealth(baseUrl: string, timeoutMs = 10_000) {
 }
 
 export async function startLocalLicenseServer(input: {
+	accessKey?: string;
 	installFingerprint?: string;
 	licenseKey?: string;
 	licenseStatus?: LicenseStatus;
 	leaseTtlSeconds?: number;
 } = {}): Promise<LocalLicenseServer> {
+	const accessKey = input.accessKey ?? "envsync-license-test-access-key";
 	const installFingerprint = input.installFingerprint ?? "envsync-e2e-install";
 	const licenseKey = input.licenseKey ?? "envsync-enterprise-dev";
 	const licenseStatus = input.licenseStatus ?? "active";
@@ -137,6 +140,7 @@ export async function startLocalLicenseServer(input: {
 			env: {
 				...process.env,
 				PORT: String(port),
+				LICENSE_SERVER_ACCESS_KEY: accessKey,
 				LICENSE_SERVER_SIGNING_SECRET: "envsync-license-test-secret",
 				LICENSE_SERVER_LEASE_TTL_SECONDS: String(leaseTtlSeconds),
 				LICENSE_SERVER_STORE_FILE: storePath,
@@ -162,6 +166,7 @@ export async function startLocalLicenseServer(input: {
 
 	return {
 		baseUrl,
+		accessKey,
 		storePath,
 		readStore,
 		setLicenseStatus,

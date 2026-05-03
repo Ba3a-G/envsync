@@ -1,6 +1,6 @@
 {
   "name": "@envsync-cloud/deploy",
-  "version": "0.7.8",
+  "version": "0.8.0",
   "type": "module",
   "bin": {
     "envsync-deploy": "./dist/index.js"
