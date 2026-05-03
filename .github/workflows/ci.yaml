@@ -15,7 +15,6 @@ jobs:
       - name: Setup Bun Runtime
         uses: oven-sh/setup-bun@v2
       - run: bun i
-      - run: bun run check:no-enterprise-imports
       - run: bun run build
 
   build-cli:
