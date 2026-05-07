@@ -16,11 +16,19 @@ export async function gotoPit(
 }
 
 export async function expectPitHistory(page: Page) {
-	await expect(page.getByRole("heading", { name: /snapshot history/i })).toBeVisible();
+	await expect(
+		page.getByRole("heading", {
+			name: /snapshot history|snapshots in selected range/i,
+		}).first(),
+	).toBeVisible();
 }
 
 export async function compareFirstTwoPits(page: Page) {
-	await page.getByRole("button", { name: "Preview comparison" }).click();
+	const previewButton = page.getByRole("button", { name: "Preview comparison" });
+	if (!(await previewButton.isVisible().catch(() => false))) {
+		await page.getByRole("radio", { name: "Snapshots" }).click();
+	}
+	await previewButton.click();
 	await expect(page.getByRole("heading", { name: /snapshot diff/i })).toBeVisible();
 	await expect(
 		page.getByText(/Added:|Modified:|Deleted:|No net changes were found/i).first()
@@ -28,7 +36,7 @@ export async function compareFirstTwoPits(page: Page) {
 }
 
 export async function openTimeRangeMode(page: Page) {
-	await page.getByRole("button", { name: "Time Range" }).click();
+	await page.getByRole("radio", { name: "Time Range" }).click();
 	await expect(page.getByRole("heading", { name: "Snapshots in selected range" })).toBeVisible();
 }
 

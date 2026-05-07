@@ -20,6 +20,7 @@ export const ActionCategories = z.enum([
 	'cli*',
 	'gpg_key*',
 	'cert*',
+	'enterprise*',
 ]);
 
 export type ActionCtgs = z.infer<typeof ActionCategories>;

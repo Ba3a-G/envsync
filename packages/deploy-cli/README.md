@@ -48,6 +48,8 @@ Running `envsync-deploy` with no subcommand shows the current operator status an
 - `promote [blue|green]` switches API traffic to a slot without rebuilding.
 - `rollback` switches traffic back to the previously active API slot.
 - `health --json` prints health JSON; plain `health` prints the operator summary view.
+- `plan-topology [file]` renders the Enterprise topology plan from `deploy.yaml`.
+- `validate-topology [file]` validates Enterprise edition topology rules before deployment.
 - `upgrade [version]` pins a release target and deploys it.
 - `upgrade-deps` refreshes dependency image pins and redeploys.
 - `backup` creates a managed self-host backup archive.
@@ -132,10 +134,18 @@ Validate unpublished deploy-cli changes from the monorepo:
 bun run selfhost:smoke
 ```
 
+Validate the edition-aware Enterprise topology contract directly:
+
+```bash
+bun run src/index.ts validate-topology /etc/envsync/deploy.yaml --json
+bun run src/index.ts plan-topology /etc/envsync/deploy.yaml
+```
+
 ## Important Notes
 
 - Self-hosted releases use exact semver values, not `stable` or `latest`.
 - `bootstrap` is destructive.
 - `upgrade` and `deploy` reconcile managed versioned artifacts from `release.version`.
 - Custom image overrides are still preserved for advanced self-host setups.
+- Enterprise package publication now targets GitHub Packages rather than the public npm registry.
 - The full deployment guide lives in [SELFHOSTING.md](/Users/bravo68web/Projects/OSS/EnvSync/monorepo/SELFHOSTING.md).

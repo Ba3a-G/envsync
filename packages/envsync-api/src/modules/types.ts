@@ -1,6 +1,8 @@
 import type { Hono } from "hono";
 import type { ZodRawShape } from "zod";
 
+export type ApiSurface = "core" | "management";
+
 export type EnvSchemaExtension = ZodRawShape | (() => ZodRawShape);
 
 export interface ApiModule {

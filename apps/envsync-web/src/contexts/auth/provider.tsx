@@ -8,11 +8,22 @@ export const AuthContextProvider = ({
 }: {
   children: React.ReactNode;
 }) => {
-  const { isAuthenticated, isLoading, user, token, authError } = useAuth();
+  const {
+    isAuthenticated,
+    isLoading,
+    user,
+    token,
+    authError,
+    switchOrg,
+    isSwitchingOrg,
+    createWorkspace,
+    isCreatingWorkspace,
+  } = useAuth();
   const registeredScopes = getRegisteredScopeIds();
   const scopeRules = getWebScopeRuleMap();
 
   const contextValue = useMemo(() => {
+    const memberships = user?.memberships ?? [];
     const allowedScopes = registeredScopes.filter((scope) => {
       if (!user) return false;
 
@@ -26,8 +37,26 @@ export const AuthContextProvider = ({
       isAuthenticated,
       allowedScopes,
       authError: authError ?? null,
+      memberships,
+      activeMembershipUserId: user?.active_membership_user_id ?? null,
+      switchOrg,
+      isSwitchingOrg,
+      createWorkspace,
+      isCreatingWorkspace,
     };
-  }, [user, isLoading, isAuthenticated, token, authError, registeredScopes, scopeRules]);
+  }, [
+    user,
+    isLoading,
+    isAuthenticated,
+    token,
+    authError,
+    registeredScopes,
+    scopeRules,
+    switchOrg,
+    isSwitchingOrg,
+    createWorkspace,
+    isCreatingWorkspace,
+  ]);
 
   return (
     <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>

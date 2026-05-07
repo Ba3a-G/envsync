@@ -32,14 +32,9 @@ test.describe("collaboration protected environment journey", () => {
 		const inviteResponse = waitForTrackedResponse(page, {
 			method: "POST",
 			pathFragment: "/api/onboarding/user",
-			expectedStatus: 201,
-		}).catch(() =>
-			waitForTrackedResponse(page, {
-				method: "POST",
-				pathFragment: "/api/onboarding/user",
-				expectedStatus: 200,
-			}),
-		);
+			expectedStatus: [200, 201],
+			failOnUnexpectedStatus: true,
+		});
 		await inviteDialog.getByRole("button", { name: /Send Invitation/i }).click();
 		await inviteResponse;
 

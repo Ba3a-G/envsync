@@ -369,7 +369,11 @@ function buildAuthTimeoutError(credential: AuthCredential, timeoutMs: number, st
 	return new Error(`Timed out waiting for login for ${credential.email} after ${timeoutMs}ms (${formatSessionStatus(status)})`);
 }
 
-async function finalizeAuthenticatedSession(page: Page, storageKey: string) {
+async function finalizeAuthenticatedSession(
+	page: Page,
+	storageKey: string,
+	options: { persistStorage?: boolean } = {},
+) {
 	const status = await getSessionStatus(page);
 	if (!status.authenticated || !status.hasAccessToken || !status.hasCsrfToken) {
 		return false;
@@ -377,7 +381,9 @@ async function finalizeAuthenticatedSession(page: Page, storageKey: string) {
 
 	await settleAuthenticatedPage(page);
 	await page.goto(getUiHarnessConfig().baseUrl, { waitUntil: "domcontentloaded" });
-	await saveStorageState(page.context(), storageKey);
+	if (options.persistStorage ?? true) {
+		await saveStorageState(page.context(), storageKey);
+	}
 	return true;
 }
 
@@ -391,12 +397,12 @@ async function ensureFreshCredentialContext(
 	const page = await context.newPage();
 	page.setDefaultTimeout(config.actionTimeoutMs);
 	await page.goto(config.baseUrl, { waitUntil: "domcontentloaded" });
-	if (await finalizeAuthenticatedSession(page, storageKey)) {
+	if (await finalizeAuthenticatedSession(page, storageKey, { persistStorage: true })) {
 		return { context, page };
 	}
 
 	await startLocalDevSession(page, credential);
-	if (await finalizeAuthenticatedSession(page, storageKey)) {
+	if (await finalizeAuthenticatedSession(page, storageKey, { persistStorage: true })) {
 		return { context, page };
 	}
 
@@ -405,7 +411,7 @@ async function ensureFreshCredentialContext(
 	const startedAt = Date.now();
 	let lastStatus = await getSessionStatus(page);
 	while (Date.now() - startedAt < config.loginTimeoutMs) {
-		if (await finalizeAuthenticatedSession(page, storageKey)) {
+		if (await finalizeAuthenticatedSession(page, storageKey, { persistStorage: true })) {
 			return { context, page };
 		}
 
@@ -417,7 +423,12 @@ async function ensureFreshCredentialContext(
 		}
 
 		lastStatus = await getSessionStatus(page);
-		if (lastStatus.authenticated && lastStatus.hasAccessToken && lastStatus.hasCsrfToken && await finalizeAuthenticatedSession(page, storageKey)) {
+		if (
+			lastStatus.authenticated
+			&& lastStatus.hasAccessToken
+			&& lastStatus.hasCsrfToken
+			&& await finalizeAuthenticatedSession(page, storageKey, { persistStorage: true })
+		) {
 			return { context, page };
 		}
 
@@ -504,7 +515,7 @@ export async function ensureAuthenticatedPageWithCredential(
 	const config = getUiHarnessConfig();
 	page.setDefaultTimeout(config.actionTimeoutMs);
 	await page.goto(config.baseUrl, { waitUntil: "domcontentloaded" });
-	if (await finalizeAuthenticatedSession(page, storageKey)) {
+	if (await finalizeAuthenticatedSession(page, storageKey, { persistStorage: false })) {
 		return;
 	}
 
@@ -512,14 +523,14 @@ export async function ensureAuthenticatedPageWithCredential(
 	let lastStatus = await getSessionStatus(page);
 
 	await startLocalDevSession(page, credential);
-	if (await finalizeAuthenticatedSession(page, storageKey)) {
+	if (await finalizeAuthenticatedSession(page, storageKey, { persistStorage: false })) {
 		return;
 	}
 
 	await startWebLogin(page);
 
 	while (Date.now() - startedAt < config.loginTimeoutMs) {
-		if (await finalizeAuthenticatedSession(page, storageKey)) {
+		if (await finalizeAuthenticatedSession(page, storageKey, { persistStorage: false })) {
 			return;
 		}
 
@@ -531,7 +542,12 @@ export async function ensureAuthenticatedPageWithCredential(
 		}
 
 		lastStatus = await getSessionStatus(page);
-		if (lastStatus.authenticated && lastStatus.hasAccessToken && lastStatus.hasCsrfToken && await finalizeAuthenticatedSession(page, storageKey)) {
+		if (
+			lastStatus.authenticated
+			&& lastStatus.hasAccessToken
+			&& lastStatus.hasCsrfToken
+			&& await finalizeAuthenticatedSession(page, storageKey, { persistStorage: false })
+		) {
 			return;
 		}
 

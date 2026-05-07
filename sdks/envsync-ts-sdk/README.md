@@ -33,6 +33,33 @@ const apps = await sdk.applications.getApps();
 console.log(apps);
 ```
 
+## Multi-Org Bearer Token Usage
+
+If one identity belongs to multiple organizations, bearer-token clients can
+select the org for a single request by sending `X-EnvSync-Org-Id`.
+
+```ts
+import { EnvSyncAPISDK } from "@envsync-cloud/envsync-ts-sdk";
+
+const sdk = new EnvSyncAPISDK({
+	BASE: "https://api.envsync.cloud",
+	TOKEN: process.env.ENVSYNC_TOKEN,
+	HEADERS: async () => ({
+		"X-EnvSync-Org-Id": process.env.ENVSYNC_ORG_ID ?? "",
+	}),
+});
+
+const me = await sdk.authentication.whoami();
+
+console.log(me.org.id);
+```
+
+Notes:
+
+- `X-EnvSync-Org-Id` is honored only for bearer-token requests.
+- Cookie-session clients should continue using `POST /api/auth/switch-org`.
+- API-key requests ignore this header.
+
 ## Runtime Notes
 
 - The SDK uses the generated `fetch` client from `openapi-typescript-codegen`.

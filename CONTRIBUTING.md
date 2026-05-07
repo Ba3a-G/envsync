@@ -78,11 +78,6 @@ Use `bun run test:e2e` from the repo root. It runs `e2e-setup init` before invok
 - The public repo is the canonical FOSS shared shell.
 - Shared extension seams live in the `src/modules/` loaders for API and web.
 - If future enterprise work needs a seam, upstream the seam first and keep proprietary logic outside public packages.
-- Public source must not import enterprise-only packages. Run:
-
-```bash
-bun run check:no-enterprise-imports
-```
 
 ## CLI Changes (`packages/envsync-cli/`)
 

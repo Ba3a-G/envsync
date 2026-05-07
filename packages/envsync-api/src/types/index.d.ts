@@ -148,6 +148,17 @@ type CertificateAuditActions =
 
 type CliAuditActions = "cli_command_executed";
 
+type EnterpriseAuditActions =
+	| "enterprise_provider_connection_created"
+	| "enterprise_provider_connection_updated"
+	| "enterprise_org_secret_created"
+	| "enterprise_org_secret_updated"
+	| "enterprise_integration_binding_created"
+	| "enterprise_integration_binding_updated"
+	| "enterprise_env_mapping_created"
+	| "enterprise_env_mapping_updated"
+	| "enterprise_sync_run_created";
+
 type AuditActions =
 	| AppAuditActions
 	| AuditLogAuditActions
@@ -165,4 +176,5 @@ type AuditActions =
 	| ChangeRequestAuditActions
 	| GpgKeyAuditActions
 	| CertificateAuditActions
-	| CliAuditActions;
+	| CliAuditActions
+	| EnterpriseAuditActions;

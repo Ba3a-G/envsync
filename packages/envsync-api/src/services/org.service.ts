@@ -25,7 +25,7 @@ export class OrgService {
 			.values({
 				id: uuidv4(),
 				...data,
-				metadata: {},
+				metadata: data.metadata ?? {},
 				created_at: new Date(),
 				updated_at: new Date(),
 			})

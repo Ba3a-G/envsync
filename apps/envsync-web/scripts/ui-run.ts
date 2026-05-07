@@ -86,6 +86,20 @@ const tierWorkers: Record<TierKey, number> = {
 	nightly: 1,
 };
 
+function resolveWorkerCount(tierKey: TierKey) {
+	const rawOverride = process.env.ENVSYNC_UI_WORKERS;
+	if (!rawOverride) {
+		return tierWorkers[tierKey];
+	}
+
+	const parsed = Number.parseInt(rawOverride, 10);
+	if (!Number.isFinite(parsed) || parsed <= 0) {
+		throw new Error(`Invalid ENVSYNC_UI_WORKERS value "${rawOverride}"`);
+	}
+
+	return parsed;
+}
+
 async function runScript(scriptPath: string, args: string[] = []) {
 	const proc = Bun.spawnSync({
 		cmd: ["bun", "run", scriptPath, ...args],
@@ -107,8 +121,9 @@ if (process.env.ENVSYNC_UI_SKIP_LOGIN !== "1") {
 }
 
 const tierSpecs = tiers[tier as TierKey];
+const workerCount = resolveWorkerCount(tier as TierKey);
 const proc = Bun.spawnSync({
-	cmd: ["bunx", "playwright", "test", ...tierSpecs, "--workers", String(tierWorkers[tier as TierKey])],
+	cmd: ["bunx", "playwright", "test", ...tierSpecs, "--workers", String(workerCount)],
 	cwd: path.resolve(import.meta.dir, ".."),
 	stdout: "inherit",
 	stderr: "inherit",

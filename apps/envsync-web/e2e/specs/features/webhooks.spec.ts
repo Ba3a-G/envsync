@@ -20,14 +20,9 @@ test.describe("feature: webhooks", () => {
 		const createResponse = waitForTrackedResponse(page, {
 			method: "POST",
 			pathFragment: "/api/webhook",
-			expectedStatus: 201,
-		}).catch(() =>
-			waitForTrackedResponse(page, {
-				method: "POST",
-				pathFragment: "/api/webhook",
-				expectedStatus: 200,
-			}),
-		);
+			expectedStatus: [200, 201],
+			failOnUnexpectedStatus: true,
+		});
 		await dialog.getByRole("button", { name: /^Create Webhook$/i }).click();
 		await createResponse;
 

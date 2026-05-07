@@ -42,14 +42,14 @@ export const coreApiModules: ApiModule[] = [
 		createRouter: async () => (await import("@/routes/role.route")).default,
 	},
 	{
-		name: "onboarding",
-		mountPath: "/onboarding",
-		createRouter: async () => (await import("@/routes/onboarding.route")).default,
-	},
-	{
 		name: "org",
 		mountPath: "/org",
 		createRouter: async () => (await import("@/routes/org.route")).default,
+	},
+	{
+		name: "onboarding",
+		mountPath: "/onboarding",
+		createRouter: async () => (await import("@/routes/onboarding.route")).default,
 	},
 	{
 		name: "secret",
@@ -95,5 +95,10 @@ export const coreApiModules: ApiModule[] = [
 		name: "change_request",
 		mountPath: "/change_request",
 		createRouter: async () => (await import("@/routes/change_request.route")).default,
+	},
+	{
+		name: "system",
+		mountPath: "/system",
+		createRouter: async () => (await import("@/routes/system.route")).default,
 	},
 ];

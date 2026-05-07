@@ -2,19 +2,24 @@ import type { ZodRawShape } from "zod";
 
 import { coreApiModules } from "./core-modules";
 import { externalApiModules } from "./external-modules";
-import type { ApiModule, EnvSchemaExtension } from "./types";
+import { managementApiModules } from "./management-modules";
+import type { ApiModule, ApiSurface, EnvSchemaExtension } from "./types";
 
-const apiModules = [...coreApiModules, ...externalApiModules];
+const allApiModules = [...coreApiModules, ...managementApiModules, ...externalApiModules];
 
 function resolveEnvShape(extension: EnvSchemaExtension): ZodRawShape {
 	return typeof extension === "function" ? extension() : extension;
 }
 
-export function loadApiModules(): ApiModule[] {
-	return [...apiModules];
+export function loadApiModules(surface: ApiSurface = "core"): ApiModule[] {
+	if (surface === "management") {
+		return [...managementApiModules];
+	}
+
+	return [...coreApiModules, ...externalApiModules];
 }
 
-export function collectEnvSchemaExtensions(modules: ApiModule[] = loadApiModules()): ZodRawShape[] {
+export function collectEnvSchemaExtensions(modules: ApiModule[] = allApiModules): ZodRawShape[] {
 	return modules
 		.flatMap(module => {
 			if (!module.extendEnvSchema) {
@@ -34,7 +39,7 @@ export function collectMigrationDirectories(baseDirectories: string[] = [], modu
 	return [...new Set(directories.filter(Boolean))];
 }
 
-export async function registerApiBackgroundHandlers(modules: ApiModule[] = loadApiModules()) {
+export async function registerApiBackgroundHandlers(surface: ApiSurface = "core", modules: ApiModule[] = loadApiModules(surface)) {
 	for (const module of modules) {
 		await module.registerBackgroundHandlers?.();
 	}

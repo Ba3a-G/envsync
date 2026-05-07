@@ -7,6 +7,7 @@ const ACCESS_TOKEN_COOKIE = "access_token";
 const REFRESH_TOKEN_COOKIE = "refresh_token";
 const CSRF_COOKIE = "envsync_csrf";
 const LOGIN_STATE_COOKIE = "envsync_login_state";
+const ACTIVE_MEMBERSHIP_COOKIE = "envsync_active_membership";
 
 type SameSitePolicy = "Lax" | "Strict" | "None";
 
@@ -57,8 +58,16 @@ export function readCsrfToken(c: Context) {
 	return getCookie(c, CSRF_COOKIE);
 }
 
+export function readAccessToken(c: Context) {
+	return getCookie(c, ACCESS_TOKEN_COOKIE);
+}
+
 export function readLoginState(c: Context) {
 	return getCookie(c, LOGIN_STATE_COOKIE);
+}
+
+export function readActiveMembershipCookie(c: Context) {
+	return getCookie(c, ACTIVE_MEMBERSHIP_COOKIE);
 }
 
 export function readRefreshToken(c: Context) {
@@ -68,7 +77,13 @@ export function readRefreshToken(c: Context) {
 export function clearWebAuthCookies(c: Context) {
 	const csrfDomain = sharedCookieDomain();
 
-	for (const cookieName of [ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE, CSRF_COOKIE, LOGIN_STATE_COOKIE]) {
+	for (const cookieName of [
+		ACCESS_TOKEN_COOKIE,
+		REFRESH_TOKEN_COOKIE,
+		CSRF_COOKIE,
+		LOGIN_STATE_COOKIE,
+		ACTIVE_MEMBERSHIP_COOKIE,
+	]) {
 		deleteCookie(c, cookieName, { path: "/" });
 		deleteCookie(c, cookieName, { path: "/api" });
 		if (cookieName === CSRF_COOKIE && csrfDomain) {
@@ -81,6 +96,13 @@ export function setLoginStateCookie(c: Context, state: string) {
 	setCookie(c, LOGIN_STATE_COOKIE, state, {
 		...cookieBaseOptions("/api"),
 		maxAge: 10 * 60,
+	});
+}
+
+export function setActiveMembershipCookie(c: Context, userId: string, maxAge = 7 * 24 * 60 * 60) {
+	setCookie(c, ACTIVE_MEMBERSHIP_COOKIE, userId, {
+		...cookieBaseOptions("/api"),
+		maxAge,
 	});
 }
 

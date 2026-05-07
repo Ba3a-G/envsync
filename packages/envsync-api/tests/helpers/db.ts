@@ -10,6 +10,12 @@ import type { Database } from "@/types/db";
 
 // Tables in FK-safe truncation order (children first)
 const TABLES_IN_ORDER = [
+	"sync_audit_event",
+	"sync_run",
+	"env_type_mapping",
+	"integration_binding",
+	"org_secret",
+	"provider_connection",
 	"team_members",
 	"teams",
 	"env_store_pit_change_request",
@@ -28,6 +34,8 @@ const TABLES_IN_ORDER = [
 	"invite_user",
 	"invite_org",
 	"org_role",
+	"license_state",
+	"install_state",
 	"orgs",
 ] as const;
 
@@ -305,7 +313,14 @@ export async function seedEnvType(
 export async function cleanupDB(): Promise<void> {
 	const db = await DB.getInstance();
 	for (const table of TABLES_IN_ORDER) {
-		await sql`TRUNCATE TABLE ${sql.raw(table)} CASCADE`.execute(db);
+		try {
+			await sql`TRUNCATE TABLE ${sql.raw(table)} CASCADE`.execute(db);
+		} catch (error) {
+			if ((error as { code?: string }).code === "42P01") {
+				continue;
+			}
+			throw error;
+		}
 	}
 }
 

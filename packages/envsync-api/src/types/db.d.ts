@@ -250,6 +250,87 @@ export interface ChangeRequestSecretItem extends BaseTable {
 	operation: ColumnType<"CREATE" | "UPDATE" | "DELETE">;
 }
 
+export interface InstallState extends BaseTable {
+	edition: ColumnType<"oss" | "enterprise">;
+	first_bootstrap_completed_at?: ColumnType<Date | null>;
+	single_org_mode: ColumnType<boolean>;
+	management_enabled: ColumnType<boolean>;
+	observability_enabled: ColumnType<boolean>;
+	management_web_enabled: ColumnType<boolean>;
+	landing_enabled: ColumnType<boolean>;
+}
+
+export interface LicenseState extends BaseTable {
+	status: ColumnType<"unknown" | "active" | "inactive" | "expired" | "error" | "locked">;
+	signed_lease?: ColumnType<string | null>;
+	lease_expires_at?: ColumnType<Date | null>;
+	fingerprint?: ColumnType<string | null>;
+	last_verified_at?: ColumnType<Date | null>;
+	last_error_code?: ColumnType<string | null>;
+	last_error_message?: ColumnType<string | null>;
+}
+
+export interface ProviderConnection extends BaseTable {
+	org_id: ColumnType<string>;
+	provider_type: ColumnType<"github" | "gitlab" | "aws-ssm" | "vercel" | "google-secret-manager">;
+	name: ColumnType<string>;
+	status: ColumnType<"active" | "inactive" | "error">;
+	auth_config: ColumnType<Record<string, unknown>>;
+	metadata: ColumnType<Record<string, unknown>>;
+}
+
+export interface OrgSecret extends BaseTable {
+	org_id: ColumnType<string>;
+	key: ColumnType<string>;
+	value: ColumnType<string>;
+	description?: ColumnType<string | null>;
+	metadata: ColumnType<Record<string, unknown>>;
+}
+
+export interface IntegrationBinding extends BaseTable {
+	org_id: ColumnType<string>;
+	app_id: ColumnType<string>;
+	provider_connection_id: ColumnType<string>;
+	provider_type: ColumnType<"github" | "gitlab" | "aws-ssm" | "vercel" | "google-secret-manager">;
+	is_enabled: ColumnType<boolean>;
+	metadata: ColumnType<Record<string, unknown>>;
+}
+
+export interface EnvTypeMapping extends BaseTable {
+	org_id: ColumnType<string>;
+	app_id: ColumnType<string>;
+	env_type_id: ColumnType<string>;
+	integration_binding_id: ColumnType<string>;
+	target_identifier: ColumnType<string>;
+	branch_ref?: ColumnType<string | null>;
+	path_prefix?: ColumnType<string | null>;
+	metadata: ColumnType<Record<string, unknown>>;
+}
+
+export interface SyncRun extends BaseTable {
+	org_id: ColumnType<string>;
+	app_id?: ColumnType<string | null>;
+	provider_type: ColumnType<"github" | "gitlab" | "aws-ssm" | "vercel" | "google-secret-manager">;
+	status: ColumnType<"pending" | "running" | "succeeded" | "failed">;
+	actor_user_id?: ColumnType<string | null>;
+	started_at: ColumnType<Date>;
+	completed_at?: ColumnType<Date | null>;
+	error_message?: ColumnType<string | null>;
+	metadata: ColumnType<Record<string, unknown>>;
+}
+
+export interface SyncAuditEvent extends BaseTable {
+	org_id: ColumnType<string>;
+	sync_run_id?: ColumnType<string | null>;
+	app_id?: ColumnType<string | null>;
+	env_type_id?: ColumnType<string | null>;
+	provider_type: ColumnType<"github" | "gitlab" | "aws-ssm" | "vercel" | "google-secret-manager">;
+	action: ColumnType<string>;
+	result: ColumnType<"info" | "success" | "error">;
+	actor_user_id?: ColumnType<string | null>;
+	details: ColumnType<Record<string, unknown>>;
+}
+
 export interface BaseDatabase {
 	invite_org: InviteOrg;
 	invite_user: InviteUser;
@@ -273,6 +354,14 @@ export interface BaseDatabase {
 	change_request: ChangeRequest;
 	change_request_env_item: ChangeRequestEnvItem;
 	change_request_secret_item: ChangeRequestSecretItem;
+	install_state: InstallState;
+	license_state: LicenseState;
+	provider_connection: ProviderConnection;
+	org_secret: OrgSecret;
+	integration_binding: IntegrationBinding;
+	env_type_mapping: EnvTypeMapping;
+	sync_run: SyncRun;
+	sync_audit_event: SyncAuditEvent;
 }
 
 /**

@@ -3,7 +3,9 @@ import * as openid from "openid-client";
 
 import { config } from "@/utils/env";
 import { getKeycloakIssuer, getKeycloakPublicBaseUrl, getKeycloakRealm, keycloakPasswordLogin, keycloakTokenExchange } from "@/helpers/keycloak";
-import { clearWebAuthCookies, readLoginState, setLoginStateCookie, setWebAuthCookies } from "@/helpers/web-auth";
+import { clearWebAuthCookies, readLoginState, setActiveMembershipCookie, setLoginStateCookie, setWebAuthCookies } from "@/helpers/web-auth";
+import { UserService } from "@/services/user.service";
+import { verifyJWTToken } from "@/helpers/jwt";
 
 const keycloakDiscoveryUrl = () => `${getKeycloakIssuer()}/.well-known/openid-configuration`;
 const authorizeEndpoint = () => `${getKeycloakIssuer()}/protocol/openid-connect/auth`;
@@ -19,6 +21,21 @@ export class AccessController {
 		if (config.NODE_ENV === "production") {
 			throw new Error("Local dev session bootstrap is disabled in production");
 		}
+	}
+
+	private static async setActiveMembershipFromAccessToken(
+		c: Context,
+		accessToken: string,
+	) {
+		const decoded = await verifyJWTToken(accessToken);
+		const authServiceId = typeof decoded.sub === "string" ? decoded.sub : "";
+		if (!authServiceId) {
+			return;
+		}
+
+		const user = await UserService.resolveActiveMembershipByIdpId(authServiceId);
+		await UserService.touchLastLogin(user.id);
+		setActiveMembershipCookie(c, user.id);
 	}
 
 	public static readonly createCliLogin = async (c: Context) => {
@@ -82,6 +99,7 @@ export class AccessController {
 				clientSecret,
 			);
 			setWebAuthCookies(c, tokenData);
+			await this.setActiveMembershipFromAccessToken(c, tokenData.access_token);
 			return c.json({ message: "Local web session created." }, 200);
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
@@ -122,6 +140,7 @@ export class AccessController {
 		);
 
 		setWebAuthCookies(c, tokenData);
+		await this.setActiveMembershipFromAccessToken(c, tokenData.access_token);
 		return c.redirect(KEYCLOAK_WEB_CALLBACK_URL, 302);
 	};
 

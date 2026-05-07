@@ -5,10 +5,12 @@
  * Subcommands:
  *   init    — Start docker services, wait for health, create e2e database,
  *             write .env.e2e.test
+ *   reset   — Fully reset docker/data state, then run init
  *   cleanup — Drop e2e database, remove .env.e2e.test
  *
  * Usage:
  *   bun run scripts/e2e-setup.ts init
+ *   bun run scripts/e2e-setup.ts reset
  *   bun run scripts/e2e-setup.ts cleanup
  */
 
@@ -27,6 +29,7 @@ import {
 	waitForMiniKMS,
 } from "./lib/services";
 import { bootstrapKeycloakClient } from "../packages/envsync-api/tests/e2e/helpers/keycloak-bootstrap";
+import { authorizationModelDef } from "../packages/envsync-api/src/libs/openfga/model";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
@@ -149,7 +152,7 @@ function ensureMiniKmsSchema(): void {
 		{ stdio: "pipe", encoding: "utf8" },
 	);
 
-	if (check.status === 0 && check.stdout.trim() === "t") {
+	if (check.status === 0 && (check.stdout as string).trim() === "t") {
 		console.log("  miniKMS schema already present.");
 		return;
 	}
@@ -164,6 +167,37 @@ function ensureMiniKmsSchema(): void {
 	}
 
 	dockerComposeRestart("minikms");
+}
+
+async function initOpenFGA(apiUrl: string): Promise<{ storeId: string; modelId: string }> {
+	console.log("\nBootstrapping OpenFGA store for E2E...");
+
+	const storeRes = await fetch(`${apiUrl}/stores`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ name: `envsync-e2e-${Date.now()}` }),
+	});
+	if (!storeRes.ok) {
+		throw new Error(`OpenFGA store create failed: ${storeRes.status} ${await storeRes.text()}`);
+	}
+	const store = (await storeRes.json()) as { id: string };
+
+	const modelRes = await fetch(`${apiUrl}/stores/${store.id}/authorization-models`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify(authorizationModelDef),
+	});
+	if (!modelRes.ok) {
+		throw new Error(
+			`OpenFGA model write failed: ${modelRes.status} ${await modelRes.text()}`,
+		);
+	}
+	const model = (await modelRes.json()) as { authorization_model_id: string };
+
+	console.log(`  Store: ${store.id}`);
+	console.log(`  Model: ${model.authorization_model_id}`);
+
+	return { storeId: store.id, modelId: model.authorization_model_id };
 }
 
 // ── Database helpers ────────────────────────────────────────────────
@@ -266,6 +300,7 @@ async function init(): Promise<void> {
 	const openfgaUrl = (
 		process.env.OPENFGA_API_URL ?? `http://localhost:${process.env.OPENFGA_HTTP_PORT ?? "8090"}`
 	).replace(/\/$/, "");
+	const openfga = await initOpenFGA(openfgaUrl);
 
 	// Write .env.e2e.test
 	const e2eEnv: Record<string, string> = {
@@ -273,6 +308,8 @@ async function init(): Promise<void> {
 		MINIKMS_GRPC_ADDR: "localhost:50051",
 		MINIKMS_TLS_ENABLED: "false",
 		OPENFGA_API_URL: openfgaUrl,
+		OPENFGA_STORE_ID: openfga.storeId,
+		OPENFGA_MODEL_ID: openfga.modelId,
 		KEYCLOAK_URL: keycloakUrl,
 		KEYCLOAK_REALM: keycloakRealm,
 		KEYCLOAK_ADMIN_USER: keycloakAdminUser,
@@ -325,11 +362,34 @@ async function cleanup(): Promise<void> {
 	console.log("\nE2E cleanup complete!");
 }
 
+// ── Reset ───────────────────────────────────────────────────────────
+
+function dockerComposeDown(): void {
+	console.log("\nStopping Docker Compose services for fresh E2E reset...");
+	spawnSync(
+		"docker",
+		["compose", "down", "-v", "--remove-orphans"],
+		{ cwd: rootDir, stdio: "inherit", env: process.env },
+	);
+}
+
+async function reset(): Promise<void> {
+	console.log("E2E Environment Reset\n");
+	dockerComposeDown();
+	await cleanup();
+	await init();
+}
+
 // ── CLI ─────────────────────────────────────────────────────────────
 
 const cmd = process.argv[2];
 if (cmd === "init") {
 	init().catch(err => {
+		console.error(err);
+		process.exit(1);
+	});
+} else if (cmd === "reset") {
+	reset().catch(err => {
 		console.error(err);
 		process.exit(1);
 	});
@@ -339,6 +399,6 @@ if (cmd === "init") {
 		process.exit(1);
 	});
 } else {
-	console.log("Usage: bun run scripts/e2e-setup.ts <init|cleanup>");
+	console.log("Usage: bun run scripts/e2e-setup.ts <init|reset|cleanup>");
 	process.exit(cmd ? 1 : 0);
 }

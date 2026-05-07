@@ -8,12 +8,14 @@ import { ensureE2EEnv } from "./bootstrap-env";
 
 ensureE2EEnv();
 
-export async function startTestServer(): Promise<{
+export async function startTestServer(surface: "core" | "management" = "core"): Promise<{
 	url: string;
 	port: number;
 	stop: () => void;
 }> {
-	const { app } = await import("@/app");
+	const app = surface === "management"
+		? (await import("@/app/management")).managementApp
+		: (await import("@/app")).app;
 	const server = Bun.serve({
 		port: 0,
 		fetch: app.fetch.bind(app),

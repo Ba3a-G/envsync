@@ -17,14 +17,9 @@ test.describe("feature: gpg keys", () => {
 		const createResponse = waitForTrackedResponse(page, {
 			method: "PUT",
 			pathFragment: "/api/gpg_key/generate",
-			expectedStatus: 201,
-		}).catch(() =>
-			waitForTrackedResponse(page, {
-				method: "PUT",
-				pathFragment: "/api/gpg_key/generate",
-				expectedStatus: 200,
-			}),
-		);
+			expectedStatus: [200, 201],
+			failOnUnexpectedStatus: true,
+		});
 		await dialog.getByRole("button", { name: /^Generate$/i }).click();
 		await createResponse;
 

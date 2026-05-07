@@ -1,7 +1,12 @@
 import type { Context, MiddlewareHandler, Next } from "hono";
 import { getCookie } from "hono/cookie";
 
-import { clearWebAuthCookies, setWebAuthCookies } from "@/helpers/web-auth";
+import {
+	clearWebAuthCookies,
+	readActiveMembershipCookie,
+	setActiveMembershipCookie,
+	setWebAuthCookies,
+} from "@/helpers/web-auth";
 import { AppError } from "@/libs/errors";
 import { config } from "@/utils/env";
 import { getActiveSpan } from "@/libs/telemetry";
@@ -31,7 +36,10 @@ export const authMiddleware = (): MiddlewareHandler => {
 		let token = ctx.req.header("Authorization") ?? getCookie(ctx, "access_token");
 		const refreshToken = getCookie(ctx, "refresh_token");
 		const apiKey = ctx.req.header("X-API-Key");
-		const usesCookieSession = !ctx.req.header("Authorization") && Boolean(token);
+		const authorizationHeader = ctx.req.header("Authorization");
+		const usesCookieSession = !authorizationHeader && Boolean(token);
+		const usesBearerToken = Boolean(authorizationHeader && token);
+		const requestedOrgHeader = ctx.req.header("X-EnvSync-Org-Id");
 
 		if (!token && !apiKey) {
 			return ctx.json({ error: "No token provided", code: "AUTH_MISSING" }, 401);
@@ -79,7 +87,33 @@ export const authMiddleware = (): MiddlewareHandler => {
 				});
 			}
 
-			const user = await UserService.getUser(access_info.user_id);
+			let user = await UserService.getUser(access_info.user_id);
+			if (usesCookieSession && access_info.auth_service_id) {
+				const requestedMembershipId = readActiveMembershipCookie(ctx);
+				user = await UserService.resolveActiveMembershipByIdpId(
+					access_info.auth_service_id,
+					requestedMembershipId,
+				);
+
+				if (requestedMembershipId && requestedMembershipId !== user.id) {
+					await UserService.touchLastLogin(user.id);
+					setActiveMembershipCookie(ctx, user.id);
+				}
+			} else if (usesBearerToken && access_info.auth_service_id && requestedOrgHeader !== undefined) {
+				const requestedOrgId = requestedOrgHeader.trim();
+				if (!requestedOrgId) {
+					throw new AppError(
+						"X-EnvSync-Org-Id must not be blank.",
+						400,
+						"AUTH_ORG_HEADER_INVALID",
+					);
+				}
+
+				user = await UserService.resolveMembershipByOrgId(
+					access_info.auth_service_id,
+					requestedOrgId,
+				);
+			}
 
 			const [org, role] = await Promise.all([
 				OrgService.getOrg(user.org_id),
@@ -87,7 +121,7 @@ export const authMiddleware = (): MiddlewareHandler => {
 			]);
 
 			ctx.set("user_id", user.id);
-			ctx.set("keycloak_user_id", access_info.user_id); // IdP user id; key name kept for compatibility
+			ctx.set("keycloak_user_id", access_info.auth_service_id ?? access_info.user_id);
 			ctx.set("org_id", user.org_id);
 			ctx.set("role_id", user.role_id);
 			ctx.set("org_name", org.name);
@@ -107,7 +141,7 @@ export const authMiddleware = (): MiddlewareHandler => {
 					"envsync.org_id": user.org_id,
 					"envsync.org_name": org.name,
 					"envsync.role_name": role.name,
-					"enduser.id": access_info.user_id,
+					"enduser.id": access_info.auth_service_id ?? access_info.user_id,
 				});
 			}
 

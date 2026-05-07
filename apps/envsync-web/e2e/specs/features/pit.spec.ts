@@ -46,7 +46,9 @@ test.describe("feature: point in time", () => {
 		await previewTimeRangeDiff(page);
 		await rollbackCurrentPit(page);
 
-		await page.goto(`/applications/${project.appId}`, { waitUntil: "domcontentloaded" });
+		await page.goto(`/applications/${project.appId}?selected=${encodeURIComponent(envTypeId)}`, {
+			waitUntil: "domcontentloaded",
+		});
 		await expect(page.locator("tr").filter({ hasText: variableKey }).first()).toBeVisible();
 	});
 });

@@ -1,19 +1,17 @@
 import { type Context } from "hono";
-import { AppError } from "@/libs/errors";
 
-import { OrgService } from "@/services/org.service";
-import { RoleService } from "@/services/role.service";
-import { slugifyName } from "@/utils/random";
-import { UserService } from "@/services/user.service";
+import { AppError } from "@/libs/errors";
 import { InviteService } from "@/services/invite.service";
 import { onOrgOnboardingInvite, onUserOnboardingInvite } from "@/libs/mail";
 import { AuditLogService } from "@/services/audit_log.service";
 import { isPasswordStrong } from "@/utils/password";
 import { config } from "@/utils/env";
-import { runSaga } from "@/helpers/saga";
-import { DB } from "@/libs/db";
-import { CertificateService } from "@/services/certificate.service";
 import { CertificateRoleMapper } from "@/services/certificate-role.mapper";
+import { CertificateService } from "@/services/certificate.service";
+import { OrgProvisioningService } from "@/services/org-provisioning.service";
+import { OrgService } from "@/services/org.service";
+import { RoleService } from "@/services/role.service";
+import { UserService } from "@/services/user.service";
 
 export class OnboardingController {
 	public static readonly createOrgInvite = async (c: Context) => {
@@ -62,148 +60,25 @@ export class OnboardingController {
 			return c.json({ error: "Invite already accepted." }, 400);
 		}
 
-		const sagaCtx = { org_id: "", admin_role_id: "", user_id: "" };
-		let generatedBundle: {
-			root_ca_pem: string;
-			member_cert_pem: string;
-			member_key_pem: string;
-			member_certificate_id: string;
-			member_serial_hex: string;
-			is_system_generated: true;
-		} | undefined;
-
-		try {
-			await runSaga("acceptOrgInvite", sagaCtx, [
-				{
-					name: "create-org",
-					execute: async (c) => {
-						c.org_id = await OrgService.createOrg({
-							name,
-							slug: slugifyName(name),
-							size,
-							website,
-						});
-					},
-					compensate: async (c) => {
-						const db = await DB.getInstance();
-						await db.deleteFrom("orgs").where("id", "=", c.org_id).execute();
-					},
-				},
-				{
-					name: "create-default-roles",
-					execute: async (c) => {
-						const roles = await RoleService.createDefaultRoles(c.org_id);
-						c.admin_role_id = roles.find(role => role.name === "Org Admin")?.id || "";
-					},
-					compensate: async (c) => {
-						const db = await DB.getInstance();
-						await db.deleteFrom("org_role").where("org_id", "=", c.org_id).execute();
-					},
-				},
-				{
-					name: "create-user",
-					execute: async (c) => {
-						const user = await UserService.createUser({
-							email: invite_data.email,
-							full_name,
-							password,
-							org_id: c.org_id,
-							role_id: c.admin_role_id,
-						});
-						c.user_id = user.id;
-					},
-					compensate: async (c) => {
-						await UserService.deleteUser(c.user_id);
-					},
-				},
-				{
-					name: "init-system-ca",
-					execute: async (c) => {
-						await CertificateService.initOrgCA(
-							c.org_id,
-							name,
-							c.user_id,
-							"System-generated organization CA",
-							{ issued_source: "org_invite_accept" },
-							{ is_system_generated: true },
-						);
-					},
-				},
-				{
-					name: "issue-system-member-cert",
-					execute: async (c) => {
-						const role = await RoleService.getRole(c.admin_role_id);
-						const cert = await CertificateService.issueMemberCert({
-							org_id: c.org_id,
-							target_user_id: c.user_id,
-							target_email: invite_data.email,
-							issued_by_user_id: c.user_id,
-							envsync_pki_role: CertificateRoleMapper.toPkiRole(role),
-							is_system_generated: true,
-							persist_private_key: true,
-							description: "System-generated admin certificate",
-							metadata: {
-								role_id: role.id,
-								role_name: role.name,
-								issued_source: "org_invite_accept",
-							},
-						});
-						const rootCA = await CertificateService.getRootCA();
-						generatedBundle = {
-							root_ca_pem: rootCA.cert_pem,
-							member_cert_pem: cert.cert_pem ?? "",
-							member_key_pem: cert.key_pem,
-							member_certificate_id: cert.id,
-							member_serial_hex: cert.serial_hex,
-							is_system_generated: true,
-						};
-					},
-				},
-				{
-					name: "accept-invite",
-					execute: async () => {
-						await InviteService.updateOrgInvite(invite_data.id, {
-							is_accepted: true,
-						});
-					},
-					compensate: async () => {
-						await InviteService.updateOrgInvite(invite_data.id, {
-							is_accepted: false,
-						});
-					},
-				},
-				{
-					name: "audit-log",
-					execute: async (c) => {
-						await AuditLogService.notifyAuditSystem({
-							action: "org_created",
-							org_id: c.org_id,
-							user_id: c.user_id,
-							message: "Organization created.",
-							details: {
-								name,
-							},
-						});
-					},
-				},
-			]);
-		} catch (error) {
-			if (
-				error instanceof AppError
-				&& (error.code === "CONFLICT" || error.code === "NOT_FOUND")
-			) {
-				throw new AppError("Organization already onboarded for this email.", 409, "ORG_ALREADY_ONBOARDED");
-			}
-			if ((error as { code?: string }).code === "23505") {
-				throw new AppError("Organization already onboarded for this email.", 409, "ORG_ALREADY_ONBOARDED");
-			}
-			throw error;
-		}
+		const provisioned = await OrgProvisioningService.provisionOrganization({
+			org: {
+				name,
+				size,
+				website,
+			},
+			adminUser: {
+				email: invite_data.email,
+				full_name,
+				password,
+			},
+			source: "org_invite_accept",
+			inviteId: invite_data.id,
+		});
 
 		return c.json(
 			{
 				message: "Organization created successfully.",
-				generated_certificate_bundle: generatedBundle,
+				generated_certificate_bundle: provisioned.generated_certificate_bundle,
 			},
 			200,
 		);

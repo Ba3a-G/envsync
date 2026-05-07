@@ -1,13 +1,19 @@
 import { createContext, useContext } from "react";
-import type { WhoAmIResponse } from "@envsync-cloud/envsync-ts-sdk";
+import type { AuthMembershipSummary, AuthSession } from "@/types/auth-session";
 
 export interface IAuthContext {
-  user: WhoAmIResponse | null;
+  user: AuthSession | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   token: string | null;
   allowedScopes: string[];
   authError: string | null;
+  memberships: AuthMembershipSummary[];
+  activeMembershipUserId: string | null;
+  isSwitchingOrg: boolean;
+  isCreatingWorkspace: boolean;
+  switchOrg: (orgId: string) => Promise<void>;
+  createWorkspace: (name: string) => Promise<void>;
 }
 
 const FALLBACK_AUTH_CONTEXT: IAuthContext = {
@@ -17,6 +23,12 @@ const FALLBACK_AUTH_CONTEXT: IAuthContext = {
   token: null,
   allowedScopes: [],
   authError: "Auth context unavailable",
+  memberships: [],
+  activeMembershipUserId: null,
+  isSwitchingOrg: false,
+  isCreatingWorkspace: false,
+  switchOrg: async () => undefined,
+  createWorkspace: async () => undefined,
 };
 
 let hasWarnedMissingProvider = false;

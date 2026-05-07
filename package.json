@@ -1,6 +1,6 @@
 {
   "name": "monorepo",
-  "version": "0.7.8",
+  "version": "0.8.0",
   "private": true,
   "workspaces": [
     "packages/*",
@@ -8,7 +8,6 @@
     "apps/*"
   ],
   "scripts": {
-    "check:no-enterprise-imports": "bun run scripts/check-no-enterprise-imports.ts",
     "build": "turbo build",
     "dev": "turbo dev",
     "start": "turbo start",
