@@ -31,7 +31,7 @@ describe("deploy package artifact", () => {
 		const [{ files }] = runPackDryRun(packageDir);
 		const filePaths = files.map(file => file.path);
 
-		expect(pkg.bin["envsync-deploy"]).toBe("./dist/index.js");
+		expect(pkg.bin["envsync-deploy"]).toBe("dist/index.js");
 		expect(filePaths).toContain("dist/index.js");
 		expect(filePaths).toContain("README.md");
 		expect(filePaths.some(file => file.startsWith("src/"))).toBe(false);
