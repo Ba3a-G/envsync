@@ -3,7 +3,7 @@
   "version": "0.8.0",
   "type": "module",
   "bin": {
-    "envsync-deploy": "./dist/index.js"
+    "envsync-deploy": "dist/index.js"
   },
   "files": [
     "dist",
@@ -15,6 +15,26 @@
     "check:pack": "npm pack --dry-run",
     "test": "bun run build && bun test"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EnvSync-Cloud/envsync.git",
+    "directory": "packages/deploy"
+  },
+  "homepage": "https://github.com/EnvSync-Cloud/envsync/tree/main/packages/deploy#readme",
+  "bugs": {
+    "url": "https://github.com/EnvSync-Cloud/envsync/issues"
+  },
+  "author": "EnvSync Cloud",
+  "license": "MIT",
+  "keywords": [
+    "envsync",
+    "deploy",
+    "self-hosted",
+    "docker-swarm",
+    "cli",
+    "secrets",
+    "oss"
+  ],
   "dependencies": {
     "@envsync-cloud/deploy-core": "workspace:*",
     "chalk": "^5.6.2"
