@@ -1,4 +1,8 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "tsup";
+
+const dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
 	entry: ["src/index.ts"],
@@ -12,4 +16,10 @@ export default defineConfig({
 	clean: true,
 	sourcemap: false,
 	dts: false,
+	esbuildOptions(options) {
+		options.alias = {
+			...options.alias,
+			"@envsync-cloud/deploy-core": path.resolve(dirname, "../deploy-core/src/index.ts"),
+		};
+	},
 });
