@@ -5,7 +5,7 @@ WORKDIR /app
 COPY package.json bun.lock ./
 COPY packages ./packages
 
-RUN bun install --frozen-lockfile
+RUN bun install
 RUN bun run --filter envsync-management-api build
 
 FROM oven/bun:1.3.9-alpine

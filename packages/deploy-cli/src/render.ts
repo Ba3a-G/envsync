@@ -1,4 +1,5 @@
 export interface DeployConfig {
+	edition?: "oss" | "enterprise";
 	source: {
 		repo_url: string;
 		ref: string;
@@ -174,6 +175,10 @@ function slotHasApiDeployment(state: ApiSlotState) {
 	return state.api_image.length > 0;
 }
 
+function isOssConfig(config: DeployConfig) {
+	return config.edition === "oss";
+}
+
 function createSteadyApiDeploymentState(config: DeployConfig, generated: DeployGeneratedState) {
 	const deployment = generated.deployment;
 	const activeSlot = deployment.active_slot;
@@ -199,8 +204,14 @@ function createSteadyApiDeploymentState(config: DeployConfig, generated: DeployG
 export function buildRuntimeEnv(config: DeployConfig, generated: DeployGeneratedState): RuntimeEnv {
 	const hosts = domainMap(config.domain.root_domain);
 	const bucketName = "envsync-bucket";
+	const oss = isOssConfig(config);
 	return {
 		NODE_ENV: "production",
+		ENVSYNC_EDITION: oss ? "oss" : "enterprise",
+		ENVSYNC_MANAGEMENT_ENABLED: oss ? "false" : "true",
+		ENVSYNC_LANDING_ENABLED: oss ? "false" : "true",
+		ENVSYNC_SINGLE_ORG_MODE: oss ? "true" : "false",
+		ENVSYNC_LICENSE_ENFORCEMENT: oss ? "false" : "true",
 		DB_AUTO_MIGRATE: "false",
 		PORT: `${config.services.api_port}`,
 		DATABASE_HOST: "postgres",
@@ -238,7 +249,7 @@ export function buildRuntimeEnv(config: DeployConfig, generated: DeployGenerated
 		KEYCLOAK_WEB_REDIRECT_URI: publicHttpsUrl(config, hosts.api, "/api/access/web/callback"),
 		KEYCLOAK_WEB_CALLBACK_URL: publicHttpsUrl(config, hosts.app, "/auth/callback"),
 		KEYCLOAK_API_REDIRECT_URI: publicHttpsUrl(config, hosts.api, "/api/access/api/callback"),
-		LANDING_PAGE_URL: publicHttpsUrl(config, hosts.landing),
+		LANDING_PAGE_URL: oss ? "" : publicHttpsUrl(config, hosts.landing),
 		DASHBOARD_URL: publicHttpsUrl(config, hosts.app),
 		OPENFGA_API_URL: "http://openfga:8090",
 		OPENFGA_STORE_ID: generated.openfga.store_id,
@@ -341,8 +352,9 @@ export function renderTraefikDynamicConfig(config: DeployConfig, generated: Depl
 	const hosts = domainMap(config.domain.root_domain);
 	const activeSlot = generated.deployment.active_slot;
 	const apiServiceName = generated.deployment.maintenance_mode ? "envsync-api-maintenance" : "envsync-api";
+	const landingEnabled = !isOssConfig(config);
 	const otelAllowedOrigins = [
-		...publicHttpsOriginVariants(config, hosts.landing),
+		...(landingEnabled ? publicHttpsOriginVariants(config, hosts.landing) : []),
 		...publicHttpsOriginVariants(config, hosts.app),
 	];
 	return [
@@ -402,10 +414,12 @@ export function renderTraefikDynamicConfig(config: DeployConfig, generated: Depl
 		"      loadBalancer:",
 		"        servers:",
 		"          - url: http://api_maintenance:8080",
-		"    landing:",
-		"      loadBalancer:",
-		"        servers:",
-		"          - url: http://landing_nginx:8080",
+		...(landingEnabled ? [
+			"    landing:",
+			"      loadBalancer:",
+			"        servers:",
+			"          - url: http://landing_nginx:8080",
+		] : []),
 		"    web:",
 		"      loadBalancer:",
 		"        servers:",
@@ -419,12 +433,14 @@ export function renderTraefikDynamicConfig(config: DeployConfig, generated: Depl
 		"        servers:",
 		`          - url: http://clickstack:${config.services.clickstack_otlp_http_port}`,
 		"  routers:",
-		"    landing-router:",
-		`      rule: Host(\`${hosts.landing}\`)`,
-		"      service: landing",
-		"      entryPoints: [websecure]",
-		"      tls:",
-		"        certResolver: letsencrypt",
+		...(landingEnabled ? [
+			"    landing-router:",
+			`      rule: Host(\`${hosts.landing}\`)`,
+			"      service: landing",
+			"      entryPoints: [websecure]",
+			"      tls:",
+			"        certResolver: letsencrypt",
+		] : []),
 		"    web-router:",
 		`      rule: Host(\`${hosts.app}\`)`,
 		"      service: web",
@@ -578,6 +594,7 @@ export function renderStack(
 	const hosts = domainMap(config.domain.root_domain);
 	const includeRuntimeInfra = mode !== "base";
 	const includeAppServices = mode === "full";
+	const landingEnabled = !isOssConfig(config);
 	const deployment = createSteadyApiDeploymentState(config, generated);
 	const stackName = config.services.stack_name;
 	const s3RouterName = `${stackName}-s3-router`;
@@ -798,6 +815,7 @@ ${includeAppServices ? `
         target: /etc/nginx/conf.d/default.conf
     networks: [envsync]
 
+${landingEnabled ? `
   landing_nginx:
     image: nginx:1.27-alpine
     configs:
@@ -805,7 +823,7 @@ ${includeAppServices ? `
         target: /etc/nginx/conf.d/default.conf
     volumes:
       - ${paths.releasesRoot}/landing/current:/srv/landing:ro
-    networks: [envsync]
+    networks: [envsync]` : ""}
 
   web_nginx:
     image: nginx:1.27-alpine
@@ -863,8 +881,9 @@ configs:
     file: ${paths.clickstackClickhouseConf}
   otel_agent_conf:
     file: ${paths.otelAgentConf}
-  nginx_landing_conf:
+${landingEnabled ? `  nginx_landing_conf:
     file: ${paths.nginxLandingConf}
+` : ""}
   nginx_web_conf:
     file: ${paths.nginxWebConf}
   nginx_api_maintenance_conf:

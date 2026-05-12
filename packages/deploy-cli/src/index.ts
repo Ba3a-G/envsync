@@ -10,6 +10,7 @@ import * as renderHelpers from "./render";
 import * as staticBundleHelpers from "./static-bundle";
 
 interface DeployConfig {
+	edition?: "oss" | "enterprise";
 	source: {
 		repo_url: string;
 		ref: string;
@@ -676,6 +677,10 @@ function defaultSourceConfig(version: string) {
 	};
 }
 
+function isOssConfig(config: DeployConfig) {
+	return config.edition === "oss";
+}
+
 function isManagedVersionedImage(
 	image: string | undefined,
 	key: keyof Pick<DeployConfig["images"], "api" | "keycloak" | "web" | "landing">,
@@ -718,6 +723,7 @@ function normalizeConfig(raw: Partial<DeployConfig>): DeployConfig {
 	const acmeEmail = requireDefined(raw.domain?.acme_email, "domain.acme_email");
 	return {
 		...rest,
+		edition: raw.edition ?? "enterprise",
 		source: {
 			repo_url: raw.source?.repo_url ?? DEFAULT_SOURCE_REPO_URL,
 			ref: `v${version}`,
@@ -1815,7 +1821,9 @@ function writeDeployArtifacts(config: DeployConfig, generated: DeployGeneratedSt
 	writeFileMaybe(BOOTSTRAP_STACK_FILE, renderHelpers.renderStack(config, runtimeEnv, generated, "bootstrap", DEPLOY_RENDER_PATHS));
 	writeFileMaybe(STACK_FILE, renderHelpers.renderStack(config, runtimeEnv, generated, "full", DEPLOY_RENDER_PATHS));
 	writeFileMaybe(NGINX_WEB_CONF, renderHelpers.renderNginxConf("web"));
-	writeFileMaybe(NGINX_LANDING_CONF, renderHelpers.renderNginxConf("landing"));
+	if (!isOssConfig(config)) {
+		writeFileMaybe(NGINX_LANDING_CONF, renderHelpers.renderNginxConf("landing"));
+	}
 	writeFileMaybe(NGINX_API_MAINTENANCE_CONF, renderHelpers.renderApiMaintenanceConf());
 	writeFileMaybe(OTEL_AGENT_CONF, renderHelpers.renderOtelAgentConfig(config));
 	writeFileMaybe(CLICKSTACK_CLICKHOUSE_CONF, renderHelpers.renderClickstackClickHouseConfig());
@@ -2032,7 +2040,9 @@ function restoreApiDbUpgradeBackup(config: DeployConfig, backupPath: string) {
 function activateFrontendReleaseForState(config: DeployConfig, state: DeployGeneratedState, fallbackVersion = config.release.version) {
 	const version = state.deployment.slots[state.deployment.active_slot].release_version || fallbackVersion;
 	activateFrontendRelease("web", version, renderHelpers.renderFrontendRuntimeConfig(config, state));
-	activateFrontendRelease("landing", version, renderHelpers.renderFrontendRuntimeConfig(config, state));
+	if (!isOssConfig(config)) {
+		activateFrontendRelease("landing", version, renderHelpers.renderFrontendRuntimeConfig(config, state));
+	}
 }
 
 function buildKeycloakImage(imageTag: string, repoRoot = REPO_ROOT) {
@@ -2894,6 +2904,7 @@ function printHealthSection(title: string) {
 }
 
 function printHealthSummary(checks: {
+	edition: "oss" | "enterprise";
 	bootstrap: {
 		completed: boolean;
 		completed_at: string | null;
@@ -3038,7 +3049,7 @@ function printHealthSummary(checks: {
 		printHealthLine("Recommended", chalk.cyan("envsync-deploy bootstrap"));
 		return;
 	}
-	if (checks.deploy.api !== "healthy" || checks.deploy.web !== "healthy" || checks.deploy.landing !== "healthy") {
+	if (checks.deploy.api !== "healthy" || checks.deploy.web !== "healthy" || (checks.edition !== "oss" && checks.deploy.landing !== "healthy")) {
 		printHealthLine("Recommended", chalk.cyan("envsync-deploy deploy"));
 		return;
 	}
@@ -3259,7 +3270,7 @@ async function cmdDeploy() {
 			serviceHealth(services, `${config.services.stack_name}_openfga`) === "missing" ||
 			serviceHealth(services, `${config.services.stack_name}_minikms`) === "missing"
 		) {
-			throw new Error("Bootstrap has not completed successfully. Run 'envsync-deploy bootstrap' again.");
+			logWarn("Bootstrap services are not running. Recreating from persisted bootstrap state.");
 		}
 	} else {
 		logDryRun("Skipping runtime bootstrap service validation");
@@ -3268,10 +3279,14 @@ async function cmdDeploy() {
 	buildKeycloakImage(config.images.keycloak);
 	if (!currentOptions.dryRun) {
 		ensureDir(currentReleaseDir("web"));
-		ensureDir(currentReleaseDir("landing"));
+		if (!isOssConfig(config)) {
+			ensureDir(currentReleaseDir("landing"));
+		}
 	}
 	stageFrontendRelease("web", config.images.web, config.release.version);
-	stageFrontendRelease("landing", config.images.landing, config.release.version);
+	if (!isOssConfig(config)) {
+		stageFrontendRelease("landing", config.images.landing, config.release.version);
+	}
 
 	const originalState = normalizeGeneratedState(generated);
 	let currentState = originalState;
@@ -3370,7 +3385,7 @@ async function cmdDeploy() {
 		{ label: "openfga", getHealth: services => serviceHealth(services, `${config.services.stack_name}_openfga`) },
 		{ label: "minikms", getHealth: services => serviceHealth(services, `${config.services.stack_name}_minikms`) },
 		{ label: "clickstack", getHealth: services => serviceHealth(services, `${config.services.stack_name}_clickstack`) },
-		{ label: "landing", getHealth: services => serviceHealth(services, `${config.services.stack_name}_landing_nginx`) },
+		...(isOssConfig(config) ? [] : [{ label: "landing", getHealth: services => serviceHealth(services, `${config.services.stack_name}_landing_nginx`) }]),
 		{ label: "web", getHealth: services => serviceHealth(services, `${config.services.stack_name}_web_nginx`) },
 		{ label: "api", getHealth: services => apiHealth(services, config.services.stack_name) },
 	]);
@@ -3493,6 +3508,7 @@ async function cmdHealth(asJson: boolean) {
 		minikms: serviceHealth(services, `${stackName}_minikms`),
 	};
 	const checks = {
+		edition: config.edition ?? "enterprise",
 		bootstrap: {
 			completed: hasCompleteBootstrapState(generated) && generated.bootstrap.completed_at.length > 0,
 			completed_at: generated.bootstrap.completed_at || null,
@@ -3568,7 +3584,7 @@ async function cmdHealth(asJson: boolean) {
 			},
 		},
 		public: {
-			landing: publicHttpsUrl(config, hosts.landing),
+			...(isOssConfig(config) ? {} : { landing: publicHttpsUrl(config, hosts.landing) }),
 			app: publicHttpsUrl(config, hosts.app),
 			api: publicHttpsUrl(config, hosts.api, "/health"),
 			auth: publicHttpsUrl(config, hosts.auth, `/realms/${config.auth.keycloak_realm}/.well-known/openid-configuration`),
