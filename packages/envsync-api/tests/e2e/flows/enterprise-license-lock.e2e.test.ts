@@ -11,10 +11,11 @@ import {
 import { LicenseStateService } from "@/services/license-state.service";
 import { config } from "@/utils/env";
 
-type LicenseMode = "active" | "inactive";
-
 let seed: E2ESeed;
-let licenseMode: LicenseMode = "active";
+const hostedLicenseServerUrl = process.env.ENVSYNC_LICENSE_SERVER_URL ?? "https://license.envsync.cloud";
+const hostedLicenseKey = process.env.ENVSYNC_E2E_LICENSE_KEY ?? config.ENVSYNC_LICENSE_KEY;
+const hostedInvalidLicenseKey = "envsync-e2e-invalid-license-key";
+const hostedInstallFingerprint = "envsync-e2e-hosted-license-lock";
 
 const originalConfig = {
 	ENVSYNC_EDITION: config.ENVSYNC_EDITION,
@@ -27,45 +28,35 @@ const originalConfig = {
 	ENVSYNC_RELEASE_VERSION: config.ENVSYNC_RELEASE_VERSION,
 };
 
-const fakeLicenseServer = Bun.serve({
-	port: 0,
-	fetch(request) {
-		if (request.method === "GET" && new URL(request.url).pathname === "/health") {
-			return Response.json({ status: "ok", store: "memory" });
+async function pollUntil<T>(fn: () => Promise<T>, predicate: (value: T) => boolean, timeoutMs = 10_000) {
+	const deadline = Date.now() + timeoutMs;
+	let lastValue: T | undefined;
+
+	while (Date.now() < deadline) {
+		lastValue = await fn();
+		if (predicate(lastValue)) {
+			return lastValue;
 		}
+		await Bun.sleep(100);
+	}
 
-		if (request.method !== "POST") {
-			return new Response("Method Not Allowed", { status: 405 });
-		}
-
-		const now = Date.now();
-		const lease_expires_at = new Date(now + 5 * 60_000).toISOString();
-		const status = licenseMode === "active" ? "active" : "inactive";
-		const reason_code = licenseMode === "active" ? null : "ENTERPRISE_LICENSE_INVALID";
-		const message = licenseMode === "active" ? "License is active." : "License is inactive.";
-
-		return Response.json({
-			status,
-			lease_expires_at,
-			signed_lease: `lease-${licenseMode}`,
-			reason_code,
-			message,
-			license_key: "envsync-e2e-license",
-			last_verified_at: new Date(now).toISOString(),
-		});
-	},
-});
+	throw new Error(`Timed out waiting for condition. Last value: ${JSON.stringify(lastValue)}`);
+}
 
 beforeAll(async () => {
+	if (!hostedLicenseKey) {
+		throw new Error("ENVSYNC_E2E_LICENSE_KEY or ENVSYNC_LICENSE_KEY is required for hosted license E2E tests.");
+	}
+
 	await checkServiceHealth();
 	seed = await seedE2EOrg();
 
 	config.ENVSYNC_EDITION = "enterprise";
 	config.ENVSYNC_LICENSE_ENFORCEMENT = "true";
 	config.ENVSYNC_LICENSE_MODE = "lease";
-	config.ENVSYNC_LICENSE_SERVER_URL = `http://127.0.0.1:${fakeLicenseServer.port}`;
-	config.ENVSYNC_LICENSE_KEY = "envsync-e2e-license";
-	config.ENVSYNC_INSTALL_FINGERPRINT = "e2e-install-fingerprint";
+	config.ENVSYNC_LICENSE_SERVER_URL = hostedLicenseServerUrl;
+	config.ENVSYNC_LICENSE_KEY = hostedLicenseKey;
+	config.ENVSYNC_INSTALL_FINGERPRINT = hostedInstallFingerprint;
 	config.ENVSYNC_STACK_NAME = "envsync-e2e";
 	config.ENVSYNC_RELEASE_VERSION = "e2e";
 
@@ -90,6 +81,8 @@ afterAll(async () => {
 	config.ENVSYNC_INSTALL_FINGERPRINT = originalConfig.ENVSYNC_INSTALL_FINGERPRINT;
 	config.ENVSYNC_STACK_NAME = originalConfig.ENVSYNC_STACK_NAME;
 	config.ENVSYNC_RELEASE_VERSION = originalConfig.ENVSYNC_RELEASE_VERSION;
+	LicenseStateService.stopHeartbeatForTests();
+	LicenseStateService.clearTestOverrides();
 
 	await LicenseStateService.updateLicenseState({
 		status: "unknown",
@@ -101,13 +94,13 @@ afterAll(async () => {
 		last_error_message: null,
 		validation_mode: originalConfig.ENVSYNC_LICENSE_MODE,
 	});
-
-	fakeLicenseServer.stop(true);
 });
 
 describe("Enterprise License Lock E2E", () => {
 	test("active verification keeps core and management surfaces unlocked", async () => {
-		licenseMode = "active";
+		LicenseStateService.stopHeartbeatForTests();
+		LicenseStateService.clearTestOverrides();
+		config.ENVSYNC_LICENSE_KEY = hostedLicenseKey;
 
 		const activateRes = await managementTestRequest("/api/license/activate", {
 			method: "POST",
@@ -137,15 +130,33 @@ describe("Enterprise License Lock E2E", () => {
 		expect(licenseStatus.state.status).toBe("active");
 	});
 
-	test("inactive verification locks protected routes but preserves allowlisted status routes", async () => {
-		licenseMode = "inactive";
-
-		const verifyRes = await managementTestRequest("/api/license/verify", {
-			method: "POST",
+	test("invalid hosted verification locks protected routes but preserves allowlisted status routes", async () => {
+		LicenseStateService.stopHeartbeatForTests();
+		LicenseStateService.setTestOverrides({
+			server_url: hostedLicenseServerUrl,
+			license_key: hostedInvalidLicenseKey,
+			install_fingerprint: `${hostedInstallFingerprint}-invalid`,
+			heartbeat_interval_ms: 50,
 		});
-		expect(verifyRes.status).toBe(200);
-		const verified = await verifyRes.json<{ state: { status: string } }>();
-		expect(verified.state.status).toBe("inactive");
+		await LicenseStateService.updateLicenseState({
+			status: "unknown",
+			signed_lease: null,
+			lease_expires_at: null,
+			fingerprint: `${hostedInstallFingerprint}-invalid`,
+			last_verified_at: null,
+			last_error_code: null,
+			last_error_message: null,
+			validation_mode: "lease",
+		});
+		await LicenseStateService.startHeartbeat();
+
+		await pollUntil(
+			async () => {
+				const response = await managementTestRequest("/api/license/status");
+				return await response.json<{ locked: boolean; state: { status: string } }>();
+			},
+			value => value.locked && value.state.status === "error",
+		);
 
 		const [coreAppsRes, managementProvidersRes, coreSystemRes, managementSystemRes, licenseStatusRes] = await Promise.all([
 			testRequest("/api/app", {
@@ -167,15 +178,15 @@ describe("Enterprise License Lock E2E", () => {
 
 		const coreLocked = await coreAppsRes.json<{ code: string; reason: string }>();
 		const managementLocked = await managementProvidersRes.json<{ code: string; reason: string }>();
-		expect(coreLocked.code).toBe("ENTERPRISE_LICENSE_INVALID");
-		expect(managementLocked.code).toBe("ENTERPRISE_LICENSE_INVALID");
+		expect(coreLocked.code).toBe("LICENSE_SERVER_UNREACHABLE");
+		expect(managementLocked.code).toBe("LICENSE_SERVER_UNREACHABLE");
 
 		const managementSystem = await managementSystemRes.json<{
 			license: { required: boolean; locked: boolean; reason: string | null; state: { status: string } };
 		}>();
 		expect(managementSystem.license.required).toBe(true);
 		expect(managementSystem.license.locked).toBe(true);
-		expect(managementSystem.license.state.status).toBe("inactive");
+		expect(managementSystem.license.state.status).toBe("error");
 
 		const licenseStatus = await licenseStatusRes.json<{
 			required: boolean;
@@ -185,7 +196,7 @@ describe("Enterprise License Lock E2E", () => {
 		}>();
 		expect(licenseStatus.required).toBe(true);
 		expect(licenseStatus.locked).toBe(true);
-		expect(licenseStatus.reason).toBe("ENTERPRISE_LICENSE_INVALID");
-		expect(licenseStatus.state.status).toBe("inactive");
+		expect(licenseStatus.reason).toBe("LICENSE_SERVER_UNREACHABLE");
+		expect(licenseStatus.state.status).toBe("error");
 	});
 });

@@ -88,7 +88,6 @@ jobs:
     name: E2E Tests
     runs-on: ubuntu-latest
     env:
-      ENVSYNC_E2E_SKIP_LOCAL_LICENSE_SERVER: "1"
       ENVSYNC_LICENSE_SERVER_URL: "https://license.envsync.cloud"
       ENVSYNC_E2E_LICENSE_KEY: ${{ secrets.ENVSYNC_E2E_LICENSE_KEY }}
     steps:

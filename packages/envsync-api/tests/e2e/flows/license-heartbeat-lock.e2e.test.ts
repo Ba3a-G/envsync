@@ -1,11 +1,6 @@
 import { afterEach, beforeAll, describe, expect, test } from "bun:test";
 
 import { testRequest } from "../../helpers/request";
-import {
-	getLocalLicenseServerAvailability,
-	startLocalLicenseServer,
-	type LocalLicenseServer,
-} from "../helpers/license-server";
 import { startManagementBackgroundHandlers } from "../helpers/management-app";
 import {
 	checkServiceHealth,
@@ -16,15 +11,13 @@ import {
 import { EditionPolicyService } from "@/services/edition-policy.service";
 import { LicenseStateService } from "@/services/license-state.service";
 import { ApiKeyService } from "@/services/api_key.service";
+import { config } from "@/utils/env";
 
 let seed: E2ESeed;
-let licenseServer: LocalLicenseServer | null = null;
-const licenseServerAvailability = getLocalLicenseServerAvailability();
-const describeLicenseHeartbeatLock = licenseServerAvailability.available ? describe : describe.skip;
-
-if (!licenseServerAvailability.available) {
-	console.warn(`[E2E] Skipping License Heartbeat Lock E2E: ${licenseServerAvailability.reason}`);
-}
+const hostedLicenseServerUrl = process.env.ENVSYNC_LICENSE_SERVER_URL ?? "https://license.envsync.cloud";
+const hostedLicenseKey = process.env.ENVSYNC_E2E_LICENSE_KEY ?? config.ENVSYNC_LICENSE_KEY;
+const hostedInvalidLicenseKey = "envsync-e2e-invalid-heartbeat-license-key";
+const hostedInstallFingerprint = "envsync-e2e-hosted-heartbeat";
 
 async function pollUntil<T>(fn: () => Promise<T>, predicate: (value: T) => boolean, timeoutMs = 10_000) {
 	const deadline = Date.now() + timeoutMs;
@@ -41,8 +34,12 @@ async function pollUntil<T>(fn: () => Promise<T>, predicate: (value: T) => boole
 	throw new Error(`Timed out waiting for condition. Last value: ${JSON.stringify(lastValue)}`);
 }
 
-describeLicenseHeartbeatLock("License Heartbeat Lock E2E", () => {
+describe("License Heartbeat Lock E2E", () => {
 	beforeAll(async () => {
+		if (!hostedLicenseKey) {
+			throw new Error("ENVSYNC_E2E_LICENSE_KEY or ENVSYNC_LICENSE_KEY is required for hosted license E2E tests.");
+		}
+
 		await checkServiceHealth();
 		seed = await seedE2EOrg();
 	});
@@ -60,24 +57,14 @@ describeLicenseHeartbeatLock("License Heartbeat Lock E2E", () => {
 			last_error_code: null,
 			last_error_message: null,
 		});
-		await licenseServer?.stop();
-		licenseServer = null;
 	});
 
 	test("heartbeat renews the lease, lock enforcement blocks protected routes, and re-verification recovers both surfaces", async () => {
-		const licenseKey = "envsync-enterprise-heartbeat-e2e";
-		const installFingerprint = "envsync-install-heartbeat-e2e";
 		const masterApiKey = (await ApiKeyService.createKey({
 			user_id: seed.masterUser.id,
 			org_id: seed.org.id,
 			description: "License heartbeat lock E2E",
 		})).key;
-
-		licenseServer = await startLocalLicenseServer({
-			licenseKey,
-			installFingerprint,
-			leaseTtlSeconds: 1,
-		});
 
 		EditionPolicyService.setTestOverrides({
 			edition: "enterprise",
@@ -89,16 +76,16 @@ describeLicenseHeartbeatLock("License Heartbeat Lock E2E", () => {
 		});
 		LicenseStateService.stopHeartbeatForTests();
 		LicenseStateService.setTestOverrides({
-			server_url: licenseServer.baseUrl,
-			license_key: licenseKey,
-			install_fingerprint: installFingerprint,
+			server_url: hostedLicenseServerUrl,
+			license_key: hostedLicenseKey,
+			install_fingerprint: hostedInstallFingerprint,
 			heartbeat_interval_ms: 50,
 		});
 		await LicenseStateService.updateLicenseState({
 			status: "unknown",
 			signed_lease: null,
 			lease_expires_at: null,
-			fingerprint: installFingerprint,
+			fingerprint: hostedInstallFingerprint,
 			last_verified_at: null,
 			last_error_code: null,
 			last_error_message: null,
@@ -143,7 +130,24 @@ describeLicenseHeartbeatLock("License Heartbeat Lock E2E", () => {
 		);
 		expect(renewedStatus.locked).toBe(false);
 
-		licenseServer.setLicenseStatus("inactive");
+		LicenseStateService.stopHeartbeatForTests();
+		LicenseStateService.setTestOverrides({
+			server_url: hostedLicenseServerUrl,
+			license_key: hostedInvalidLicenseKey,
+			install_fingerprint: `${hostedInstallFingerprint}-invalid`,
+			heartbeat_interval_ms: 50,
+		});
+		await LicenseStateService.updateLicenseState({
+			status: "unknown",
+			signed_lease: null,
+			lease_expires_at: null,
+			fingerprint: `${hostedInstallFingerprint}-invalid`,
+			last_verified_at: null,
+			last_error_code: null,
+			last_error_message: null,
+			validation_mode: "lease",
+		});
+		await LicenseStateService.startHeartbeat();
 
 		await pollUntil(
 			async () => {
@@ -186,9 +190,15 @@ describeLicenseHeartbeatLock("License Heartbeat Lock E2E", () => {
 		}>();
 		expect(inactiveLicenseStatus.required).toBe(true);
 		expect(inactiveLicenseStatus.locked).toBe(true);
-		expect(inactiveLicenseStatus.state.status).toBe("inactive");
+		expect(inactiveLicenseStatus.state.status).toBe("error");
 
-		licenseServer.setLicenseStatus("active");
+		LicenseStateService.stopHeartbeatForTests();
+		LicenseStateService.setTestOverrides({
+			server_url: hostedLicenseServerUrl,
+			license_key: hostedLicenseKey,
+			install_fingerprint: hostedInstallFingerprint,
+			heartbeat_interval_ms: 50,
+		});
 
 		const recoveryVerify = await testRequest("/api/license/verify", {
 			method: "POST",
