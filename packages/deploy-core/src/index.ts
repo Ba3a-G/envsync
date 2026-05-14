@@ -20,7 +20,7 @@ const deployConfigSchema = z.object({
 		ref: z.string().default("main"),
 	}).default({}),
 	release: z.object({
-		version: z.string().default("0.8.2"),
+		version: z.string().default("0.8.3"),
 		channel: z.string().default("stable"),
 	}).default({}),
 	domain: z.object({

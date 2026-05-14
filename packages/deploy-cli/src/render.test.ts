@@ -20,18 +20,18 @@ const config: DeployConfig = {
 		ref: "main",
 	},
 	release: {
-		version: "0.8.2",
+		version: "0.8.3",
 	},
 	domain: {
 		root_domain: "enterprise.example.com",
 		acme_email: "ops@example.com",
 	},
 	images: {
-		api: "ghcr.io/envsync-cloud/envsync-api:0.8.2",
-		keycloak: "envsync-keycloak:0.8.2",
-		web: "ghcr.io/envsync-cloud/envsync-web-static:0.8.2",
-		landing: "ghcr.io/envsync-cloud/envsync-landing-static:0.8.2",
-		clickstack: "ghcr.io/envsync-cloud/clickstack:0.8.2",
+		api: "ghcr.io/envsync-cloud/envsync-api:0.8.3",
+		keycloak: "envsync-keycloak:0.8.3",
+		web: "ghcr.io/envsync-cloud/envsync-web-static:0.8.3",
+		landing: "ghcr.io/envsync-cloud/envsync-landing-static:0.8.3",
+		clickstack: "ghcr.io/envsync-cloud/clickstack:0.8.3",
 		traefik: "traefik:v3.1",
 		otel_agent: "otel/opentelemetry-collector-contrib:0.111.0",
 	},
@@ -96,8 +96,8 @@ const generated: DeployGeneratedState = {
 		maintenance_mode: false,
 		slots: {
 			blue: {
-				api_image: "ghcr.io/envsync-cloud/envsync-api:0.8.2",
-				release_version: "0.8.2",
+				api_image: "ghcr.io/envsync-cloud/envsync-api:0.8.3",
+				release_version: "0.8.3",
 				deployed_at: "2026-04-30T00:00:00.000Z",
 			},
 			green: {
@@ -175,7 +175,7 @@ describe("deploy render helpers", () => {
 
 		expect(frontendRuntime).toContain("https://api.enterprise.example.com");
 		expect(frontendRuntime).toContain("\"activeApiSlot\": \"blue\"");
-		expect(frontendRuntime).toContain("\"releaseVersion\": \"0.8.2\"");
+		expect(frontendRuntime).toContain("\"releaseVersion\": \"0.8.3\"");
 	});
 
 	test("render supporting nginx and otel artifacts", () => {

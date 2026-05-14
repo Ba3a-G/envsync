@@ -297,11 +297,11 @@ jobs:
         working-directory: packages/deploy-cli
         run: npm pack --dry-run
 
-      - name: Publish to GitHub Packages
+      - name: Publish to NPM Packages
         working-directory: packages/deploy-cli
         run: npm publish
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   publish-ts-sdk:
     name: Publish TypeScript SDK
@@ -404,8 +404,8 @@ jobs:
         working-directory: sdks/envsync-management-ts-sdk
         run: npm pack --dry-run
 
-      - name: Publish to GitHub Packages
+      - name: Publish to NPM Packages
         working-directory: sdks/envsync-management-ts-sdk
         run: npm publish
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
