@@ -297,6 +297,9 @@ jobs:
         working-directory: packages/deploy-cli
         run: npm pack --dry-run
 
+      - name: Wait for 10 sec
+        run: sleep 10
+
       - name: Publish to NPM Packages
         working-directory: packages/deploy-cli
         run: npm publish --provenance --access public
