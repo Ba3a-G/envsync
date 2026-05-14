@@ -34,12 +34,15 @@ async function pollUntil<T>(fn: () => Promise<T>, predicate: (value: T) => boole
 	throw new Error(`Timed out waiting for condition. Last value: ${JSON.stringify(lastValue)}`);
 }
 
+function requireHostedLicenseKey() {
+	if (!hostedLicenseKey) {
+		throw new Error("ENVSYNC_E2E_LICENSE_KEY or ENVSYNC_LICENSE_KEY is required for hosted license E2E tests.");
+	}
+	return hostedLicenseKey;
+}
+
 describe("License Heartbeat Lock E2E", () => {
 	beforeAll(async () => {
-		if (!hostedLicenseKey) {
-			throw new Error("ENVSYNC_E2E_LICENSE_KEY or ENVSYNC_LICENSE_KEY is required for hosted license E2E tests.");
-		}
-
 		await checkServiceHealth();
 		seed = await seedE2EOrg();
 	});
@@ -60,6 +63,7 @@ describe("License Heartbeat Lock E2E", () => {
 	});
 
 	test("heartbeat renews the lease, lock enforcement blocks protected routes, and re-verification recovers both surfaces", async () => {
+		const licenseKey = requireHostedLicenseKey();
 		const masterApiKey = (await ApiKeyService.createKey({
 			user_id: seed.masterUser.id,
 			org_id: seed.org.id,
@@ -77,7 +81,7 @@ describe("License Heartbeat Lock E2E", () => {
 		LicenseStateService.stopHeartbeatForTests();
 		LicenseStateService.setTestOverrides({
 			server_url: hostedLicenseServerUrl,
-			license_key: hostedLicenseKey,
+			license_key: licenseKey,
 			install_fingerprint: hostedInstallFingerprint,
 			heartbeat_interval_ms: 50,
 		});
@@ -195,7 +199,7 @@ describe("License Heartbeat Lock E2E", () => {
 		LicenseStateService.stopHeartbeatForTests();
 		LicenseStateService.setTestOverrides({
 			server_url: hostedLicenseServerUrl,
-			license_key: hostedLicenseKey,
+			license_key: licenseKey,
 			install_fingerprint: hostedInstallFingerprint,
 			heartbeat_interval_ms: 50,
 		});

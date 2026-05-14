@@ -101,6 +101,15 @@ jobs:
           cache-dependency-path: packages/envsync-cli/go.sum
       - run: bun i
 
+      - name: Validate hosted license E2E configuration
+        run: |
+          if [ -z "$ENVSYNC_E2E_LICENSE_KEY" ]; then
+            echo "ENVSYNC_E2E_LICENSE_KEY GitHub Actions secret is required for hosted license E2E tests."
+            exit 1
+          fi
+
+          curl --silent --fail "$ENVSYNC_LICENSE_SERVER_URL/health" > /dev/null
+
       - name: Run E2E tests
         run: bun run test:e2e
 

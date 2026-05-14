@@ -43,11 +43,14 @@ async function pollUntil<T>(fn: () => Promise<T>, predicate: (value: T) => boole
 	throw new Error(`Timed out waiting for condition. Last value: ${JSON.stringify(lastValue)}`);
 }
 
-beforeAll(async () => {
+function requireHostedLicenseKey() {
 	if (!hostedLicenseKey) {
 		throw new Error("ENVSYNC_E2E_LICENSE_KEY or ENVSYNC_LICENSE_KEY is required for hosted license E2E tests.");
 	}
+	return hostedLicenseKey;
+}
 
+beforeAll(async () => {
 	await checkServiceHealth();
 	seed = await seedE2EOrg();
 
@@ -55,7 +58,6 @@ beforeAll(async () => {
 	config.ENVSYNC_LICENSE_ENFORCEMENT = "true";
 	config.ENVSYNC_LICENSE_MODE = "lease";
 	config.ENVSYNC_LICENSE_SERVER_URL = hostedLicenseServerUrl;
-	config.ENVSYNC_LICENSE_KEY = hostedLicenseKey;
 	config.ENVSYNC_INSTALL_FINGERPRINT = hostedInstallFingerprint;
 	config.ENVSYNC_STACK_NAME = "envsync-e2e";
 	config.ENVSYNC_RELEASE_VERSION = "e2e";
@@ -98,9 +100,10 @@ afterAll(async () => {
 
 describe("Enterprise License Lock E2E", () => {
 	test("active verification keeps core and management surfaces unlocked", async () => {
+		const licenseKey = requireHostedLicenseKey();
 		LicenseStateService.stopHeartbeatForTests();
 		LicenseStateService.clearTestOverrides();
-		config.ENVSYNC_LICENSE_KEY = hostedLicenseKey;
+		config.ENVSYNC_LICENSE_KEY = licenseKey;
 
 		const activateRes = await managementTestRequest("/api/license/activate", {
 			method: "POST",
