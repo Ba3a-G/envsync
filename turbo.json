@@ -43,6 +43,8 @@
         "package.json"
     ],
     "globalEnv": [
-
+        "ENVSYNC_E2E_LICENSE_KEY",
+        "ENVSYNC_LICENSE_KEY",
+        "ENVSYNC_LICENSE_SERVER_URL"
     ]
 }
