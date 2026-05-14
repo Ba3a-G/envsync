@@ -44,10 +44,9 @@ bun run dev                          # start all services via Turbo
 | `bun run test:mock` | Run unit tests (mocked dependencies) |
 | `bun run test:e2e` | Run e2e tests from the repo root (runs `e2e-setup init` first) |
 
-License heartbeat note:
-- `packages/envsync-api/tests/e2e/flows/license-heartbeat-lock.e2e.test.ts` requires the local ignored `packages/license-server` implementation.
-- Public GitHub CI skips that suite with `ENVSYNC_E2E_SKIP_LOCAL_LICENSE_SERVER=1`.
-- Local runs execute it automatically when `packages/license-server/src/index.ts` exists, and you can force-skip it the same way.
+License E2E note:
+- Hosted enterprise license checks live in `packages/envsync-api/tests/e2e/flows/enterprise-license-lock.e2e.test.ts`.
+- CI requires `ENVSYNC_E2E_LICENSE_KEY` and calls `https://license.envsync.cloud`; do not reintroduce local license-server skips for public CI.
 
 UI E2E note:
 - GitHub CI should prepare UI E2E with `bun run e2e-setup reset`, not plain `init`.

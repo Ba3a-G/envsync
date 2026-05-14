@@ -2,12 +2,15 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { testRequest } from "../../helpers/request";
 import { managementTestRequest } from "../helpers/management-request";
+import { startManagementBackgroundHandlers } from "../helpers/management-app";
 import {
 	checkServiceHealth,
 	seedE2EOrg,
 	type E2ESeed,
 } from "../helpers/real-auth";
 
+import { ApiKeyService } from "@/services/api_key.service";
+import { EditionPolicyService } from "@/services/edition-policy.service";
 import { LicenseStateService } from "@/services/license-state.service";
 import { config } from "@/utils/env";
 
@@ -85,6 +88,7 @@ afterAll(async () => {
 	config.ENVSYNC_RELEASE_VERSION = originalConfig.ENVSYNC_RELEASE_VERSION;
 	LicenseStateService.stopHeartbeatForTests();
 	LicenseStateService.clearTestOverrides();
+	EditionPolicyService.clearTestOverrides();
 
 	await LicenseStateService.updateLicenseState({
 		status: "unknown",
@@ -98,11 +102,12 @@ afterAll(async () => {
 	});
 });
 
-describe("Enterprise License Lock E2E", () => {
+describe.serial("Enterprise License Lock E2E", () => {
 	test("active verification keeps core and management surfaces unlocked", async () => {
 		const licenseKey = requireHostedLicenseKey();
 		LicenseStateService.stopHeartbeatForTests();
 		LicenseStateService.clearTestOverrides();
+		EditionPolicyService.clearTestOverrides();
 		config.ENVSYNC_LICENSE_KEY = licenseKey;
 
 		const activateRes = await managementTestRequest("/api/license/activate", {
@@ -131,6 +136,174 @@ describe("Enterprise License Lock E2E", () => {
 		const licenseStatus = await licenseStatusRes.json<{ locked: boolean; state: { status: string } }>();
 		expect(licenseStatus.locked).toBe(false);
 		expect(licenseStatus.state.status).toBe("active");
+	});
+
+	test("hosted heartbeat renews the lease and re-verification recovers locked surfaces", async () => {
+		const licenseKey = requireHostedLicenseKey();
+		const masterApiKey = (await ApiKeyService.createKey({
+			user_id: seed.masterUser.id,
+			org_id: seed.org.id,
+			description: "License heartbeat lock E2E",
+		})).key;
+
+		EditionPolicyService.setTestOverrides({
+			edition: "enterprise",
+			management_enabled: true,
+			management_web_enabled: true,
+			landing_enabled: true,
+			license_enforcement: true,
+			single_org_mode: false,
+		});
+		LicenseStateService.stopHeartbeatForTests();
+		LicenseStateService.setTestOverrides({
+			server_url: hostedLicenseServerUrl,
+			license_key: licenseKey,
+			install_fingerprint: hostedInstallFingerprint,
+			heartbeat_interval_ms: 50,
+		});
+		await LicenseStateService.updateLicenseState({
+			status: "unknown",
+			signed_lease: null,
+			lease_expires_at: null,
+			fingerprint: hostedInstallFingerprint,
+			last_verified_at: null,
+			last_error_code: null,
+			last_error_message: null,
+			validation_mode: "lease",
+		});
+
+		await startManagementBackgroundHandlers();
+
+		const firstStatus = await pollUntil(
+			async () => {
+				const response = await testRequest("/api/license/status", { surface: "management" });
+				return {
+					status: response.status,
+					body: await response.json<{
+						locked: boolean;
+						state: {
+							status: string;
+							last_verified_at: string | null;
+							lease_expires_at: string | null;
+						};
+					}>(),
+				};
+			},
+			value => value.status === 200 && value.body.locked === false && value.body.state.status === "active",
+		);
+
+		const renewedStatus = await pollUntil(
+			async () => {
+				const response = await testRequest("/api/license/status", { surface: "management" });
+				return await response.json<{
+					locked: boolean;
+					state: {
+						status: string;
+						last_verified_at: string | null;
+						lease_expires_at: string | null;
+					};
+				}>();
+			},
+			value => value.state.status === "active" && (
+				value.state.last_verified_at !== firstStatus.body.state.last_verified_at
+				|| value.state.lease_expires_at !== firstStatus.body.state.lease_expires_at
+			),
+		);
+		expect(renewedStatus.locked).toBe(false);
+
+		LicenseStateService.stopHeartbeatForTests();
+		LicenseStateService.setTestOverrides({
+			server_url: hostedLicenseServerUrl,
+			license_key: hostedInvalidLicenseKey,
+			install_fingerprint: `${hostedInstallFingerprint}-invalid`,
+			heartbeat_interval_ms: 50,
+		});
+		await LicenseStateService.updateLicenseState({
+			status: "unknown",
+			signed_lease: null,
+			lease_expires_at: null,
+			fingerprint: `${hostedInstallFingerprint}-invalid`,
+			last_verified_at: null,
+			last_error_code: null,
+			last_error_message: null,
+			validation_mode: "lease",
+		});
+		await LicenseStateService.startHeartbeat();
+
+		await pollUntil(
+			async () => {
+				const [managementProviders, coreOrg] = await Promise.all([
+					testRequest("/api/enterprise/providers", {
+						apiKey: masterApiKey,
+						surface: "management",
+					}),
+					testRequest("/api/org", {
+						apiKey: masterApiKey,
+					}),
+				]);
+				return {
+					managementStatus: managementProviders.status,
+					coreStatus: coreOrg.status,
+				};
+			},
+			value => value.managementStatus === 423 && value.coreStatus === 423,
+		);
+
+		const [managementLicenseStatus, managementSystemStatus, coreSystemStatus] = await Promise.all([
+			testRequest("/api/license/status", { surface: "management" }),
+			testRequest("/api/system/status", { surface: "management" }),
+			testRequest("/api/system/status"),
+		]);
+
+		expect(managementLicenseStatus.status).toBe(200);
+		expect(managementSystemStatus.status).toBe(200);
+		expect(coreSystemStatus.status).toBe(200);
+
+		const inactiveLicenseStatus = await managementLicenseStatus.json<{
+			required: boolean;
+			locked: boolean;
+			reason: string | null;
+			state: { status: string };
+		}>();
+		expect(inactiveLicenseStatus.required).toBe(true);
+		expect(inactiveLicenseStatus.locked).toBe(true);
+		expect(inactiveLicenseStatus.state.status).toBe("error");
+
+		LicenseStateService.stopHeartbeatForTests();
+		LicenseStateService.setTestOverrides({
+			server_url: hostedLicenseServerUrl,
+			license_key: licenseKey,
+			install_fingerprint: hostedInstallFingerprint,
+			heartbeat_interval_ms: 50,
+		});
+
+		const recoveryVerify = await testRequest("/api/license/verify", {
+			method: "POST",
+			surface: "management",
+		});
+		expect(recoveryVerify.status).toBe(200);
+		expect(await recoveryVerify.json<{ state: { status: string } }>()).toMatchObject({
+			state: { status: "active" },
+		});
+
+		await pollUntil(
+			async () => {
+				const [managementProviders, coreOrg] = await Promise.all([
+					testRequest("/api/enterprise/providers", {
+						apiKey: masterApiKey,
+						surface: "management",
+					}),
+					testRequest("/api/org", {
+						apiKey: masterApiKey,
+					}),
+				]);
+				return {
+					managementStatus: managementProviders.status,
+					coreStatus: coreOrg.status,
+				};
+			},
+			value => value.managementStatus === 200 && value.coreStatus === 200,
+		);
 	});
 
 	test("invalid hosted verification locks protected routes but preserves allowlisted status routes", async () => {
