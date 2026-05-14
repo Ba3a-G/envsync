@@ -299,7 +299,7 @@ jobs:
 
       - name: Publish to NPM Packages
         working-directory: packages/deploy-cli
-        run: npm publish
+        run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -406,6 +406,6 @@ jobs:
 
       - name: Publish to NPM Packages
         working-directory: sdks/envsync-management-ts-sdk
-        run: npm publish
+        run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

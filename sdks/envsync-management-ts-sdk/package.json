@@ -54,6 +54,6 @@
     "management-api-client"
   ],
   "publishConfig": {
-    "access": "restricted"
+    "access": "public"
   }
 }
