@@ -309,6 +309,23 @@ export class LicenseStateService {
 
 	private static async getEnforcementDecisionFromState(state: PersistedLicenseState) {
 		const now = Date.now();
+		if (state.validation_mode === "certificate" || this.usesCertificateMode()) {
+			const certificateExpiry = state.certificate_expires_at ? new Date(state.certificate_expires_at).getTime() : 0;
+			const locked = state.status !== "active" || !certificateExpiry || certificateExpiry <= now;
+			const reason = state.status !== "active"
+				? state.last_error_code ?? "ENTERPRISE_LICENSE_INVALID"
+				: !certificateExpiry || certificateExpiry <= now
+					? "LICENSE_CERT_EXPIRED"
+					: null;
+
+			return {
+				required: true,
+				locked,
+				reason,
+				state,
+			};
+		}
+
 		const leaseExpiry = state.lease_expires_at ? new Date(state.lease_expires_at).getTime() : 0;
 		const locked = state.status !== "active" || !leaseExpiry || leaseExpiry <= now;
 		const reason = state.status !== "active"

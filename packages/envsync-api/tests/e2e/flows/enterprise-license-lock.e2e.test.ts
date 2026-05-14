@@ -19,6 +19,7 @@ let licenseMode: LicenseMode = "active";
 const originalConfig = {
 	ENVSYNC_EDITION: config.ENVSYNC_EDITION,
 	ENVSYNC_LICENSE_ENFORCEMENT: config.ENVSYNC_LICENSE_ENFORCEMENT,
+	ENVSYNC_LICENSE_MODE: config.ENVSYNC_LICENSE_MODE,
 	ENVSYNC_LICENSE_SERVER_URL: config.ENVSYNC_LICENSE_SERVER_URL,
 	ENVSYNC_LICENSE_KEY: config.ENVSYNC_LICENSE_KEY,
 	ENVSYNC_INSTALL_FINGERPRINT: config.ENVSYNC_INSTALL_FINGERPRINT,
@@ -29,6 +30,10 @@ const originalConfig = {
 const fakeLicenseServer = Bun.serve({
 	port: 0,
 	fetch(request) {
+		if (request.method === "GET" && new URL(request.url).pathname === "/health") {
+			return Response.json({ status: "ok", store: "memory" });
+		}
+
 		if (request.method !== "POST") {
 			return new Response("Method Not Allowed", { status: 405 });
 		}
@@ -57,6 +62,7 @@ beforeAll(async () => {
 
 	config.ENVSYNC_EDITION = "enterprise";
 	config.ENVSYNC_LICENSE_ENFORCEMENT = "true";
+	config.ENVSYNC_LICENSE_MODE = "lease";
 	config.ENVSYNC_LICENSE_SERVER_URL = `http://127.0.0.1:${fakeLicenseServer.port}`;
 	config.ENVSYNC_LICENSE_KEY = "envsync-e2e-license";
 	config.ENVSYNC_INSTALL_FINGERPRINT = "e2e-install-fingerprint";
@@ -71,12 +77,14 @@ beforeAll(async () => {
 		last_verified_at: null,
 		last_error_code: null,
 		last_error_message: null,
+		validation_mode: "lease",
 	});
 });
 
 afterAll(async () => {
 	config.ENVSYNC_EDITION = originalConfig.ENVSYNC_EDITION;
 	config.ENVSYNC_LICENSE_ENFORCEMENT = originalConfig.ENVSYNC_LICENSE_ENFORCEMENT;
+	config.ENVSYNC_LICENSE_MODE = originalConfig.ENVSYNC_LICENSE_MODE;
 	config.ENVSYNC_LICENSE_SERVER_URL = originalConfig.ENVSYNC_LICENSE_SERVER_URL;
 	config.ENVSYNC_LICENSE_KEY = originalConfig.ENVSYNC_LICENSE_KEY;
 	config.ENVSYNC_INSTALL_FINGERPRINT = originalConfig.ENVSYNC_INSTALL_FINGERPRINT;
@@ -91,6 +99,7 @@ afterAll(async () => {
 		last_verified_at: null,
 		last_error_code: null,
 		last_error_message: null,
+		validation_mode: originalConfig.ENVSYNC_LICENSE_MODE,
 	});
 
 	fakeLicenseServer.stop(true);
