@@ -23,6 +23,7 @@ const stackPath = path.join(deployRoot, "docker-stack.yaml");
 const keepFailed = process.argv.includes("--keep-failed");
 const version = JSON.parse(fs.readFileSync(path.join(rootDir, "package.json"), "utf8")).version as string;
 const rootDomain = "127.0.0.1.sslip.io";
+const enterpriseLicenseServerUrl = "https://license.envsync.cloud";
 const localApiImage = `envsync-selfhost-smoke-api:${runId}`;
 const localApiImageCanary = `envsync-selfhost-smoke-api:${runId}-canary`;
 const localWebImage = `envsync-selfhost-smoke-web-static:${runId}`;
@@ -114,6 +115,12 @@ function publicHttpsUrl(host: string, pathName = "") {
 }
 
 function writeConfig() {
+	const enterpriseLicenseKey = process.env.ENVSYNC_E2E_LICENSE_KEY ?? process.env.ENVSYNC_LICENSE_KEY;
+	if (!enterpriseLicenseKey) {
+		throw new Error(
+			"Enterprise self-host smoke requires ENVSYNC_E2E_LICENSE_KEY or ENVSYNC_LICENSE_KEY. In GitHub Actions, set ENVSYNC_E2E_LICENSE_KEY from secrets.",
+		);
+	}
 	ensureDir(etcRoot);
 	ensureDir(traefikStateRoot);
 	ensureDir(path.join(hostRoot, "backups"));
@@ -182,6 +189,11 @@ function writeConfig() {
 			mailpit_enabled: false,
 			s3_public: true,
 			s3_console_public: true,
+		},
+		license: {
+			server_url: enterpriseLicenseServerUrl,
+			key: enterpriseLicenseKey,
+			certificate_validity_days: 30,
 		},
 	};
 	fs.writeFileSync(deployYamlPath, JSON.stringify(config, null, 2) + "\n", "utf8");

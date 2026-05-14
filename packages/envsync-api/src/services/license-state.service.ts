@@ -1,5 +1,6 @@
 import { CacheClient } from "@/libs/cache";
 import { DB } from "@/libs/db";
+import { EnterpriseCertificateVerifierService, type CertificateValidationResult } from "@/services/enterprise-certificate-verifier.service";
 import { EditionPolicyService } from "@/services/edition-policy.service";
 import { LicenseServerClient, type LicenseVerificationRequest, type LicenseVerificationResponse } from "@/services/license-server.client";
 import { config } from "@/utils/env";
@@ -25,6 +26,14 @@ type PersistedLicenseState = {
 	last_verified_at: Date | null;
 	last_error_code: string | null;
 	last_error_message: string | null;
+	validation_mode?: "none" | "lease" | "certificate" | null;
+	certificate_serial_hex?: string | null;
+	certificate_fingerprint_sha256?: string | null;
+	certificate_subject?: string | null;
+	certificate_issuer?: string | null;
+	certificate_expires_at?: Date | null;
+	root_ca_fingerprint_sha256?: string | null;
+	validated_at?: Date | null;
 	created_at: Date | null;
 	updated_at: Date | null;
 };
@@ -47,6 +56,14 @@ function normalizeState(value: Record<string, unknown>): PersistedLicenseState {
 		last_verified_at: toDate(value.last_verified_at as string | Date | null | undefined),
 		last_error_code: (value.last_error_code as string | null | undefined) ?? null,
 		last_error_message: (value.last_error_message as string | null | undefined) ?? null,
+		validation_mode: (value.validation_mode as PersistedLicenseState["validation_mode"] | undefined) ?? null,
+		certificate_serial_hex: (value.certificate_serial_hex as string | null | undefined) ?? null,
+		certificate_fingerprint_sha256: (value.certificate_fingerprint_sha256 as string | null | undefined) ?? null,
+		certificate_subject: (value.certificate_subject as string | null | undefined) ?? null,
+		certificate_issuer: (value.certificate_issuer as string | null | undefined) ?? null,
+		certificate_expires_at: toDate(value.certificate_expires_at as string | Date | null | undefined),
+		root_ca_fingerprint_sha256: (value.root_ca_fingerprint_sha256 as string | null | undefined) ?? null,
+		validated_at: toDate(value.validated_at as string | Date | null | undefined),
 		created_at: toDate(value.created_at as string | Date | null | undefined),
 		updated_at: toDate(value.updated_at as string | Date | null | undefined),
 	};
@@ -89,6 +106,14 @@ export class LicenseStateService {
 				last_verified_at: null,
 				last_error_code: null,
 				last_error_message: null,
+				validation_mode: EditionPolicyService.requiresEnterpriseLicense() ? config.ENVSYNC_LICENSE_MODE : "none",
+				certificate_serial_hex: null,
+				certificate_fingerprint_sha256: null,
+				certificate_subject: null,
+				certificate_issuer: null,
+				certificate_expires_at: null,
+				root_ca_fingerprint_sha256: null,
+				validated_at: null,
 				created_at: now,
 				updated_at: now,
 			})
@@ -164,6 +189,14 @@ export class LicenseStateService {
 		last_verified_at?: Date | null;
 		last_error_code?: string | null;
 		last_error_message?: string | null;
+		validation_mode?: "none" | "lease" | "certificate" | null;
+		certificate_serial_hex?: string | null;
+		certificate_fingerprint_sha256?: string | null;
+		certificate_subject?: string | null;
+		certificate_issuer?: string | null;
+		certificate_expires_at?: Date | null;
+		root_ca_fingerprint_sha256?: string | null;
+		validated_at?: Date | null;
 	}) {
 		const db = await DB.getInstance();
 		await this.getLicenseState();
@@ -211,13 +244,48 @@ export class LicenseStateService {
 	}
 
 	public static async activateLicense() {
+		if (this.usesCertificateMode()) {
+			return this.validateCertificateNow();
+		}
 		const response = await LicenseServerClient.activate(this.buildLicenseRequest(), this.getServerUrl());
 		return this.applyLicenseServerResponse(response);
 	}
 
 	public static async verifyLicenseNow() {
+		if (this.usesCertificateMode()) {
+			return this.validateCertificateNow();
+		}
 		const response = await LicenseServerClient.verify(this.buildLicenseRequest(), this.getServerUrl());
 		return this.applyLicenseServerResponse(response);
+	}
+
+	private static usesCertificateMode() {
+		return config.ENVSYNC_LICENSE_MODE === "certificate";
+	}
+
+	public static async validateCertificateNow() {
+		const result = await EnterpriseCertificateVerifierService.validateFromEnv();
+		return this.applyCertificateValidationResult(result);
+	}
+
+	public static async applyCertificateValidationResult(result: CertificateValidationResult) {
+		return this.updateLicenseState({
+			status: result.status,
+			signed_lease: null,
+			lease_expires_at: result.expires_at,
+			fingerprint: this.getInstallFingerprint() || null,
+			last_verified_at: new Date(),
+			last_error_code: result.reason_code,
+			last_error_message: result.message,
+			validation_mode: "certificate",
+			certificate_serial_hex: result.serial_hex,
+			certificate_fingerprint_sha256: result.certificate_fingerprint_sha256,
+			certificate_subject: result.subject,
+			certificate_issuer: result.issuer,
+			certificate_expires_at: result.expires_at,
+			root_ca_fingerprint_sha256: result.root_ca_fingerprint_sha256,
+			validated_at: new Date(),
+		});
 	}
 
 	public static async getEnforcementDecision() {
@@ -231,6 +299,15 @@ export class LicenseStateService {
 		}
 
 		const state = await this.getLicenseState();
+		if (this.usesCertificateMode() && state.status === "unknown") {
+			const refreshed = await this.validateCertificateNow();
+			return this.getEnforcementDecisionFromState(refreshed);
+		}
+
+		return this.getEnforcementDecisionFromState(state);
+	}
+
+	private static async getEnforcementDecisionFromState(state: PersistedLicenseState) {
 		const now = Date.now();
 		const leaseExpiry = state.lease_expires_at ? new Date(state.lease_expires_at).getTime() : 0;
 		const locked = state.status !== "active" || !leaseExpiry || leaseExpiry <= now;
@@ -250,6 +327,12 @@ export class LicenseStateService {
 
 	public static async startHeartbeat() {
 		if (this.#heartbeatStarted || !EditionPolicyService.requiresEnterpriseLicense()) {
+			return;
+		}
+
+		if (this.usesCertificateMode()) {
+			this.#heartbeatStarted = true;
+			await this.validateCertificateNow();
 			return;
 		}
 

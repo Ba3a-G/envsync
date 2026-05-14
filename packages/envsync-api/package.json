@@ -1,6 +1,6 @@
 {
   "name": "envsync-api",
-  "version": "0.8.6",
+  "version": "0.8.7",
   "type": "module",
   "module": "index.ts",
   "scripts": {
@@ -40,6 +40,7 @@
     "@opentelemetry/sdk-trace-base": "^1.30.0",
     "@opentelemetry/sdk-trace-node": "^1.30.0",
     "@opentelemetry/semantic-conventions": "^1.28.0",
+    "@peculiar/x509": "^2.0.0",
     "@scalar/hono-api-reference": "^0.9.1",
     "@slack/webhook": "^7.0.5",
     "hono": "^4.7.11",
@@ -55,6 +56,7 @@
     "pg": "^8.16.0",
     "pino": "^9.7.0",
     "redis": "^5.5.5",
+    "reflect-metadata": "^0.2.2",
     "sk-keygen": "^0.1.0",
     "uuid": "^11.1.0",
     "zod": "^3.25.50",

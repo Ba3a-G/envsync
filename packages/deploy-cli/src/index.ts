@@ -81,6 +81,13 @@ interface DeployConfig {
 		db_snapshot_on_api_upgrade: boolean;
 		keep_failed_upgrade_db_snapshot: boolean;
 	};
+	license?: {
+		server_url?: string;
+		key?: string;
+		install_fingerprint?: string;
+		certificate_bundle_file?: string;
+		certificate_validity_days?: number;
+	};
 	release_channel?: string;
 }
 
@@ -129,6 +136,23 @@ type ApiSlotState = {
 type RuntimeEnv = Record<string, string>;
 type ServiceHealth = "healthy" | "missing" | "degraded";
 type CommandOptions = { dryRun: boolean; force: boolean };
+type EnterpriseLicenseCertificateBundle = {
+	certificate_pem: string;
+	private_key_pem: string;
+	root_ca_pem: string;
+	serial_hex: string;
+	certificate_fingerprint_sha256: string;
+	root_ca_fingerprint_sha256: string;
+	issued_at: string;
+	expires_at: string;
+	metadata: {
+		license_key_hash: string;
+		install_fingerprint: string;
+		stack_name: string;
+		root_domain: string;
+		edition: "enterprise";
+	};
+};
 
 const HOST_ROOT = process.env.ENVSYNC_HOST_ROOT ?? "/opt/envsync";
 const ETC_ROOT = process.env.ENVSYNC_ETC_ROOT ?? "/etc/envsync";
@@ -139,6 +163,11 @@ const BACKUPS_ROOT = path.join(HOST_ROOT, "backups");
 const REPO_ROOT = process.env.ENVSYNC_REPO_ROOT ?? path.join(HOST_ROOT, "repo");
 const DEPLOY_ENV = path.join(ETC_ROOT, "deploy.env");
 const DEPLOY_YAML = path.join(ETC_ROOT, "deploy.yaml");
+const LICENSE_ROOT = path.join(ETC_ROOT, "license");
+const LICENSE_BUNDLE_FILE = path.join(LICENSE_ROOT, "enterprise-license-bundle.json");
+const LICENSE_CERT_FILE = path.join(LICENSE_ROOT, "enterprise-cert.pem");
+const LICENSE_KEY_FILE = path.join(LICENSE_ROOT, "enterprise-key.pem");
+const LICENSE_ROOT_CA_FILE = path.join(LICENSE_ROOT, "root-ca.pem");
 const VERSIONS_LOCK = path.join(DEPLOY_ROOT, "versions.lock.json");
 const STACK_FILE = path.join(DEPLOY_ROOT, "docker-stack.yaml");
 const BOOTSTRAP_BASE_STACK_FILE = path.join(DEPLOY_ROOT, "docker-stack.bootstrap.base.yaml");
@@ -215,6 +244,7 @@ const CLICKSTACK_SELFHOST_TEAM_NAME = "EnvSync Self-Hosted Team";
 const SEMVER_VERSION_RE = /^\d+\.\d+\.\d+$/;
 let currentOptions: CommandOptions = { dryRun: false, force: false };
 const DEFAULT_SOURCE_REPO_URL = "https://github.com/EnvSync-Cloud/envsync.git";
+const DEFAULT_ENTERPRISE_LICENSE_SERVER_URL = "https://license.envsync.cloud";
 const MANAGED_VERSIONED_IMAGE_PREFIXES = {
 	api: "ghcr.io/envsync-cloud/envsync-api:",
 	keycloak: "envsync-keycloak:",
@@ -358,6 +388,10 @@ function exists(target: string) {
 
 function randomSecret(bytes = 24) {
 	return randomBytes(bytes).toString("hex");
+}
+
+function deterministicInstallFingerprint(rootDomain: string, stackName: string) {
+	return `envsync-${createHash("sha256").update(`${rootDomain}:${stackName}`).digest("hex").slice(0, 32)}`;
 }
 
 function randomStrongPassword() {
@@ -529,6 +563,9 @@ function renderHelpBlock() {
 		"  validate-topology    Validate Enterprise edition topology rules",
 		"  upgrade [version]    Pin a target release and deploy it",
 		"  upgrade-deps         Refresh dependency images and redeploy",
+		"  license issue-cert   Issue and install an Enterprise certificate bundle",
+		"  license renew-cert   Renew and install the Enterprise certificate bundle",
+		"  license validate-cert Validate the installed Enterprise certificate bundle files",
 		"  backup               Create a managed self-host backup archive",
 		"  restore <archive>    Restore a backup archive into the managed self-host roots",
 		"",
@@ -618,6 +655,7 @@ function printOperatorOverview() {
 		"`envsync-deploy bootstrap --force`",
 		"`envsync-deploy deploy`",
 		"`envsync-deploy upgrade`",
+		"`envsync-deploy license issue-cert`",
 		"`envsync-deploy health --json`",
 		"`envsync-deploy plan-topology --json`",
 		"`envsync-deploy backup`",
@@ -721,6 +759,7 @@ function normalizeConfig(raw: Partial<DeployConfig>): DeployConfig {
 	const { release_channel: _legacyReleaseChannel, ...rest } = raw;
 	const rootDomain = requireDefined(raw.domain?.root_domain, "domain.root_domain");
 	const acmeEmail = requireDefined(raw.domain?.acme_email, "domain.acme_email");
+	const stackName = requireDefined(raw.services?.stack_name, "services.stack_name");
 	return {
 		...rest,
 		edition: raw.edition ?? "enterprise",
@@ -749,7 +788,7 @@ function normalizeConfig(raw: Partial<DeployConfig>): DeployConfig {
 			otel_agent: raw.images?.otel_agent ?? "otel/opentelemetry-collector-contrib:0.111.0",
 		},
 		services: {
-			stack_name: requireDefined(raw.services?.stack_name, "services.stack_name"),
+			stack_name: stackName,
 			api_port: requireDefined(raw.services?.api_port, "services.api_port"),
 			public_http_port: raw.services?.public_http_port ?? 80,
 			public_https_port: raw.services?.public_https_port ?? 443,
@@ -797,6 +836,16 @@ function normalizeConfig(raw: Partial<DeployConfig>): DeployConfig {
 			maintenance_mode_enabled: raw.upgrade?.maintenance_mode_enabled ?? true,
 			db_snapshot_on_api_upgrade: raw.upgrade?.db_snapshot_on_api_upgrade ?? true,
 			keep_failed_upgrade_db_snapshot: raw.upgrade?.keep_failed_upgrade_db_snapshot ?? true,
+		},
+		license: raw.license ? {
+			server_url: raw.license.server_url,
+			key: raw.license.key,
+			install_fingerprint: raw.license.install_fingerprint ?? deterministicInstallFingerprint(rootDomain, stackName),
+			certificate_bundle_file: raw.license.certificate_bundle_file,
+			certificate_validity_days: raw.license.certificate_validity_days,
+		} : raw.edition === "oss" ? undefined : {
+			install_fingerprint: deterministicInstallFingerprint(rootDomain, stackName),
+			certificate_validity_days: 1095,
 		},
 	};
 }
@@ -1196,6 +1245,11 @@ function buildRuntimeEnv(config: DeployConfig, generated: DeployGeneratedState):
 		OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-agent:4318",
 		OTEL_SERVICE_NAME: "envsync-api",
 		OTEL_SDK_DISABLED: "false",
+		ENVSYNC_LICENSE_MODE: "certificate",
+		ENVSYNC_LICENSE_BUNDLE_PATH: "/etc/envsync/license/enterprise-license-bundle.json",
+		ENVSYNC_LICENSE_CERT_PATH: "/etc/envsync/license/enterprise-cert.pem",
+		ENVSYNC_LICENSE_KEY_PATH: "/etc/envsync/license/enterprise-key.pem",
+		ENVSYNC_LICENSE_ROOT_CA_CERT_PATH: "/etc/envsync/license/root-ca.pem",
 		CLICKSTACK_URL: publicHttpsUrl(config, hosts.obs),
 		KEYCLOAK_IMAGE_TAG: keycloakImageTag(config.images.keycloak),
 	};
@@ -1758,6 +1812,8 @@ ${renderEnvList({
 		ENVSYNC_DEPLOY_SLOT: "blue",
 		ENVSYNC_DEPLOY_RELEASE_VERSION: deployment.slots.blue.release_version || config.release.version,
 	})}
+    volumes:
+      - /etc/envsync/license:/etc/envsync/license:ro
     networks: [envsync]
     deploy:
       replicas: ${slotHasApiDeployment(deployment.slots.blue) ? 1 : 0}
@@ -1770,6 +1826,8 @@ ${renderEnvList({
 		ENVSYNC_DEPLOY_SLOT: "green",
 		ENVSYNC_DEPLOY_RELEASE_VERSION: deployment.slots.green.release_version || config.release.version,
 	})}
+    volumes:
+      - /etc/envsync/license:/etc/envsync/license:ro
     networks: [envsync]
     deploy:
       replicas: ${slotHasApiDeployment(deployment.slots.green) ? 1 : 0}` : ""}
@@ -3064,6 +3122,7 @@ async function cmdPreinstall() {
 	ensureDir(RELEASES_ROOT);
 	ensureDir(BACKUPS_ROOT);
 	ensureDir(ETC_ROOT);
+	ensureDir(LICENSE_ROOT);
 	ensureDir(TRAEFIK_STATE_ROOT);
 	run("bash", ["-lc", "command -v apt-get >/dev/null"]);
 	run("sudo", ["apt-get", "update"]);
@@ -3097,8 +3156,13 @@ async function cmdSetup() {
 	const publicAuth = (await ask("Expose auth.<domain> publicly (true/false)", "true")) === "true";
 	const publicObs = (await ask("Expose obs.<domain> publicly (true/false)", "true")) === "true";
 	const mailpitEnabled = (await ask("Enable mailpit (true/false)", "false")) === "true";
+	const licenseServerUrl = await ask("Enterprise license server URL", DEFAULT_ENTERPRISE_LICENSE_SERVER_URL);
+	const licenseKey = licenseServerUrl ? await ask("Enterprise license key", "") : "";
+	const certificateBundleFile = licenseServerUrl ? "" : await ask("Enterprise certificate bundle file (optional)", "");
+	const installFingerprint = deterministicInstallFingerprint(rootDomain, "envsync");
 
 	const config: DeployConfig = {
+		edition: "enterprise",
 		source: defaultSourceConfig(releaseVersion),
 		release: {
 			version: releaseVersion,
@@ -3161,6 +3225,13 @@ async function cmdSetup() {
 			db_snapshot_on_api_upgrade: true,
 			keep_failed_upgrade_db_snapshot: true,
 		},
+		license: {
+			server_url: licenseServerUrl || undefined,
+			key: licenseKey || undefined,
+			install_fingerprint: installFingerprint,
+			certificate_bundle_file: certificateBundleFile || undefined,
+			certificate_validity_days: 1095,
+		},
 	};
 
 	saveDesiredConfig(config);
@@ -3177,6 +3248,7 @@ async function cmdBootstrap() {
 	const runtimeEnv = renderHelpers.buildRuntimeEnv(config, nextGenerated);
 	logReleaseContext(config);
 	assertSwarmManager();
+	await ensureEnterpriseCertificateBundle(config);
 	if (currentOptions.dryRun) {
 		logWarn("Dry-run mode: bootstrap reset will be previewed but not executed.");
 	}
@@ -3658,6 +3730,161 @@ function sha256File(filePath: string) {
 	return hash.digest("hex");
 }
 
+function parseEnterpriseLicenseBundle(raw: unknown): EnterpriseLicenseCertificateBundle {
+	if (!raw || typeof raw !== "object") {
+		throw new Error("Invalid Enterprise license certificate bundle: expected an object.");
+	}
+	const candidate = raw as Partial<EnterpriseLicenseCertificateBundle>;
+	const requiredStrings: Array<keyof EnterpriseLicenseCertificateBundle> = [
+		"certificate_pem",
+		"private_key_pem",
+		"root_ca_pem",
+		"serial_hex",
+		"certificate_fingerprint_sha256",
+		"root_ca_fingerprint_sha256",
+		"issued_at",
+		"expires_at",
+	];
+	for (const key of requiredStrings) {
+		if (typeof candidate[key] !== "string" || candidate[key].length === 0) {
+			throw new Error(`Invalid Enterprise license certificate bundle: missing ${String(key)}.`);
+		}
+	}
+	if (!candidate.metadata || candidate.metadata.edition !== "enterprise") {
+		throw new Error("Invalid Enterprise license certificate bundle: missing enterprise metadata.");
+	}
+	return candidate as EnterpriseLicenseCertificateBundle;
+}
+
+function readEnterpriseLicenseBundle(bundlePath: string): EnterpriseLicenseCertificateBundle {
+	return parseEnterpriseLicenseBundle(JSON.parse(fs.readFileSync(bundlePath, "utf8")));
+}
+
+function normalizeLicenseServerUrl(serverUrl: string, route: "issue" | "renew") {
+	const trimmed = serverUrl.replace(/\/+$/, "");
+	return `${trimmed}/v1/certificates/${route}`;
+}
+
+async function requestEnterpriseLicenseCertificate(config: DeployConfig, route: "issue" | "renew") {
+	const license = config.license;
+	if (!license?.server_url) {
+		throw new Error(`Missing license.server_url in ${DEPLOY_YAML}. Set it or use license.certificate_bundle_file.`);
+	}
+	if (!license.key) {
+		throw new Error(`Missing license.key in ${DEPLOY_YAML}.`);
+	}
+	const installFingerprint = license.install_fingerprint || deterministicInstallFingerprint(config.domain.root_domain, config.services.stack_name);
+	const response = await fetch(normalizeLicenseServerUrl(license.server_url, route), {
+		method: "POST",
+		headers: {
+			"content-type": "application/json",
+			"x-license-server-access-key": license.key,
+		},
+		body: JSON.stringify({
+			license_key: license.key,
+			install_fingerprint: installFingerprint,
+			root_domain: config.domain.root_domain,
+			stack_name: config.services.stack_name,
+			edition: "enterprise",
+			requested_validity_days: license.certificate_validity_days ?? 1095,
+		}),
+	});
+	const body = await response.json().catch(() => ({})) as { bundle?: unknown; message?: string; error?: string };
+	if (!response.ok || !body.bundle) {
+		throw new Error(body.error || body.message || `License certificate ${route} failed with HTTP ${response.status}`);
+	}
+	return parseEnterpriseLicenseBundle(body.bundle);
+}
+
+function writeEnterpriseLicenseBundle(bundle: EnterpriseLicenseCertificateBundle) {
+	writeFileMaybe(LICENSE_BUNDLE_FILE, JSON.stringify(bundle, null, 2) + "\n", 0o600);
+	writeFileMaybe(LICENSE_CERT_FILE, bundle.certificate_pem.endsWith("\n") ? bundle.certificate_pem : `${bundle.certificate_pem}\n`, 0o600);
+	writeFileMaybe(LICENSE_KEY_FILE, bundle.private_key_pem.endsWith("\n") ? bundle.private_key_pem : `${bundle.private_key_pem}\n`, 0o600);
+	writeFileMaybe(LICENSE_ROOT_CA_FILE, bundle.root_ca_pem.endsWith("\n") ? bundle.root_ca_pem : `${bundle.root_ca_pem}\n`, 0o644);
+}
+
+async function ensureEnterpriseCertificateBundle(config: DeployConfig) {
+	if (isOssConfig(config)) return;
+	if (exists(LICENSE_BUNDLE_FILE) && exists(LICENSE_CERT_FILE) && exists(LICENSE_KEY_FILE) && exists(LICENSE_ROOT_CA_FILE)) {
+		validateEnterpriseLicenseBundleFiles(config, false);
+		return;
+	}
+	if (currentOptions.dryRun) {
+		logDryRun(`Would install or issue Enterprise certificate bundle under ${LICENSE_ROOT}`);
+		return;
+	}
+	if (config.license?.certificate_bundle_file) {
+		logStep("Installing Enterprise certificate bundle from configured file");
+		const bundle = readEnterpriseLicenseBundle(config.license.certificate_bundle_file);
+		writeEnterpriseLicenseBundle(bundle);
+		validateEnterpriseLicenseBundleFiles(config, false);
+		return;
+	}
+	if (config.license?.server_url && config.license.key) {
+		logStep("Issuing Enterprise certificate bundle from license server");
+		const bundle = await requestEnterpriseLicenseCertificate(config, "issue");
+		writeEnterpriseLicenseBundle(bundle);
+		validateEnterpriseLicenseBundleFiles(config, false);
+		return;
+	}
+	throw new Error(
+		`Enterprise deployments require a certificate bundle. Configure license.server_url and license.key, set license.certificate_bundle_file, or run 'envsync-deploy license issue-cert'.`,
+	);
+}
+
+function validateEnterpriseLicenseBundleFiles(config: DeployConfig, verbose = true) {
+	if (isOssConfig(config)) {
+		if (verbose) logInfo("OSS deployments do not use Enterprise license certificates.");
+		return null;
+	}
+	const bundle = readEnterpriseLicenseBundle(LICENSE_BUNDLE_FILE);
+	if (bundle.metadata.install_fingerprint !== config.license?.install_fingerprint) {
+		throw new Error("Installed Enterprise certificate bundle does not match deploy.yaml license.install_fingerprint.");
+	}
+	if (bundle.metadata.stack_name !== config.services.stack_name) {
+		throw new Error("Installed Enterprise certificate bundle does not match deploy.yaml services.stack_name.");
+	}
+	if (bundle.metadata.root_domain !== config.domain.root_domain) {
+		throw new Error("Installed Enterprise certificate bundle does not match deploy.yaml domain.root_domain.");
+	}
+	for (const filePath of [LICENSE_CERT_FILE, LICENSE_KEY_FILE, LICENSE_ROOT_CA_FILE]) {
+		if (!exists(filePath)) throw new Error(`Missing Enterprise license file: ${filePath}`);
+	}
+	if (verbose) {
+		logSuccess(`Enterprise certificate bundle is installed at ${LICENSE_ROOT}`);
+		logInfo(`Certificate serial: ${bundle.serial_hex}`);
+		logInfo(`Certificate expires: ${bundle.expires_at}`);
+	}
+	return bundle;
+}
+
+async function cmdLicense(action = "validate-cert") {
+	logSection("Enterprise License");
+	const config = loadConfig();
+	if (isOssConfig(config)) {
+		logInfo("OSS deployments do not require license verification.");
+		return;
+	}
+	if (action === "issue-cert" || action === "renew-cert") {
+		const route = action === "renew-cert" ? "renew" : "issue";
+		if (currentOptions.dryRun) {
+			logDryRun(`Would ${route} Enterprise certificate bundle and install it under ${LICENSE_ROOT}`);
+			return;
+		}
+		const bundle = config.license?.certificate_bundle_file
+			? readEnterpriseLicenseBundle(config.license.certificate_bundle_file)
+			: await requestEnterpriseLicenseCertificate(config, route);
+		writeEnterpriseLicenseBundle(bundle);
+		validateEnterpriseLicenseBundleFiles(config);
+		return;
+	}
+	if (action === "validate-cert") {
+		validateEnterpriseLicenseBundleFiles(config);
+		return;
+	}
+	throw new Error("Unknown license action. Expected issue-cert, renew-cert, or validate-cert.");
+}
+
 function stackVolumeName(config: DeployConfig, name: (typeof STACK_VOLUMES)[number]) {
 	return `${config.services.stack_name}_${name}`;
 }
@@ -3779,6 +4006,9 @@ async function cmdBackup() {
 		for (const volume of STACK_VOLUMES) {
 			backupDockerVolume(stackVolumeName(config, volume), path.join(staged, "volumes", volume));
 		}
+		if (!isOssConfig(config)) {
+			logDryRun(`Would include Enterprise license material from ${LICENSE_ROOT}`);
+		}
 		logDryRun(`Would write manifest ${manifestPath}`);
 		logDryRun(`Would create archive ${tarPath}`);
 		logSuccess("Backup dry-run completed");
@@ -3806,6 +4036,9 @@ async function cmdBackup() {
 		writeFile(path.join(staged, "keycloak-realm.envsync.json"), fs.readFileSync(KEYCLOAK_REALM_FILE, "utf8"));
 		writeFile(path.join(staged, "otel-agent.yaml"), fs.readFileSync(OTEL_AGENT_CONF, "utf8"));
 		writeFile(path.join(staged, "clickhouse-listen.xml"), fs.readFileSync(CLICKSTACK_CLICKHOUSE_CONF, "utf8"));
+		if (!isOssConfig(config) && exists(LICENSE_ROOT)) {
+			fs.cpSync(LICENSE_ROOT, path.join(staged, "license"), { recursive: true });
+		}
 		const volumesDir = path.join(staged, "volumes");
 		for (const volume of STACK_VOLUMES) {
 			backupDockerVolume(stackVolumeName(config, volume), path.join(volumesDir, volume));
@@ -3882,6 +4115,11 @@ async function cmdRestore(archivePath: string, autoDeploy = false) {
 	writeFile(KEYCLOAK_REALM_FILE, fs.readFileSync(path.join(restoreRoot, "keycloak-realm.envsync.json"), "utf8"));
 	writeFile(OTEL_AGENT_CONF, fs.readFileSync(path.join(restoreRoot, "otel-agent.yaml"), "utf8"));
 	writeFile(CLICKSTACK_CLICKHOUSE_CONF, fs.readFileSync(path.join(restoreRoot, "clickhouse-listen.xml"), "utf8"));
+	const restoredLicenseRoot = path.join(restoreRoot, "license");
+	if (exists(restoredLicenseRoot)) {
+		fs.rmSync(LICENSE_ROOT, { recursive: true, force: true });
+		fs.cpSync(restoredLicenseRoot, LICENSE_ROOT, { recursive: true });
+	}
 	const config = loadConfig();
 	for (const volume of STACK_VOLUMES) {
 		restoreDockerVolume(stackVolumeName(config, volume), path.join(restoreRoot, "volumes", volume));
@@ -3943,6 +4181,9 @@ async function main() {
 			break;
 		case "upgrade-deps":
 			await cmdUpgradeDeps();
+			break;
+		case "license":
+			await cmdLicense(positionals[0]);
 			break;
 		case "backup":
 			await cmdBackup();

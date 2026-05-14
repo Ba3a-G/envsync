@@ -7,6 +7,28 @@ export interface LicenseVerificationRequest {
 	root_domain?: string;
 	stack_name?: string;
 	release_version?: string;
+	requested_validity_days?: number;
+}
+
+export interface EnterpriseLicenseCertificateBundle {
+	version: 1;
+	certificate_pem: string;
+	private_key_pem: string;
+	root_ca_pem?: string;
+	serial_hex: string;
+	certificate_fingerprint_sha256: string;
+	root_ca_fingerprint_sha256: string;
+	issued_at: string;
+	expires_at: string;
+	metadata: {
+		edition: "enterprise";
+		license_key_hash: string;
+		install_fingerprint: string;
+		root_domain?: string;
+		stack_name?: string;
+		release_version?: string;
+		issuer: "envsync-license-server";
+	};
 }
 
 export interface LicenseVerificationResponse {
@@ -18,6 +40,7 @@ export interface LicenseVerificationResponse {
 	license_key?: string | null;
 	activated_at?: string | null;
 	last_verified_at?: string | null;
+	bundle?: EnterpriseLicenseCertificateBundle;
 }
 
 async function postLicense(path: string, body: LicenseVerificationRequest, serverUrl = config.ENVSYNC_LICENSE_SERVER_URL) {
@@ -48,5 +71,13 @@ export class LicenseServerClient {
 
 	public static verify(body: LicenseVerificationRequest, serverUrl?: string) {
 		return postLicense("/v1/verify", body, serverUrl);
+	}
+
+	public static issueCertificate(body: LicenseVerificationRequest, serverUrl?: string) {
+		return postLicense("/v1/certificates/issue", body, serverUrl);
+	}
+
+	public static renewCertificate(body: LicenseVerificationRequest, serverUrl?: string) {
+		return postLicense("/v1/certificates/renew", body, serverUrl);
 	}
 }

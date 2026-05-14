@@ -120,7 +120,7 @@ export async function waitForOpenFGA(openfgaUrl?: string): Promise<void> {
 
 export async function waitForMailpit(host?: string, port?: number): Promise<void> {
 	const h = host ?? "localhost";
-	const p = port ?? 1025;
+	const p = port ?? parseInt(process.env.MAILPIT_SMTP_PORT ?? "1025", 10);
 	await waitFor(
 		"Mailpit",
 		() =>

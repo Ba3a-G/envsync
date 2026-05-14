@@ -20,7 +20,7 @@ const deployConfigSchema = z.object({
 		ref: z.string().default("main"),
 	}).default({}),
 	release: z.object({
-		version: z.string().default("0.8.6"),
+		version: z.string().default("0.8.7"),
 		channel: z.string().default("stable"),
 	}).default({}),
 	domain: z.object({
@@ -230,6 +230,11 @@ function buildRuntimeEnv(config: DeployConfig, edition: DeployEdition) {
 		ENVSYNC_LANDING_ENABLED: String(enterprise),
 		ENVSYNC_SINGLE_ORG_MODE: String(edition === "oss"),
 		ENVSYNC_LICENSE_ENFORCEMENT: String(enterprise),
+		ENVSYNC_LICENSE_MODE: enterprise ? "certificate" : "none",
+		ENVSYNC_LICENSE_BUNDLE_PATH: enterprise ? "/etc/envsync/license/enterprise-license-bundle.json" : "",
+		ENVSYNC_LICENSE_CERT_PATH: enterprise ? "/etc/envsync/license/enterprise-cert.pem" : "",
+		ENVSYNC_LICENSE_KEY_PATH: enterprise ? "/etc/envsync/license/enterprise-key.pem" : "",
+		ENVSYNC_LICENSE_ROOT_CA_CERT_PATH: enterprise ? "/etc/envsync/license/root-ca.pem" : "",
 		MANAGEMENT_API_URL: enterprise ? `https://manage-api.${config.domain.root_domain}` : "",
 		ENVSYNC_LICENSE_SERVER_URL: enterprise ? (config.license.server_url ?? "") : "",
 		ENVSYNC_LICENSE_KEY: enterprise ? (config.license.key ?? "") : "",

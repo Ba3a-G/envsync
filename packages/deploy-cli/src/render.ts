@@ -212,6 +212,11 @@ export function buildRuntimeEnv(config: DeployConfig, generated: DeployGenerated
 		ENVSYNC_LANDING_ENABLED: oss ? "false" : "true",
 		ENVSYNC_SINGLE_ORG_MODE: oss ? "true" : "false",
 		ENVSYNC_LICENSE_ENFORCEMENT: oss ? "false" : "true",
+		ENVSYNC_LICENSE_MODE: oss ? "none" : "certificate",
+		ENVSYNC_LICENSE_BUNDLE_PATH: oss ? "" : "/etc/envsync/license/enterprise-license-bundle.json",
+		ENVSYNC_LICENSE_CERT_PATH: oss ? "" : "/etc/envsync/license/enterprise-cert.pem",
+		ENVSYNC_LICENSE_KEY_PATH: oss ? "" : "/etc/envsync/license/enterprise-key.pem",
+		ENVSYNC_LICENSE_ROOT_CA_CERT_PATH: oss ? "" : "/etc/envsync/license/root-ca.pem",
 		DB_AUTO_MIGRATE: "false",
 		PORT: `${config.services.api_port}`,
 		DATABASE_HOST: "postgres",
@@ -595,6 +600,7 @@ export function renderStack(
 	const includeRuntimeInfra = mode !== "base";
 	const includeAppServices = mode === "full";
 	const landingEnabled = !isOssConfig(config);
+	const apiLicenseVolume = landingEnabled ? "\n    volumes:\n      - /etc/envsync/license:/etc/envsync/license:ro" : "";
 	const deployment = createSteadyApiDeploymentState(config, generated);
 	const stackName = config.services.stack_name;
 	const s3RouterName = `${stackName}-s3-router`;
@@ -842,6 +848,7 @@ ${renderEnvList({
 		ENVSYNC_DEPLOY_SLOT: "blue",
 		ENVSYNC_DEPLOY_RELEASE_VERSION: deployment.slots.blue.release_version || config.release.version,
 	})}
+${apiLicenseVolume}
     networks: [envsync]
     deploy:
       replicas: ${slotHasApiDeployment(deployment.slots.blue) ? 1 : 0}
@@ -854,6 +861,7 @@ ${renderEnvList({
 		ENVSYNC_DEPLOY_SLOT: "green",
 		ENVSYNC_DEPLOY_RELEASE_VERSION: deployment.slots.green.release_version || config.release.version,
 	})}
+${apiLicenseVolume}
     networks: [envsync]
     deploy:
       replicas: ${slotHasApiDeployment(deployment.slots.green) ? 1 : 0}` : ""}
