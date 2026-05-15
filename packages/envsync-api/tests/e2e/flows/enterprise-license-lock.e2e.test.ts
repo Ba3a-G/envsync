@@ -267,7 +267,8 @@ describe.serial("Enterprise License Lock E2E", () => {
 		}>();
 		expect(inactiveLicenseStatus.required).toBe(true);
 		expect(inactiveLicenseStatus.locked).toBe(true);
-		expect(inactiveLicenseStatus.state.status).toBe("error");
+		expect(inactiveLicenseStatus.reason).toBe("LICENSE_NOT_FOUND");
+		expect(inactiveLicenseStatus.state.status).toBe("inactive");
 
 		LicenseStateService.stopHeartbeatForTests();
 		LicenseStateService.setTestOverrides({
@@ -331,7 +332,7 @@ describe.serial("Enterprise License Lock E2E", () => {
 				const response = await managementTestRequest("/api/license/status");
 				return await response.json<{ locked: boolean; state: { status: string } }>();
 			},
-			value => value.locked && value.state.status === "error",
+			value => value.locked && value.state.status === "inactive",
 		);
 
 		const [coreAppsRes, managementProvidersRes, coreSystemRes, managementSystemRes, licenseStatusRes] = await Promise.all([
@@ -354,15 +355,16 @@ describe.serial("Enterprise License Lock E2E", () => {
 
 		const coreLocked = await coreAppsRes.json<{ code: string; reason: string }>();
 		const managementLocked = await managementProvidersRes.json<{ code: string; reason: string }>();
-		expect(coreLocked.code).toBe("LICENSE_SERVER_UNREACHABLE");
-		expect(managementLocked.code).toBe("LICENSE_SERVER_UNREACHABLE");
+		expect(coreLocked.code).toBe("LICENSE_NOT_FOUND");
+		expect(managementLocked.code).toBe("LICENSE_NOT_FOUND");
 
 		const managementSystem = await managementSystemRes.json<{
 			license: { required: boolean; locked: boolean; reason: string | null; state: { status: string } };
 		}>();
 		expect(managementSystem.license.required).toBe(true);
 		expect(managementSystem.license.locked).toBe(true);
-		expect(managementSystem.license.state.status).toBe("error");
+		expect(managementSystem.license.reason).toBe("LICENSE_NOT_FOUND");
+		expect(managementSystem.license.state.status).toBe("inactive");
 
 		const licenseStatus = await licenseStatusRes.json<{
 			required: boolean;
@@ -372,7 +374,7 @@ describe.serial("Enterprise License Lock E2E", () => {
 		}>();
 		expect(licenseStatus.required).toBe(true);
 		expect(licenseStatus.locked).toBe(true);
-		expect(licenseStatus.reason).toBe("LICENSE_SERVER_UNREACHABLE");
-		expect(licenseStatus.state.status).toBe("error");
+		expect(licenseStatus.reason).toBe("LICENSE_NOT_FOUND");
+		expect(licenseStatus.state.status).toBe("inactive");
 	});
 });
