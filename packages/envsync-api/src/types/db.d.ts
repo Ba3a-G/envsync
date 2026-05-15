@@ -268,6 +268,14 @@ export interface LicenseState extends BaseTable {
 	last_verified_at?: ColumnType<Date | null>;
 	last_error_code?: ColumnType<string | null>;
 	last_error_message?: ColumnType<string | null>;
+	validation_mode?: ColumnType<"none" | "lease" | "certificate" | null>;
+	certificate_serial_hex?: ColumnType<string | null>;
+	certificate_fingerprint_sha256?: ColumnType<string | null>;
+	certificate_subject?: ColumnType<string | null>;
+	certificate_issuer?: ColumnType<string | null>;
+	certificate_expires_at?: ColumnType<Date | null>;
+	root_ca_fingerprint_sha256?: ColumnType<string | null>;
+	validated_at?: ColumnType<Date | null>;
 }
 
 export interface ProviderConnection extends BaseTable {

@@ -73,6 +73,7 @@ function copyDirSync(src: string, dest: string) {
 Promise.all([esmBuild()]).then(() => {
 	// Copy .proto files so the gRPC client can load them at runtime from dist/
 	copyDirSync("./src/libs/kms/proto", "./dist/libs/kms/proto");
+	copyDirSync("./src/assets", "./dist/assets");
 });
 
 exec("tsc --emitDeclarationOnly --declaration --project tsconfig.build.json");

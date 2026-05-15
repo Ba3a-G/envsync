@@ -38,6 +38,60 @@ const envE2EPath = path.join(apiDir, ".env.e2e.test");
 
 const E2E_DB_NAME = "envsync_e2e_test";
 const E2E_MINIKMS_ROOT_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+const E2E_COMPOSE_UP_ATTEMPTS = Number(process.env.ENVSYNC_E2E_COMPOSE_UP_ATTEMPTS ?? "3");
+const E2E_ENV_OVERRIDE_KEYS = [
+	"DATABASE_HOST",
+	"DATABASE_PORT",
+	"DATABASE_USER",
+	"DATABASE_PASSWORD",
+	"POSTGRES_PORT",
+	"REDIS_PORT",
+	"KEYCLOAK_PORT",
+	"KEYCLOAK_URL",
+	"KEYCLOAK_REALM",
+	"KEYCLOAK_ADMIN_USER",
+	"KEYCLOAK_ADMIN_PASSWORD",
+	"OPENFGA_HTTP_PORT",
+	"OPENFGA_GRPC_PORT",
+	"OPENFGA_API_URL",
+	"MAILPIT_PORT",
+	"MAILPIT_SMTP_PORT",
+	"MINIKMS_DB_PORT",
+	"MINIKMS_GRPC_PORT",
+	"CLICKSTACK_PORT",
+	"CLICKSTACK_OTEL_GRPC_PORT",
+	"CLICKSTACK_OTEL_HTTP_PORT",
+	"OTEL_AGENT_OTLP_GRPC_PORT",
+	"OTEL_AGENT_OTLP_HTTP_PORT",
+	"OTEL_EXPORTER_OTLP_ENDPOINT",
+];
+
+function sleepMs(ms: number): void {
+	Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function restoreExplicitEnvOverrides(keys: string[]): () => void {
+	const explicitValues = new Map<string, string>();
+	for (const key of keys) {
+		const value = process.env[key];
+		if (value !== undefined) explicitValues.set(key, value);
+	}
+
+	return () => {
+		for (const [key, value] of explicitValues) {
+			process.env[key] = value;
+		}
+	};
+}
+
+function loadRootEnvPreservingOverrides(): void {
+	const restoreOverrides = restoreExplicitEnvOverrides(E2E_ENV_OVERRIDE_KEYS);
+	const rootEnvPath = path.join(rootDir, ".env");
+	if (fs.existsSync(rootEnvPath)) {
+		loadEnvFile(rootEnvPath);
+	}
+	restoreOverrides();
+}
 
 // ── Docker Compose helpers ──────────────────────────────────────────
 
@@ -53,30 +107,39 @@ function dockerComposeBuildKeycloak(): void {
 
 function dockerComposeUp(): void {
 	process.env.MINIKMS_ROOT_KEY ||= E2E_MINIKMS_ROOT_KEY;
-	console.log("\nStarting Docker Compose services for E2E...");
-	const result = spawnSync(
-		"docker",
-		[
-			"compose",
-			"up",
-			"-d",
-			"postgres",
-			"redis",
-			"openfga_db",
-			"openfga_migrate",
-			"openfga",
-			"mailpit",
-			"keycloak_db",
-			"keycloak",
-			"minikms_db",
-			"minikms_migrate",
-			"minikms",
-			"clickstack",
-			"otel-agent",
-		],
-		{ cwd: rootDir, stdio: "inherit", env: process.env },
-	);
-	if (result.status !== 0) throw new Error("Docker Compose up failed.");
+	const composeUpArgs = [
+		"compose",
+		"up",
+		"-d",
+		"postgres",
+		"redis",
+		"openfga_db",
+		"openfga_migrate",
+		"openfga",
+		"mailpit",
+		"keycloak_db",
+		"keycloak",
+		"minikms_db",
+		"minikms_migrate",
+		"minikms",
+		"clickstack",
+		"otel-agent",
+	];
+
+	for (let attempt = 1; attempt <= E2E_COMPOSE_UP_ATTEMPTS; attempt += 1) {
+		console.log(`\nStarting Docker Compose services for E2E (attempt ${attempt}/${E2E_COMPOSE_UP_ATTEMPTS})...`);
+		const result = spawnSync("docker", composeUpArgs, { cwd: rootDir, stdio: "inherit", env: process.env });
+		if (result.status === 0) return;
+
+		if (attempt < E2E_COMPOSE_UP_ATTEMPTS) {
+			console.log("Docker Compose up failed. Cleaning partial services before retry...");
+			spawnSync("docker", ["compose", "down", "--remove-orphans"], { cwd: rootDir, stdio: "inherit", env: process.env });
+			sleepMs(5_000 * attempt);
+		}
+	}
+
+	spawnSync("docker", ["compose", "down", "--remove-orphans"], { cwd: rootDir, stdio: "inherit", env: process.env });
+	throw new Error(`Docker Compose up failed after ${E2E_COMPOSE_UP_ATTEMPTS} attempts.`);
 }
 
 function dockerComposeExec(service: string, args: string[], opts: { stdio?: "inherit" | "pipe"; encoding?: BufferEncoding } = {}) {
@@ -257,10 +320,7 @@ async function init(): Promise<void> {
 	console.log("E2E Environment Setup\n");
 
 	// Load root .env for docker-compose port overrides
-	const rootEnvPath = path.join(rootDir, ".env");
-	if (fs.existsSync(rootEnvPath)) {
-		loadEnvFile(rootEnvPath);
-	}
+	loadRootEnvPreservingOverrides();
 	process.env.MINIKMS_ROOT_KEY ||= E2E_MINIKMS_ROOT_KEY;
 
 	// Start docker services
@@ -305,7 +365,7 @@ async function init(): Promise<void> {
 	// Write .env.e2e.test
 	const e2eEnv: Record<string, string> = {
 		MINIKMS_ROOT_KEY: process.env.MINIKMS_ROOT_KEY,
-		MINIKMS_GRPC_ADDR: "localhost:50051",
+		MINIKMS_GRPC_ADDR: `localhost:${process.env.MINIKMS_GRPC_PORT ?? "50051"}`,
 		MINIKMS_TLS_ENABLED: "false",
 		OPENFGA_API_URL: openfgaUrl,
 		OPENFGA_STORE_ID: openfga.storeId,
@@ -326,7 +386,8 @@ async function init(): Promise<void> {
 		KEYCLOAK_E2E_CLIENT_SECRET: keycloakClient.clientSecret,
 		LANDING_PAGE_URL: process.env.LANDING_PAGE_URL ?? "http://localhost:8002",
 		DASHBOARD_URL: process.env.DASHBOARD_URL ?? "http://app.lvh.me:8001",
-		OTEL_EXPORTER_OTLP_ENDPOINT: "http://localhost:14318",
+		OTEL_EXPORTER_OTLP_ENDPOINT:
+			process.env.OTEL_EXPORTER_OTLP_ENDPOINT ?? `http://localhost:${process.env.OTEL_AGENT_OTLP_HTTP_PORT ?? "14318"}`,
 		OTEL_SERVICE_NAME: "envsync-api",
 	};
 
@@ -343,10 +404,7 @@ async function cleanup(): Promise<void> {
 	console.log("E2E Environment Cleanup\n");
 
 	// Load root .env for database connection info
-	const rootEnvPath = path.join(rootDir, ".env");
-	if (fs.existsSync(rootEnvPath)) {
-		loadEnvFile(rootEnvPath);
-	}
+	loadRootEnvPreservingOverrides();
 
 	// Drop E2E database
 	dropE2EDatabase();

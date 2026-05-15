@@ -1,8 +1,7 @@
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { defineConfig } from "tsup";
+import { fileURLToPath } from "node:url";
 
-const dirname = path.dirname(fileURLToPath(import.meta.url));
+const deployCoreSource = fileURLToPath(new URL("../deploy-core/src/index.ts", import.meta.url));
 
 export default defineConfig({
 	entry: ["src/index.ts"],
@@ -11,15 +10,21 @@ export default defineConfig({
 	target: "node18",
 	outDir: "dist",
 	bundle: true,
-	external: ["chalk", "yaml", "zod"],
 	splitting: false,
 	clean: true,
 	sourcemap: false,
 	dts: false,
-	esbuildOptions(options) {
-		options.alias = {
-			...options.alias,
-			"@envsync-cloud/deploy-core": path.resolve(dirname, "../deploy-core/src/index.ts"),
-		};
+	esbuildPlugins: [
+		{
+			name: "workspace-deploy-core-source",
+			setup(build) {
+				build.onResolve({ filter: /^@envsync-cloud\/deploy-core$/ }, () => ({
+					path: deployCoreSource,
+				}));
+			},
+		},
+	],
+	banner: {
+		js: "#!/usr/bin/env node",
 	},
 });

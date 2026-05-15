@@ -1,6 +1,6 @@
 {
   "name": "@envsync-cloud/deploy",
-  "version": "0.8.6",
+  "version": "0.8.7",
   "type": "module",
   "bin": {
     "envsync-deploy": "dist/index.js"
@@ -41,6 +41,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@envsync-cloud/deploy-core": "workspace:*",
     "tsup": "^8.5.0",
     "typescript": "^5.9.2"
   },
