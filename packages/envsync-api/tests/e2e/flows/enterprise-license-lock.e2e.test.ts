@@ -355,8 +355,10 @@ describe.serial("Enterprise License Lock E2E", () => {
 
 		const coreLocked = await coreAppsRes.json<{ code: string; reason: string }>();
 		const managementLocked = await managementProvidersRes.json<{ code: string; reason: string }>();
-		expect(coreLocked.code).toBe("LICENSE_NOT_FOUND");
-		expect(managementLocked.code).toBe("LICENSE_NOT_FOUND");
+		expect(coreLocked.code).toBe("ENTERPRISE_LICENSE_INVALID");
+		expect(coreLocked.reason).toBe("LICENSE_NOT_FOUND");
+		expect(managementLocked.code).toBe("ENTERPRISE_LICENSE_INVALID");
+		expect(managementLocked.reason).toBe("LICENSE_NOT_FOUND");
 
 		const managementSystem = await managementSystemRes.json<{
 			license: { required: boolean; locked: boolean; reason: string | null; state: { status: string } };
