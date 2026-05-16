@@ -77,5 +77,6 @@ await build({
 });
 
 copyDirSync("../envsync-api/src/libs/mail/templates/html", "./dist/templates/html");
+copyDirSync("../envsync-api/src/libs/mail/templates/base", "./dist/templates/base");
 
 exec("tsc --emitDeclarationOnly --declaration --project tsconfig.build.json");
