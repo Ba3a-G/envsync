@@ -28,6 +28,7 @@ const config: DeployConfig = {
 	},
 	images: {
 		api: "ghcr.io/envsync-cloud/envsync-api:0.8.7",
+		management_api: "ghcr.io/envsync-cloud/envsync-management-api:0.8.7",
 		keycloak: "envsync-keycloak:0.8.7",
 		web: "ghcr.io/envsync-cloud/envsync-web-static:0.8.7",
 		landing: "ghcr.io/envsync-cloud/envsync-landing-static:0.8.7",
@@ -38,6 +39,7 @@ const config: DeployConfig = {
 	services: {
 		stack_name: "envsync",
 		api_port: 4000,
+		management_api_port: 4001,
 		public_http_port: 80,
 		public_https_port: 443,
 		clickstack_ui_port: 8080,
@@ -151,6 +153,7 @@ describe("deploy render helpers", () => {
 		expect(runtimeEnv.KEYCLOAK_WEB_CLIENT_SECRET).toBe("web-client-secret");
 		expect(runtimeEnv.OPENFGA_STORE_ID).toBe("store_123");
 		expect(runtimeEnv.DASHBOARD_URL).toBe("https://app.enterprise.example.com");
+		expect(runtimeEnv.MANAGEMENT_API_URL).toBe("https://manage-api.enterprise.example.com");
 
 		expect(stackBase).not.toContain("landing_nginx");
 		expect(stackBase).not.toContain("envsync_api_blue");
@@ -159,6 +162,7 @@ describe("deploy render helpers", () => {
 		expect(stackFull).toContain("web_nginx");
 		expect(stackFull).toContain("envsync_api_blue");
 		expect(stackFull).toContain("envsync_api_green");
+		expect(stackFull).toContain("envsync-management-api");
 		expect(stackFull).toContain("/opt/envsync/releases/web/current:/srv/web:ro");
 		expect(stackFull).toContain("/opt/envsync/releases/landing/current:/srv/landing:ro");
 		expect(stackFull).toContain("/opt/envsync/deploy/keycloak-realm.envsync.json");
@@ -166,6 +170,7 @@ describe("deploy render helpers", () => {
 
 		expect(traefik).toContain("Host(`app.enterprise.example.com`)");
 		expect(traefik).toContain("Host(`api.enterprise.example.com`)");
+		expect(traefik).toContain("Host(`manage-api.enterprise.example.com`)");
 		expect(traefik).toContain("Host(`enterprise.example.com`)");
 		expect(traefik).toContain("obs.enterprise.example.com");
 
@@ -174,6 +179,7 @@ describe("deploy render helpers", () => {
 		expect(keycloakRealm).toContain("https://app.enterprise.example.com/auth/callback");
 
 		expect(frontendRuntime).toContain("https://api.enterprise.example.com");
+		expect(frontendRuntime).toContain("\"managementApiUrl\": \"https://manage-api.enterprise.example.com\"");
 		expect(frontendRuntime).toContain("\"activeApiSlot\": \"blue\"");
 		expect(frontendRuntime).toContain("\"releaseVersion\": \"0.8.7\"");
 	});
