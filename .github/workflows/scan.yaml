@@ -1,4 +1,4 @@
-name: Build
+name: Scan for SonarCube
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    name: Build and analyze
+    name: SonarCube analyze
     runs-on: ubuntu-latest
     
     steps:
