@@ -91,6 +91,16 @@ interface DeployConfig {
 		lease_ttl_seconds?: number;
 		certificate_validity_days?: number;
 	};
+	access_proxy?: {
+		enabled: boolean;
+		provider: "tsdproxy";
+		auth_token: string;
+		domain: string;
+		service_scope: "all" | "selected";
+		services: string[];
+		advertise_routes: boolean;
+		include_admin_services: boolean;
+	};
 	release_channel?: string;
 }
 
@@ -512,6 +522,17 @@ function parseEnvFile(content: string): RuntimeEnv {
 	return out;
 }
 
+function asBool(value: string) {
+	return value.trim().toLowerCase() === "true" || value.trim().toLowerCase() === "y" || value.trim().toLowerCase() === "yes";
+}
+
+function asStringList(value: string) {
+	return value
+		.split(",")
+		.map(item => item.trim())
+		.filter(item => item.length > 0);
+}
+
 async function ask(question: string, fallback = ""): Promise<string> {
 	if (!process.stdin.isTTY) return fallback;
 	const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -913,6 +934,32 @@ function normalizeConfig(raw: Partial<DeployConfig>): DeployConfig {
 		} : raw.edition === "oss" ? undefined : {
 			install_fingerprint: deterministicInstallFingerprint(rootDomain, stackName),
 			certificate_validity_days: 1095,
+		},
+		access_proxy: {
+			enabled: raw.access_proxy?.enabled ?? false,
+			provider: "tsdproxy",
+			auth_token: raw.access_proxy?.auth_token ?? "",
+			domain: raw.access_proxy?.domain ?? `tsdproxy.${rootDomain}`,
+			service_scope: raw.access_proxy?.service_scope === "selected" ? "selected" : "all",
+			services: Array.isArray(raw.access_proxy?.services)
+				? raw.access_proxy.services.filter(s => typeof s === "string" && s.trim().length > 0)
+				: [
+					"api",
+					"web",
+					"landing",
+					"keycloak",
+					"openfga",
+					"postgre*",
+					"redis",
+					"rustfs",
+					"clickstack",
+					"obs",
+					"envsync_api_*",
+					"envsync_management-api",
+					"envsync-api",
+				],
+			advertise_routes: raw.access_proxy?.advertise_routes ?? false,
+			include_admin_services: raw.access_proxy?.include_admin_services ?? false,
 		},
 	};
 }
@@ -3339,6 +3386,24 @@ async function cmdSetup() {
 	const licenseKey = licenseServerUrl ? await ask("Enterprise license key", "") : "";
 	const certificateBundleFile = licenseServerUrl ? "" : await ask("Enterprise certificate bundle file (optional)", "");
 	const installFingerprint = deterministicInstallFingerprint(rootDomain, "envsync");
+	const enableAccessProxy = asBool(await ask("Enable private access proxy for container services (y/N)", "n"));
+	const accessProxyProvider = enableAccessProxy ? (await ask("Private access proxy provider", "tsdproxy")) : "tsdproxy";
+	const accessProxyAuthToken = enableAccessProxy
+		? await ask("Proxy auth token or API key", "")
+		: "";
+	const accessProxyDomain = enableAccessProxy ? await ask("Private access domain", `tsdproxy.${rootDomain}`) : `tsdproxy.${rootDomain}`;
+	const accessProxyExposeAll = enableAccessProxy
+		? asBool(await ask("Expose all services through proxy (Y/n)", "y"))
+		: true;
+	const accessProxyServices = !accessProxyExposeAll
+		? asStringList(await ask("Service hostnames to expose (comma-separated)", "postgres,api,web,landing,keycloak,minikms,openfga,rustfs,clickstack,obs,manage-api"))
+		: [];
+	const includeAdminServices = enableAccessProxy
+		? asBool(await ask("Expose admin/maintenance services (y/N)", "n"))
+		: false;
+	const accessProxyAdvertiseRoutes = enableAccessProxy
+		? asBool(await ask("Advertise overlay subnet routes through the proxy provider (y/N)", "n"))
+		: false;
 
 	const config: DeployConfig = {
 		edition: "enterprise",
@@ -3412,6 +3477,16 @@ async function cmdSetup() {
 			install_fingerprint: installFingerprint,
 			certificate_bundle_file: certificateBundleFile || undefined,
 			certificate_validity_days: 1095,
+		},
+		access_proxy: {
+			enabled: enableAccessProxy,
+			provider: accessProxyProvider as "tsdproxy",
+			auth_token: accessProxyAuthToken,
+			domain: accessProxyDomain,
+			service_scope: accessProxyExposeAll ? "all" : "selected",
+			services: accessProxyServices,
+			advertise_routes: accessProxyAdvertiseRoutes,
+			include_admin_services: includeAdminServices,
 		},
 	};
 
