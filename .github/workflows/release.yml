@@ -235,6 +235,20 @@ jobs:
             exit 1
           fi
 
+      - name: Validate no workspace runtime dependencies
+        run: |
+          node - <<'NODE'
+          const fs = require("node:fs");
+          const path = "packages/deploy/package.json";
+          const pkg = JSON.parse(fs.readFileSync(path, "utf8"));
+          const deps = pkg.dependencies || {};
+          const bad = Object.entries(deps).filter(([, spec]) => typeof spec === "string" && spec.startsWith("workspace:"));
+          if (bad.length) {
+            console.error(`[${path}] contains workspace:* in dependencies: ${bad.map(([name, spec]) => `${name}@${spec}`).join(", ")}`);
+            process.exit(1);
+          }
+          NODE
+
       - name: Build OSS deploy CLI
         working-directory: packages/deploy
         run: bun run build
@@ -341,6 +355,20 @@ jobs:
             echo "deploy-cli version ${DEPLOY_VERSION} does not match root version ${ROOT_VERSION}"
             exit 1
           fi
+
+      - name: Validate no workspace runtime dependencies
+        run: |
+          node - <<'NODE'
+          const fs = require("node:fs");
+          const path = "packages/deploy-cli/package.json";
+          const pkg = JSON.parse(fs.readFileSync(path, "utf8"));
+          const deps = pkg.dependencies || {};
+          const bad = Object.entries(deps).filter(([, spec]) => typeof spec === "string" && spec.startsWith("workspace:"));
+          if (bad.length) {
+            console.error(`[${path}] contains workspace:* in dependencies: ${bad.map(([name, spec]) => `${name}@${spec}`).join(", ")}`);
+            process.exit(1);
+          }
+          NODE
 
       - name: Build enterprise deploy CLI
         working-directory: packages/deploy-cli

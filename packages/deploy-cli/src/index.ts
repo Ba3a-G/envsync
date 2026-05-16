@@ -88,6 +88,7 @@ interface DeployConfig {
 		key?: string;
 		install_fingerprint?: string;
 		certificate_bundle_file?: string;
+		lease_ttl_seconds?: number;
 		certificate_validity_days?: number;
 	};
 	release_channel?: string;
@@ -170,6 +171,8 @@ const LICENSE_BUNDLE_FILE = path.join(LICENSE_ROOT, "enterprise-license-bundle.j
 const LICENSE_CERT_FILE = path.join(LICENSE_ROOT, "enterprise-cert.pem");
 const LICENSE_KEY_FILE = path.join(LICENSE_ROOT, "enterprise-key.pem");
 const LICENSE_ROOT_CA_FILE = path.join(LICENSE_ROOT, "root-ca.pem");
+const LICENSE_FILE_MODE = 0o644;
+const LICENSE_DIR_MODE = 0o755;
 const VERSIONS_LOCK = path.join(DEPLOY_ROOT, "versions.lock.json");
 const STACK_FILE = path.join(DEPLOY_ROOT, "docker-stack.yaml");
 const BOOTSTRAP_BASE_STACK_FILE = path.join(DEPLOY_ROOT, "docker-stack.bootstrap.base.yaml");
@@ -412,6 +415,29 @@ function writeFileMaybe(target: string, content: string, mode?: number) {
 		return;
 	}
 	writeFile(target, content, mode);
+}
+
+function ensureEnterpriseLicenseFilesReadable() {
+	if (exists(LICENSE_ROOT)) {
+		try {
+			fs.chmodSync(LICENSE_ROOT, LICENSE_DIR_MODE);
+		} catch {
+			throw new Error(
+				`Cannot update directory mode for ${LICENSE_ROOT}. Fix by running: chmod ${LICENSE_DIR_MODE.toString(8)} ${LICENSE_ROOT}`,
+			);
+		}
+	}
+	for (const filePath of [LICENSE_BUNDLE_FILE, LICENSE_CERT_FILE, LICENSE_KEY_FILE, LICENSE_ROOT_CA_FILE]) {
+		if (!exists(filePath)) continue;
+		try {
+			fs.chmodSync(filePath, LICENSE_FILE_MODE);
+		} catch {
+			// Surface a clear, actionable error so users can recover outside automation.
+			throw new Error(
+				`Cannot update file mode for ${filePath}. Fix by running: chmod ${LICENSE_FILE_MODE.toString(8)} ${filePath}`,
+			);
+		}
+	}
 }
 
 function exists(target: string) {
@@ -882,6 +908,7 @@ function normalizeConfig(raw: Partial<DeployConfig>): DeployConfig {
 			key: raw.license.key,
 			install_fingerprint: raw.license.install_fingerprint ?? deterministicInstallFingerprint(rootDomain, stackName),
 			certificate_bundle_file: raw.license.certificate_bundle_file,
+			lease_ttl_seconds: raw.license.lease_ttl_seconds,
 			certificate_validity_days: raw.license.certificate_validity_days,
 		} : raw.edition === "oss" ? undefined : {
 			install_fingerprint: deterministicInstallFingerprint(rootDomain, stackName),
@@ -1229,6 +1256,8 @@ function buildRuntimeEnv(config: DeployConfig, generated: DeployGeneratedState):
 	const hosts = domainMap(config.domain.root_domain);
 	const bucketName = "envsync-bucket";
 	const oss = isOssConfig(config);
+	const enterprise = !oss;
+	const license = config.license ?? {};
 	return {
 		NODE_ENV: "production",
 		DB_AUTO_MIGRATE: "false",
@@ -1293,6 +1322,11 @@ function buildRuntimeEnv(config: DeployConfig, generated: DeployGeneratedState):
 		OTEL_SERVICE_NAME: "envsync-api",
 		OTEL_SDK_DISABLED: "false",
 		ENVSYNC_LICENSE_MODE: "certificate",
+		ENVSYNC_LICENSE_SERVER_URL: enterprise ? (license.server_url ?? "") : "",
+		ENVSYNC_LICENSE_KEY: enterprise ? (license.key ?? "") : "",
+		ENVSYNC_INSTALL_FINGERPRINT: enterprise ? (license.install_fingerprint ?? "") : "",
+		ENVSYNC_LICENSE_LEASE_TTL_SECONDS: String(license.lease_ttl_seconds ?? 300),
+		ENVSYNC_STACK_NAME: config.services.stack_name,
 		ENVSYNC_LICENSE_BUNDLE_PATH: "/etc/envsync/license/enterprise-license-bundle.json",
 		ENVSYNC_LICENSE_CERT_PATH: "/etc/envsync/license/enterprise-cert.pem",
 		ENVSYNC_LICENSE_KEY_PATH: "/etc/envsync/license/enterprise-key.pem",
@@ -1639,6 +1673,7 @@ function renderStack(config: DeployConfig, runtimeEnv: RuntimeEnv, generated: De
 	const includeRuntimeInfra = mode !== "base";
 	const includeAppServices = mode === "full";
 	const managementEnabled = !isOssConfig(config);
+	const apiLicenseVolume = managementEnabled ? "\n    volumes:\n      - /etc/envsync/license:/etc/envsync/license:ro" : "";
 	const deployment = createSteadyApiDeploymentState(config, generated);
 	const stackName = config.services.stack_name;
 	const s3RouterName = `${stackName}-s3-router`;
@@ -1859,6 +1894,7 @@ ${renderEnvList({
 		...apiEnvironment,
 		PORT: `${config.services.management_api_port}`,
 	})}
+${apiLicenseVolume}
     networks: [envsync]` : ""}
 ${includeAppServices ? `
 
@@ -3477,6 +3513,9 @@ async function cmdDeploy() {
 	logSection("Deploy");
 	const { config, generated } = loadState();
 	logReleaseContext(config);
+	if (!isOssConfig(config)) {
+		ensureEnterpriseLicenseFilesReadable();
+	}
 	assertSwarmManager();
 	assertBootstrapState(generated);
 	if (!currentOptions.dryRun) {
@@ -3843,6 +3882,9 @@ async function cmdUpgrade(targetVersion?: string) {
 		ref: `v${desiredVersion}`,
 	};
 	logReleaseContext(config);
+	if (!isOssConfig(config) && !currentOptions.dryRun) {
+		ensureEnterpriseLicenseFilesReadable();
+	}
 	config.images = {
 		...config.images,
 		...versionedImages(desiredVersion),
@@ -3941,14 +3983,23 @@ async function requestEnterpriseLicenseCertificate(config: DeployConfig, route: 
 }
 
 function writeEnterpriseLicenseBundle(bundle: EnterpriseLicenseCertificateBundle) {
-	writeFileMaybe(LICENSE_BUNDLE_FILE, JSON.stringify(bundle, null, 2) + "\n", 0o600);
-	writeFileMaybe(LICENSE_CERT_FILE, bundle.certificate_pem.endsWith("\n") ? bundle.certificate_pem : `${bundle.certificate_pem}\n`, 0o600);
-	writeFileMaybe(LICENSE_KEY_FILE, bundle.private_key_pem.endsWith("\n") ? bundle.private_key_pem : `${bundle.private_key_pem}\n`, 0o600);
-	writeFileMaybe(LICENSE_ROOT_CA_FILE, bundle.root_ca_pem.endsWith("\n") ? bundle.root_ca_pem : `${bundle.root_ca_pem}\n`, 0o644);
+	writeFileMaybe(LICENSE_BUNDLE_FILE, JSON.stringify(bundle, null, 2) + "\n", LICENSE_FILE_MODE);
+	writeFileMaybe(
+		LICENSE_CERT_FILE,
+		bundle.certificate_pem.endsWith("\n") ? bundle.certificate_pem : `${bundle.certificate_pem}\n`,
+		LICENSE_FILE_MODE,
+	);
+	writeFileMaybe(
+		LICENSE_KEY_FILE,
+		bundle.private_key_pem.endsWith("\n") ? bundle.private_key_pem : `${bundle.private_key_pem}\n`,
+		LICENSE_FILE_MODE,
+	);
+	writeFileMaybe(LICENSE_ROOT_CA_FILE, bundle.root_ca_pem.endsWith("\n") ? bundle.root_ca_pem : `${bundle.root_ca_pem}\n`, LICENSE_FILE_MODE);
 }
 
 async function ensureEnterpriseCertificateBundle(config: DeployConfig) {
 	if (isOssConfig(config)) return;
+	ensureEnterpriseLicenseFilesReadable();
 	if (exists(LICENSE_BUNDLE_FILE) && exists(LICENSE_CERT_FILE) && exists(LICENSE_KEY_FILE) && exists(LICENSE_ROOT_CA_FILE)) {
 		validateEnterpriseLicenseBundleFiles(config, false);
 		return;
@@ -4009,6 +4060,7 @@ async function cmdLicense(action = "validate-cert") {
 		logInfo("OSS deployments do not require license verification.");
 		return;
 	}
+	ensureEnterpriseLicenseFilesReadable();
 	if (action === "issue-cert" || action === "renew-cert") {
 		const route = action === "renew-cert" ? "renew" : "issue";
 		if (currentOptions.dryRun) {
@@ -4263,6 +4315,7 @@ async function cmdRestore(archivePath: string, autoDeploy = false) {
 	if (exists(restoredLicenseRoot)) {
 		fs.rmSync(LICENSE_ROOT, { recursive: true, force: true });
 		fs.cpSync(restoredLicenseRoot, LICENSE_ROOT, { recursive: true });
+		ensureEnterpriseLicenseFilesReadable();
 	}
 	const config = loadConfig();
 	for (const volume of STACK_VOLUMES) {

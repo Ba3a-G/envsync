@@ -72,6 +72,13 @@ export interface DeployConfig {
 		db_snapshot_on_api_upgrade: boolean;
 		keep_failed_upgrade_db_snapshot: boolean;
 	};
+	license?: {
+		server_url?: string;
+		key?: string;
+		install_fingerprint?: string;
+		certificate_bundle_file?: string;
+		lease_ttl_seconds?: number;
+	};
 	release_channel?: string;
 }
 
@@ -208,6 +215,8 @@ export function buildRuntimeEnv(config: DeployConfig, generated: DeployGenerated
 	const hosts = domainMap(config.domain.root_domain);
 	const bucketName = "envsync-bucket";
 	const oss = isOssConfig(config);
+	const enterprise = !oss;
+	const license = config.license ?? {};
 	return {
 		NODE_ENV: "production",
 		ENVSYNC_EDITION: oss ? "oss" : "enterprise",
@@ -220,6 +229,11 @@ export function buildRuntimeEnv(config: DeployConfig, generated: DeployGenerated
 		ENVSYNC_LICENSE_CERT_PATH: oss ? "" : "/etc/envsync/license/enterprise-cert.pem",
 		ENVSYNC_LICENSE_KEY_PATH: oss ? "" : "/etc/envsync/license/enterprise-key.pem",
 		ENVSYNC_LICENSE_ROOT_CA_CERT_PATH: oss ? "" : "/etc/envsync/license/root-ca.pem",
+		ENVSYNC_LICENSE_SERVER_URL: enterprise ? (license.server_url ?? "") : "",
+		ENVSYNC_LICENSE_KEY: enterprise ? (license.key ?? "") : "",
+		ENVSYNC_INSTALL_FINGERPRINT: enterprise ? (license.install_fingerprint ?? "") : "",
+		ENVSYNC_LICENSE_LEASE_TTL_SECONDS: String(license.lease_ttl_seconds ?? 300),
+		ENVSYNC_STACK_NAME: config.services.stack_name,
 		DB_AUTO_MIGRATE: "false",
 		PORT: `${config.services.api_port}`,
 		MANAGEMENT_API_PORT: `${config.services.management_api_port}`,

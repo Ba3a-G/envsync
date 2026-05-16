@@ -85,6 +85,12 @@ const config: DeployConfig = {
 		db_snapshot_on_api_upgrade: true,
 		keep_failed_upgrade_db_snapshot: true,
 	},
+	license: {
+		server_url: "https://license.envsync.cloud",
+		key: "envsync-enterprise-key",
+		install_fingerprint: "envsync-b3bb411825372842f0fbdfacde54b5d8",
+		lease_ttl_seconds: 300,
+	},
 };
 
 const generated: DeployGeneratedState = {
@@ -154,6 +160,15 @@ describe("deploy render helpers", () => {
 		expect(runtimeEnv.OPENFGA_STORE_ID).toBe("store_123");
 		expect(runtimeEnv.DASHBOARD_URL).toBe("https://app.enterprise.example.com");
 		expect(runtimeEnv.MANAGEMENT_API_URL).toBe("https://manage-api.enterprise.example.com");
+		expect(runtimeEnv.ENVSYNC_LICENSE_SERVER_URL).toBe("https://license.envsync.cloud");
+		expect(runtimeEnv.ENVSYNC_LICENSE_KEY).toBe("envsync-enterprise-key");
+		expect(runtimeEnv.ENVSYNC_INSTALL_FINGERPRINT).toBe("envsync-b3bb411825372842f0fbdfacde54b5d8");
+		expect(runtimeEnv.ENVSYNC_LICENSE_LEASE_TTL_SECONDS).toBe("300");
+		expect(runtimeEnv.ENVSYNC_STACK_NAME).toBe("envsync");
+		expect(runtimeEnv.ENVSYNC_LICENSE_BUNDLE_PATH).toBe("/etc/envsync/license/enterprise-license-bundle.json");
+		expect(runtimeEnv.ENVSYNC_LICENSE_CERT_PATH).toBe("/etc/envsync/license/enterprise-cert.pem");
+		expect(runtimeEnv.ENVSYNC_LICENSE_KEY_PATH).toBe("/etc/envsync/license/enterprise-key.pem");
+		expect(runtimeEnv.ENVSYNC_LICENSE_ROOT_CA_CERT_PATH).toBe("/etc/envsync/license/root-ca.pem");
 
 		expect(stackBase).not.toContain("landing_nginx");
 		expect(stackBase).not.toContain("envsync_api_blue");
@@ -163,6 +178,7 @@ describe("deploy render helpers", () => {
 		expect(stackFull).toContain("envsync_api_blue");
 		expect(stackFull).toContain("envsync_api_green");
 		expect(stackFull).toContain("envsync-management-api");
+		expect(stackFull).toContain("/etc/envsync/license:/etc/envsync/license:ro");
 		expect(stackFull).toContain("/opt/envsync/releases/web/current:/srv/web:ro");
 		expect(stackFull).toContain("/opt/envsync/releases/landing/current:/srv/landing:ro");
 		expect(stackFull).toContain("/opt/envsync/deploy/keycloak-realm.envsync.json");
