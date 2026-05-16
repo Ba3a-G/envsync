@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 import { spawnSync } from "node:child_process";
 import chalk from "chalk";
 
@@ -13,10 +11,11 @@ function printHelp() {
 	console.log(`
 ${chalk.bold("EnvSync OSS Deploy")}
 
-Commands:
-  bootstrap [--force]               Bootstrap an OSS self-host topology
-  deploy                            Deploy the OSS self-host topology
-  health [--json]                   Inspect OSS self-host health
+	Commands:
+	  bootstrap [--force]               Bootstrap an OSS self-host topology
+	  deploy                            Deploy the OSS self-host topology
+  remove [--force]                  Remove local OSS deployment resources and files
+	  health [--json]                   Inspect OSS self-host health
   backup                            Create a self-host backup
   validate [deploy.yaml] [--json]   Validate an OSS topology config
   plan [deploy.yaml] [--json]       Render the OSS topology plan
@@ -60,6 +59,7 @@ async function main() {
 	switch (command) {
 		case "bootstrap":
 		case "deploy":
+		case "remove":
 		case "health":
 		case "backup":
 		case "restore":

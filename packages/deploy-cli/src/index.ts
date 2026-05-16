@@ -193,6 +193,35 @@ const DEPLOY_RENDER_PATHS = {
 	nginxApiMaintenanceConf: NGINX_API_MAINTENANCE_CONF,
 } as const;
 
+const REMOVE_TARGETS = [
+	DEPLOY_ROOT,
+	RELEASES_ROOT,
+	BACKUPS_ROOT,
+	TRAEFIK_STATE_ROOT,
+	REPO_ROOT,
+	DEPLOY_ENV,
+	DEPLOY_YAML,
+	LICENSE_ROOT,
+	LICENSE_BUNDLE_FILE,
+	LICENSE_CERT_FILE,
+	LICENSE_KEY_FILE,
+	LICENSE_ROOT_CA_FILE,
+	INTERNAL_CONFIG_JSON,
+	VERSIONS_LOCK,
+	STACK_FILE,
+	BOOTSTRAP_BASE_STACK_FILE,
+	BOOTSTRAP_STACK_FILE,
+	TRAEFIK_DYNAMIC_FILE,
+	KEYCLOAK_REALM_FILE,
+	NGINX_WEB_CONF,
+	NGINX_LANDING_CONF,
+	NGINX_API_MAINTENANCE_CONF,
+	OTEL_AGENT_CONF,
+	CLICKSTACK_CLICKHOUSE_CONF,
+] as const;
+
+const REMOVE_CONFIRMATION_TOKEN = "YES, DO IT";
+
 const STACK_VOLUMES = [
 	"postgres_data",
 	"redis_data",
@@ -465,9 +494,9 @@ async function ask(question: string, fallback = ""): Promise<string> {
 	});
 }
 
-async function askRequired(question: string): Promise<string> {
+async function askRequired(question: string, context = "Operation"): Promise<string> {
 	if (!process.stdin.isTTY) {
-		throw new Error("Bootstrap confirmation requires an interactive terminal. Re-run with --force to bypass the prompt.");
+		throw new Error(`${context} confirmation requires an interactive terminal. Re-run with --force to bypass the prompt.`);
 	}
 	const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 	return await new Promise(resolve => {
@@ -555,6 +584,7 @@ function renderHelpBlock() {
 		"  preinstall           Prepare the host with Docker, Swarm, and required packages",
 		"  setup                Write /etc/envsync/deploy.yaml for a new self-hosted install",
 		"  bootstrap            Destructively rebuild managed infra and bootstrap runtime state",
+		"  remove               Remove local self-hosted deployment files and runtime resources",
 		"  deploy               Deploy the configured release",
 		"  promote [blue|green] Promote the requested or inactive API slot",
 		"  rollback             Switch traffic back to the previous API slot",
@@ -652,6 +682,7 @@ function printOperatorOverview() {
 	const overview = buildOperatorOverview();
 	const commonCommands = [
 		"`envsync-deploy setup`",
+		"`envsync-deploy remove --force`",
 		"`envsync-deploy bootstrap --force`",
 		"`envsync-deploy deploy`",
 		"`envsync-deploy upgrade`",
@@ -2771,11 +2802,70 @@ async function confirmBootstrapReset(config: DeployConfig) {
 		logSuccess("Destructive bootstrap reset confirmed");
 		return;
 	}
-	const response = await askRequired(chalk.bold.red('Type "yes" to continue:'));
+	const response = await askRequired(chalk.bold.red('Type "yes" to continue:'), "Bootstrap");
 	if (response !== "yes") {
 		throw new Error("Bootstrap aborted. Confirmation did not match 'yes'.");
 	}
 	logSuccess("Destructive bootstrap reset confirmed");
+}
+
+function loadConfigForCleanup() {
+	if (!exists(DEPLOY_YAML)) {
+		logWarn(`No deploy config found at ${DEPLOY_YAML}; managed runtime cleanup will be skipped.`);
+		return null;
+	}
+	try {
+		return loadConfig();
+	} catch (error) {
+		logWarn(`Deploy config at ${DEPLOY_YAML} is unreadable and managed runtime cleanup will be skipped: ${error instanceof Error ? error.message : String(error)}`);
+		return null;
+	}
+}
+
+async function confirmRemove(config: DeployConfig | null) {
+	logWarn("Remove will delete local EnvSync deployment artifacts and managed Docker resources.");
+	logWarn(`Targets: ${REMOVE_TARGETS.join(", ")}`);
+	if (config) {
+		const stackName = config.services.stack_name;
+		const networkName = stackNetworkName(config);
+		const volumeNames = STACK_VOLUMES.map(volume => stackVolumeName(config, volume));
+		logWarn(`Stack: ${stackName}`);
+		logWarn(`Network: ${networkName}`);
+		logWarn(`Volumes: ${volumeNames.join(", ")}`);
+	}
+	if (currentOptions.force) {
+		logWarn("Skipping confirmation because --force was provided.");
+		logSuccess("Destructive remove confirmed");
+		return;
+	}
+	const response = await askRequired(chalk.bold.red(`Type "${REMOVE_CONFIRMATION_TOKEN}" to continue:`), "Remove");
+	if (response !== REMOVE_CONFIRMATION_TOKEN) {
+		throw new Error(`Remove aborted. Confirmation did not match '${REMOVE_CONFIRMATION_TOKEN}'.`);
+	}
+	logSuccess("Destructive remove confirmed");
+}
+
+function removeTarget(target: string) {
+	if (!exists(target)) return;
+	if (currentOptions.dryRun) {
+		logDryRun(`Would remove ${target}`);
+		return;
+	}
+	fs.rmSync(target, { recursive: true, force: true });
+	logInfo(`Removed ${target}`);
+}
+
+async function cmdRemove() {
+	logSection("Remove");
+	const config = loadConfigForCleanup();
+	await confirmRemove(config);
+	if (config) {
+		cleanupBootstrapState(config);
+	}
+	for (const target of REMOVE_TARGETS) {
+		removeTarget(target);
+	}
+	logSuccess("Remove completed");
 }
 
 function cleanupBootstrapState(config: DeployConfig) {
@@ -4187,6 +4277,9 @@ async function main() {
 			break;
 		case "backup":
 			await cmdBackup();
+			break;
+		case "remove":
+			await cmdRemove();
 			break;
 		case "restore":
 			await cmdRestore(positionals[0] ?? "", args.includes("--deploy"));
