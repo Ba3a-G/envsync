@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import path from "node:path";
 
 import infoLogs, { LogTypes } from "@/libs/logger";
 
@@ -10,16 +11,29 @@ const __dirname = new URL(".", import.meta.url).pathname;
 
 const FROM_EMAIL = config.SMTP_FROM;
 
+const readTemplate = async (templateName: string) => {
+	const templateCandidates = [
+		path.join(__dirname, "templates", "html", templateName),
+		path.join(__dirname, "..", "templates", "html", templateName),
+		path.join(__dirname, "..", "..", "templates", "html", templateName),
+	];
+
+	for (const candidate of templateCandidates) {
+		try {
+			return await fs.readFile(candidate, "utf8");
+		} catch {}
+	}
+
+	throw new Error(`Failed to resolve mail template ${templateName}`);
+};
+
 export const onOrgOnboardingInvite = async (
 	email: string,
 	body: {
 		accept_link: string;
 	},
 ) => {
-	const contentTemplate = await fs.readFile(
-		`${__dirname}/templates/html/org-onboarding-invite.html`,
-		"utf8",
-	);
+	const contentTemplate = await readTemplate("org-onboarding-invite.html");
 	const html = await renderMailContent(contentTemplate, body);
 	const subject = "EnvSync Org Onboarding Invite";
 	const mail = {
@@ -45,10 +59,7 @@ export const onUserOnboardingInvite = async (
 		org_name: string;
 	},
 ) => {
-	const contentTemplate = await fs.readFile(
-		`${__dirname}/templates/html/user-onboarding-invite.html`,
-		"utf8",
-	);
+	const contentTemplate = await readTemplate("user-onboarding-invite.html");
 	const html = await renderMailContent(contentTemplate, body);
 	const subject = "EnvSync User Onboarding Invite";
 	const mail = {

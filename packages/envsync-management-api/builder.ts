@@ -50,6 +50,22 @@ const aliasPlugin: Plugin = {
 	},
 };
 
+const copyDirSync = (src: string, dest: string) => {
+	if (!fs.existsSync(src)) {
+		return;
+	}
+	fs.mkdirSync(dest, { recursive: true });
+	for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+		const srcPath = path.join(src, entry.name);
+		const destPath = path.join(dest, entry.name);
+		if (entry.isDirectory()) {
+			copyDirSync(srcPath, destPath);
+		} else {
+			fs.copyFileSync(srcPath, destPath);
+		}
+	}
+};
+
 await build({
 	...commonOptions,
 	bundle: true,
@@ -59,5 +75,7 @@ await build({
 	plugins: [aliasPlugin],
 	treeShaking: true,
 });
+
+copyDirSync("../envsync-api/src/libs/mail/templates/html", "./dist/templates/html");
 
 exec("tsc --emitDeclarationOnly --declaration --project tsconfig.build.json");

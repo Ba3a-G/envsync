@@ -74,6 +74,7 @@ Promise.all([esmBuild()]).then(() => {
 	// Copy .proto files so the gRPC client can load them at runtime from dist/
 	copyDirSync("./src/libs/kms/proto", "./dist/libs/kms/proto");
 	copyDirSync("./src/assets", "./dist/assets");
+	copyDirSync("./src/libs/mail/templates/html", "./dist/libs/mail/templates/html");
 });
 
 exec("tsc --emitDeclarationOnly --declaration --project tsconfig.build.json");
