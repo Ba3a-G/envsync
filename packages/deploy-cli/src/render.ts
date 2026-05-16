@@ -564,8 +564,9 @@ export function renderApiMaintenanceConf() {
 export function renderFrontendRuntimeConfig(config: DeployConfig, generated: DeployGeneratedState) {
 	const hosts = domainMap(config.domain.root_domain);
 	const otelEndpoint = publicHttpsUrl(config, hosts.obs);
+	const managementApiEnabled = !isOssConfig(config);
 	const activeReleaseVersion = generated.deployment.slots[generated.deployment.active_slot].release_version || config.release.version;
-	const managementApiUrl = config.edition === "enterprise" ? publicHttpsUrl(config, hosts.manage_api) : "";
+	const managementApiUrl = managementApiEnabled ? publicHttpsUrl(config, hosts.manage_api) : "";
 	return `window.__ENVSYNC_RUNTIME_CONFIG__ = ${JSON.stringify({
 		apiBaseUrl: publicHttpsUrl(config, hosts.api),
 		appBaseUrl: publicHttpsUrl(config, hosts.app),

@@ -1604,12 +1604,13 @@ function renderApiMaintenanceConf() {
 function renderFrontendRuntimeConfig(config: DeployConfig, generated: DeployGeneratedState) {
 	const hosts = domainMap(config.domain.root_domain);
 	const otelEndpoint = publicHttpsUrl(config, hosts.obs);
+	const managementApiEnabled = !isOssConfig(config);
 	const activeReleaseVersion = generated.deployment.slots[generated.deployment.active_slot].release_version || config.release.version;
 	return `window.__ENVSYNC_RUNTIME_CONFIG__ = ${JSON.stringify({
 		apiBaseUrl: publicHttpsUrl(config, hosts.api),
 		appBaseUrl: publicHttpsUrl(config, hosts.app),
 		authBaseUrl: publicHttpsUrl(config, hosts.auth),
-		managementApiUrl: publicHttpsUrl(config, hosts.manage_api),
+		managementApiUrl: managementApiEnabled ? publicHttpsUrl(config, hosts.manage_api) : "",
 		keycloakRealm: config.auth.keycloak_realm,
 		webClientId: config.auth.web_client_id,
 		apiDocsUrl: publicHttpsUrl(config, hosts.api, "/docs"),
