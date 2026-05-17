@@ -154,6 +154,36 @@ type NetutilsForward = {
 	host_port: number;
 	protocol: "tcp" | "udp";
 };
+type NetutilsExposeAllSpec = {
+	service: string;
+	service_port: number;
+	protocol: "tcp" | "udp";
+};
+
+const NETUTILS_EXPOSE_ALL_START_PORT = 15000;
+const NETUTILS_EXPOSE_ALL_PORTS: readonly NetutilsExposeAllSpec[] = [
+	{ service: "postgres", service_port: 5432, protocol: "tcp" },
+	{ service: "envsync_api_blue", service_port: 4000, protocol: "tcp" },
+	{ service: "envsync_api_green", service_port: 4000, protocol: "tcp" },
+	{ service: "envsync-management-api", service_port: 4001, protocol: "tcp" },
+	{ service: "keycloak", service_port: 8080, protocol: "tcp" },
+	{ service: "openfga", service_port: 8090, protocol: "tcp" },
+	{ service: "minikms", service_port: 50051, protocol: "tcp" },
+	{ service: "keycloak_db", service_port: 5432, protocol: "tcp" },
+	{ service: "openfga_db", service_port: 5432, protocol: "tcp" },
+	{ service: "minikms_db", service_port: 5432, protocol: "tcp" },
+	{ service: "redis", service_port: 6379, protocol: "tcp" },
+	{ service: "rustfs", service_port: 9000, protocol: "tcp" },
+	{ service: "rustfs", service_port: 9001, protocol: "tcp" },
+	{ service: "clickstack", service_port: 8080, protocol: "tcp" },
+	{ service: "otel-agent", service_port: 4317, protocol: "tcp" },
+	{ service: "otel-agent", service_port: 4318, protocol: "tcp" },
+	{ service: "traefik", service_port: 80, protocol: "tcp" },
+	{ service: "traefik", service_port: 443, protocol: "tcp" },
+	{ service: "web_nginx", service_port: 80, protocol: "tcp" },
+	{ service: "landing_nginx", service_port: 80, protocol: "tcp" },
+	{ service: "api_maintenance", service_port: 80, protocol: "tcp" },
+] as const;
 type WireguardPeer = {
 	public_key: string;
 	allowed_ip: string;
@@ -429,6 +459,79 @@ function runCapture(cmd: string, args: string[], opts: { cwd?: string; env?: Rec
 	return (result.stdout ?? "").toString().trim();
 }
 
+function chunkByMax<T>(items: T[], max: number) {
+	if (items.length === 0) return [];
+	const chunks: T[][] = [];
+	for (let i = 0; i < items.length; i += max) {
+		chunks.push(items.slice(i, i + max));
+	}
+	return chunks;
+}
+
+function formatPortRangesForIptables(ports: number[]) {
+	const sortedPorts = Array.from(new Set(ports))
+		.map(port => parseInt(String(port), 10))
+		.filter(port => Number.isInteger(port) && port >= 1 && port <= 65535)
+		.sort((a, b) => a - b);
+	if (sortedPorts.length === 0) return [];
+
+	const ranges: string[] = [];
+	let rangeStart = sortedPorts[0];
+	let previous = sortedPorts[0];
+
+	for (let i = 1; i < sortedPorts.length; i++) {
+		const current = sortedPorts[i];
+		if (current === previous + 1) {
+			previous = current;
+			continue;
+		}
+		ranges.push(rangeStart === previous ? `${rangeStart}` : `${rangeStart}:${previous}`);
+		rangeStart = current;
+		previous = current;
+	}
+	ranges.push(rangeStart === previous ? `${rangeStart}` : `${rangeStart}:${previous}`);
+	return ranges;
+}
+
+function formatNetutilsFirewallRules(config: DeployConfig | null) {
+	if (!config?.netutils?.enabled || !Array.isArray(config.netutils.forwards) || config.netutils.forwards.length === 0) {
+		return [] as string[];
+	}
+	const tcpPorts = config.netutils.forwards.filter(item => item.protocol === "tcp").map(item => item.host_port);
+	const udpPorts = config.netutils.forwards.filter(item => item.protocol === "udp").map(item => item.host_port);
+	const tcpRanges = formatPortRangesForIptables(tcpPorts);
+	const udpRanges = formatPortRangesForIptables(udpPorts);
+	if (tcpRanges.length === 0 && udpRanges.length === 0) return [];
+
+	const lines: string[] = [];
+	const addRules = (protocol: "tcp" | "udp", ranges: string[]) => {
+		for (const chunk of chunkByMax(ranges, 15)) {
+			const portSpec = chunk.join(",");
+			lines.push(
+				`PostUp = iptables -I DOCKER-USER -i envsync-wg -p ${protocol} -m multiport --dports ${portSpec} -j ACCEPT`,
+			);
+			lines.push(`PostUp = iptables -A DOCKER-USER -p ${protocol} -m multiport --dports ${portSpec} -j DROP`);
+			lines.push(
+				`PostDown = iptables -D DOCKER-USER -p ${protocol} -m multiport --dports ${portSpec} -j DROP`,
+			);
+			lines.push(
+				`PostDown = iptables -D DOCKER-USER -i envsync-wg -p ${protocol} -m multiport --dports ${portSpec} -j ACCEPT`,
+			);
+		}
+	};
+	addRules("tcp", tcpRanges);
+	addRules("udp", udpRanges);
+	return lines;
+}
+
+function tryLoadOptionalConfig(): DeployConfig | null {
+	try {
+		return loadConfig();
+	} catch {
+		return null;
+	}
+}
+
 function parseJsonOrDefault<T>(value: string, fallback: T): T {
 	try {
 		return JSON.parse(value) as T;
@@ -572,6 +675,16 @@ function parseNetutilsForwardsFromInput(raw: string, stackName: string) {
 	return normalizeNetutilsForwards(candidates, stackName, true).forwards;
 }
 
+function buildNetutilsExposeAllForwards(stackName: string) {
+	const candidates = NETUTILS_EXPOSE_ALL_PORTS.map((forward, index) => ({
+		service: forward.service,
+		service_port: forward.service_port,
+		host_port: NETUTILS_EXPOSE_ALL_START_PORT + index,
+		protocol: forward.protocol,
+	}));
+	return normalizeNetutilsForwards(candidates, stackName, true).forwards;
+}
+
 function normalizeNetutilsProtocol(raw: unknown) {
 	if (typeof raw === "string") {
 		const protocol = raw.toLowerCase();
@@ -706,6 +819,8 @@ function wireguardPeerAllowedIp(state: WireguardState) {
 }
 
 function writeWireguardConfig(state: WireguardState) {
+	const config = tryLoadOptionalConfig();
+	const netutilsFirewallRules = formatNetutilsFirewallRules(config);
 	const peersSection = state.peers
 		.map(peer => `\n[Peer]\nPublicKey = ${peer.public_key}\nAllowedIPs = ${peer.allowed_ip}`)
 		.join("\n");
@@ -717,6 +832,7 @@ PostUp = iptables -A FORWARD -i envsync-wg -j ACCEPT
 PostDown = iptables -D FORWARD -i envsync-wg -j ACCEPT
 PostUp = iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 PostDown = iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE
+${netutilsFirewallRules.join("\n")}
 ${peersSection}
 `;
 	writeFileMaybe(WIREGUARD_CONFIG_FILE, content);
@@ -3629,15 +3745,27 @@ async function cmdSetup() {
 	const publicObs = (await ask("Expose obs.<domain> publicly (true/false)", "true")) === "true";
 	const mailpitEnabled = (await ask("Enable mailpit (true/false)", "false")) === "true";
 	const netutilsEnabled = (await ask("Enable WireGuard jump host access (true/false)", "false")) === "true";
-	const netutilsForwards = netutilsEnabled
-		? parseNetutilsForwardsFromInput(
-			await ask(
-				"Netutils forwards (format service:service_port:host_port[:protocol], comma-separated)",
-				"postgres:5432:15432:tcp,keycloak:8080:18080:tcp",
-			),
-			"envsync",
-		  )
-		: [];
+	const netutilsExposeAll = netutilsEnabled
+		? (await ask("Expose all EnvSync service ports over WireGuard (true/false)", "false")) === "true"
+		: false;
+	let netutilsForwards = [] as Array<{ service: string; service_port: number; host_port: number; protocol: "tcp" | "udp" }>;
+	if (netutilsEnabled) {
+		if (netutilsExposeAll) {
+			netutilsForwards = buildNetutilsExposeAllForwards("envsync");
+			logInfo("Netutils exposes all preset (auto-generated):");
+			for (const forward of netutilsForwards) {
+				console.log(`  ${forward.service}:${forward.service_port} -> ${forward.host_port} (${forward.protocol})`);
+			}
+		} else {
+			netutilsForwards = parseNetutilsForwardsFromInput(
+				await ask(
+					"Netutils forwards (format service:service_port:host_port[:protocol], comma-separated)",
+					"postgres:5432:15432:tcp,keycloak:8080:18080:tcp",
+				),
+				"envsync",
+			);
+		}
+	}
 	const licenseServerUrl = await ask("Enterprise license server URL", DEFAULT_ENTERPRISE_LICENSE_SERVER_URL);
 	const licenseKey = licenseServerUrl ? await ask("Enterprise license key", "") : "";
 	const certificateBundleFile = licenseServerUrl ? "" : await ask("Enterprise certificate bundle file (optional)", "");
