@@ -4627,9 +4627,9 @@ function listRunningContainerEndpoints(serviceName: string) {
 	for (const taskId of taskIds) {
 		const taskRaw = tryRun("docker", ["inspect", taskId, "--format", "{{json .}}"], { quiet: true });
 		if (!taskRaw) continue;
-		const inspections = parseJsonOrDefault(taskRaw, [] as unknown);
-		if (!Array.isArray(inspections) || inspections.length === 0) continue;
-		const inspect = inspections[0] as DockerTaskInspect;
+		const parsedTaskInspect = parseJsonOrDefault(taskRaw, null as unknown);
+		const inspect = (Array.isArray(parsedTaskInspect) ? parsedTaskInspect[0] : parsedTaskInspect) as DockerTaskInspect;
+		if (!inspect || typeof inspect !== "object") continue;
 		const containerId = inspect.Status?.ContainerStatus?.ContainerID ?? "";
 		const addresses = Array.isArray(inspect.NetworksAttachments)
 			? inspect.NetworksAttachments.flatMap(attachment => {
