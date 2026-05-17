@@ -152,6 +152,27 @@ type WireguardState = {
 	server_ip: string;
 	peers: WireguardPeer[];
 };
+type DockerServicePort = {
+	PublishedPort?: number;
+	TargetPort?: number;
+	Protocol?: string;
+	PublishMode?: string;
+};
+type DockerTaskInspect = {
+	NetworksAttachments?: Array<{
+		Network?: {
+			Spec?: {
+				Name?: string;
+			};
+		};
+		Addresses?: string[];
+	}>;
+	Status?: {
+		ContainerStatus?: {
+			ContainerID?: string;
+		};
+	};
+};
 type EnterpriseLicenseCertificateBundle = {
 	certificate_pem: string;
 	private_key_pem: string;
@@ -391,6 +412,14 @@ function runCapture(cmd: string, args: string[], opts: { cwd?: string; env?: Rec
 		throw new Error(`Command failed: ${cmd} ${args.join(" ")}${stderr ? `\n${stderr}` : ""}`);
 	}
 	return (result.stdout ?? "").toString().trim();
+}
+
+function parseJsonOrDefault<T>(value: string, fallback: T): T {
+	try {
+		return JSON.parse(value) as T;
+	} catch {
+		return fallback;
+	}
 }
 
 function tryRun(cmd: string, args: string[], opts: { cwd?: string; env?: Record<string, string>; quiet?: boolean } = {}) {
@@ -4547,6 +4576,81 @@ async function cmdVpnWhitelist(clientPublicKeyArg?: string) {
 	console.log(`AllowedIPs = ${allowedIp}`);
 }
 
+function getVpnStackName() {
+	try {
+		return loadConfig().services.stack_name;
+	} catch {
+		return "envsync";
+	}
+}
+
+function listStackServiceNames(stackName: string) {
+	const raw = tryRun("docker", ["service", "ls", "--filter", `label=com.docker.stack.namespace=${stackName}`, "--format", "{{.Name}}"], {
+		quiet: true,
+	});
+	if (!raw.trim()) return [];
+	return raw
+		.split(/\r?\n/)
+		.map(line => line.trim())
+		.filter(Boolean);
+}
+
+function listServicePublishedPorts(serviceName: string) {
+	const raw = tryRun("docker", ["service", "inspect", "--format", "{{json .Endpoint.Ports}}", serviceName], { quiet: true });
+	const ports = parseJsonOrDefault(raw, [] as unknown) as unknown;
+	const list = Array.isArray(ports) ? (ports as Array<unknown>) : [];
+	if (list.length === 0) return [];
+	return list
+		.map(port => {
+			const typed = port as DockerServicePort;
+			if (!typed || typeof typed !== "object") return "";
+			if (!typed.PublishedPort || !typed.TargetPort || !typed.Protocol) return "";
+			const mode = typed.PublishMode || "ingress";
+			return `${typed.PublishedPort}/${typed.Protocol} -> ${typed.TargetPort}/${typed.Protocol} (${mode})`;
+		})
+		.filter(Boolean);
+}
+
+function listRunningContainerEndpoints(serviceName: string) {
+	const raw = tryRun(
+		"docker",
+		["service", "ps", serviceName, "--filter", "desired-state=running", "--no-trunc", "--format", "{{.ID}}"],
+		{ quiet: true },
+	);
+	const taskIds = raw
+		.split(/\r?\n/)
+		.map(line => line.trim())
+		.filter(Boolean);
+	if (taskIds.length === 0) return [];
+
+	const results: string[] = [];
+	for (const taskId of taskIds) {
+		const taskRaw = tryRun("docker", ["inspect", taskId, "--format", "{{json .}}"], { quiet: true });
+		if (!taskRaw) continue;
+		const inspections = parseJsonOrDefault(taskRaw, [] as unknown);
+		if (!Array.isArray(inspections) || inspections.length === 0) continue;
+		const inspect = inspections[0] as DockerTaskInspect;
+		const containerId = inspect.Status?.ContainerStatus?.ContainerID ?? "";
+		const addresses = Array.isArray(inspect.NetworksAttachments)
+			? inspect.NetworksAttachments.flatMap(attachment => {
+					const networkName = attachment.Network?.Spec?.Name ?? "overlay";
+					const ips = Array.isArray(attachment.Addresses) ? attachment.Addresses : [];
+					return ips
+						.map(ip => {
+							const trimmed = typeof ip === "string" ? ip.trim() : "";
+							return trimmed ? `${networkName}:${trimmed}` : "";
+						})
+						.filter(Boolean);
+			  })
+			: [];
+		const line = `task ${taskId.slice(0, 12)} container=${containerId.slice(0, 12) || "unknown"} ${
+			addresses.length ? `ips=${addresses.join(", ")}` : "ips=none"
+		}`;
+		results.push(line);
+	}
+	return results;
+}
+
 async function cmdVpnStatus() {
 	logSection("WireGuard VPN");
 	const state = loadWireguardState();
@@ -4566,6 +4670,27 @@ async function cmdVpnStatus() {
 		logInfo("Peers:");
 		for (const peer of state.peers) {
 			console.log(`  ${peer.public_key} -> ${peer.allowed_ip}`);
+		}
+	}
+	console.log("");
+	logInfo("Container endpoints:");
+	const stackName = getVpnStackName();
+	const services = listStackServiceNames(stackName);
+	if (services.length === 0) {
+		logWarn(`No running services found for stack ${stackName}`);
+	} else {
+		for (const service of services) {
+			const ports = listServicePublishedPorts(service);
+			const endpoints = listRunningContainerEndpoints(service);
+			console.log(`  ${service}`);
+			console.log(`    Published ports: ${ports.length ? ports.join(", ") : "none"}`);
+			if (endpoints.length === 0) {
+				console.log("    Containers: none running");
+			} else {
+				for (const endpoint of endpoints) {
+					console.log(`    ${endpoint}`);
+				}
+			}
 		}
 	}
 	try {
