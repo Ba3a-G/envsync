@@ -614,18 +614,19 @@ function renderNetutilsService(config: DeployConfig) {
 		.map(forward => {
 			const protocol = forward.protocol ?? "tcp";
 			return `      - target: ${forward.host_port}
-      published: ${forward.host_port}
-      protocol: ${protocol}
-      mode: ingress`;
+        published: ${forward.host_port}
+        protocol: ${protocol}
+        mode: ingress`;
 		})
 		.join("\n");
 
 	return `
   netutils:
     image: alpine/socat
-    command:
+    entrypoint:
       - sh
       - -c
+    command:
       - |
           set -eu
           ${commands}

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import YAML from "yaml";
 
 import {
 	buildRuntimeEnv,
@@ -166,6 +167,7 @@ describe("deploy render helpers", () => {
 	test("render enterprise runtime and stack artifacts with expected hostnames and mounted outputs", () => {
 		const runtimeEnv = buildRuntimeEnv(config, generated);
 		const stackBase = renderStack(config, runtimeEnv, generated, "base", paths);
+		const stackBootstrap = renderStack(config, runtimeEnv, generated, "bootstrap", paths);
 		const stackFull = renderStack(configWithNetutils, runtimeEnv, generated, "full", paths);
 		const traefik = renderTraefikDynamicConfig(config, generated);
 		const keycloakRealm = renderKeycloakRealm(config, runtimeEnv);
@@ -187,6 +189,8 @@ describe("deploy render helpers", () => {
 
 		expect(stackBase).not.toContain("landing_nginx");
 		expect(stackBase).not.toContain("envsync_api_blue");
+		expect(() => YAML.parse(stackBase)).not.toThrow();
+		expect(() => YAML.parse(stackBootstrap)).not.toThrow();
 
 		expect(stackFull).toContain("landing_nginx");
 		expect(stackFull).toContain("web_nginx");
@@ -200,10 +204,29 @@ describe("deploy render helpers", () => {
 		expect(stackFull).toContain("https://s3.enterprise.example.com/envsync-bucket");
 		expect(stackFull).toContain("  netutils:");
 		expect(stackFull).toContain("image: alpine/socat");
+		expect(stackFull).toContain("entrypoint:");
 		expect(stackFull).toContain("socat TCP-LISTEN:15432");
 		expect(stackFull).toContain("socat TCP-LISTEN:18080");
 		expect(stackFull).toContain("target: 15432");
 		expect(stackFull).toContain("target: 18080");
+		expect(() => YAML.parse(stackFull)).not.toThrow();
+		const parsedStackFull = YAML.parse(stackFull) as {
+			services?: {
+				netutils?: {
+					entrypoint?: string[];
+					command?: string[];
+					ports?: Array<{ target?: number; published?: number; protocol?: string; mode?: string }>;
+				};
+			};
+		};
+		expect(parsedStackFull.services?.netutils?.entrypoint).toEqual(["sh", "-c"]);
+		expect(parsedStackFull.services?.netutils?.command?.[0]).toContain("socat TCP-LISTEN:15432");
+		expect(parsedStackFull.services?.netutils?.ports?.[0]).toEqual({
+			target: 15432,
+			published: 15432,
+			protocol: "tcp",
+			mode: "ingress",
+		});
 
 		expect(traefik).toContain("Host(`app.enterprise.example.com`)");
 		expect(traefik).toContain("Host(`api.enterprise.example.com`)");
