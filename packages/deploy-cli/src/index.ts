@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomInt } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -91,16 +91,6 @@ interface DeployConfig {
 		lease_ttl_seconds?: number;
 		certificate_validity_days?: number;
 	};
-	access_proxy?: {
-		enabled: boolean;
-		provider: "tsdproxy";
-		auth_token: string;
-		domain: string;
-		service_scope: "all" | "selected";
-		services: string[];
-		advertise_routes: boolean;
-		include_admin_services: boolean;
-	};
 	release_channel?: string;
 }
 
@@ -149,6 +139,19 @@ type ApiSlotState = {
 type RuntimeEnv = Record<string, string>;
 type ServiceHealth = "healthy" | "missing" | "degraded";
 type CommandOptions = { dryRun: boolean; force: boolean };
+type WireguardPeer = {
+	public_key: string;
+	allowed_ip: string;
+	added_at: string;
+};
+type WireguardState = {
+	private_key: string;
+	public_key: string;
+	listen_port: number;
+	network: string;
+	server_ip: string;
+	peers: WireguardPeer[];
+};
 type EnterpriseLicenseCertificateBundle = {
 	certificate_pem: string;
 	private_key_pem: string;
@@ -176,6 +179,7 @@ const BACKUPS_ROOT = path.join(HOST_ROOT, "backups");
 const REPO_ROOT = process.env.ENVSYNC_REPO_ROOT ?? path.join(HOST_ROOT, "repo");
 const DEPLOY_ENV = path.join(ETC_ROOT, "deploy.env");
 const DEPLOY_YAML = path.join(ETC_ROOT, "deploy.yaml");
+const WIREGUARD_ROOT = path.join(ETC_ROOT, "wireguard");
 const LICENSE_ROOT = path.join(ETC_ROOT, "license");
 const LICENSE_BUNDLE_FILE = path.join(LICENSE_ROOT, "enterprise-license-bundle.json");
 const LICENSE_CERT_FILE = path.join(LICENSE_ROOT, "enterprise-cert.pem");
@@ -196,6 +200,10 @@ const OTEL_AGENT_CONF = path.join(DEPLOY_ROOT, "otel-agent.yaml");
 const CLICKSTACK_CLICKHOUSE_CONF = path.join(DEPLOY_ROOT, "clickhouse-listen.xml");
 const INTERNAL_CONFIG_JSON = path.join(DEPLOY_ROOT, "config.json");
 const UPGRADE_BACKUPS_ROOT = path.join(BACKUPS_ROOT, "upgrade");
+const WIREGUARD_STATE_FILE = path.join(WIREGUARD_ROOT, "state.json");
+const WIREGUARD_PRIVATE_KEY_FILE = path.join(WIREGUARD_ROOT, "server-private.key");
+const WIREGUARD_PUBLIC_KEY_FILE = path.join(WIREGUARD_ROOT, "server-public.key");
+const WIREGUARD_CONFIG_FILE = path.join(WIREGUARD_ROOT, "envsync-wg.conf");
 const DEPLOY_RENDER_PATHS = {
 	traefikStateRoot: TRAEFIK_STATE_ROOT,
 	deployRoot: DEPLOY_ROOT,
@@ -223,6 +231,11 @@ const REMOVE_TARGETS = [
 	LICENSE_ROOT_CA_FILE,
 	INTERNAL_CONFIG_JSON,
 	VERSIONS_LOCK,
+	WIREGUARD_ROOT,
+	WIREGUARD_STATE_FILE,
+	WIREGUARD_PRIVATE_KEY_FILE,
+	WIREGUARD_PUBLIC_KEY_FILE,
+	WIREGUARD_CONFIG_FILE,
 	STACK_FILE,
 	BOOTSTRAP_BASE_STACK_FILE,
 	BOOTSTRAP_STACK_FILE,
@@ -365,6 +378,21 @@ function run(cmd: string, args: string[], opts: { cwd?: string; env?: Record<str
 	return result.stdout?.toString() ?? "";
 }
 
+function runCapture(cmd: string, args: string[], opts: { cwd?: string; env?: Record<string, string>; input?: string } = {}) {
+	const result = spawnSync(cmd, args, {
+		cwd: opts.cwd,
+		env: { ...process.env, ...opts.env },
+		input: opts.input,
+		stdio: "pipe",
+		encoding: "utf8",
+	});
+	if (result.status !== 0) {
+		const stderr = typeof result.stderr === "string" ? result.stderr : "";
+		throw new Error(`Command failed: ${cmd} ${args.join(" ")}${stderr ? `\n${stderr}` : ""}`);
+	}
+	return (result.stdout ?? "").toString().trim();
+}
+
 function tryRun(cmd: string, args: string[], opts: { cwd?: string; env?: Record<string, string>; quiet?: boolean } = {}) {
 	try {
 		return run(cmd, args, opts);
@@ -464,6 +492,94 @@ function deterministicInstallFingerprint(rootDomain: string, stackName: string) 
 
 function randomStrongPassword() {
 	return `EnvSync!${randomBytes(8).toString("hex")}Aa1`;
+}
+
+function randomWireguardPort() {
+	return randomInt(50000, 65535);
+}
+
+function loadWireguardState(): WireguardState | null {
+	if (!exists(WIREGUARD_STATE_FILE)) return null;
+	const raw = JSON.parse(fs.readFileSync(WIREGUARD_STATE_FILE, "utf8")) as WireguardState;
+	return {
+		private_key: raw.private_key,
+		public_key: raw.public_key,
+		listen_port: raw.listen_port,
+		network: raw.network,
+		server_ip: raw.server_ip,
+		peers: Array.isArray(raw.peers) ? raw.peers : [],
+	};
+}
+
+function saveWireguardState(state: WireguardState) {
+	if (currentOptions.dryRun) {
+		logDryRun(`Would save WireGuard state to ${WIREGUARD_STATE_FILE}`);
+		return;
+	}
+	writeFile(WIREGUARD_STATE_FILE, JSON.stringify(state, null, 2), 0o600);
+}
+
+function ensureWireguardState(): WireguardState {
+	ensureDir(WIREGUARD_ROOT);
+	let state: WireguardState | null = loadWireguardState();
+	if (state) {
+		state.private_key = state.private_key?.trim();
+		state.public_key = state.public_key?.trim();
+		state.network = state.network || "10.66.0.0/24";
+		state.server_ip = state.server_ip || "10.66.0.1";
+		state.listen_port = state.listen_port || randomWireguardPort();
+		state.peers = Array.isArray(state.peers) ? state.peers : [];
+		if (state.private_key && !state.public_key) {
+			state.public_key = runCapture("wg", ["pubkey"], { input: `${state.private_key}\n` });
+		}
+		if (!state.private_key || !state.public_key) {
+			state = null;
+		}
+	}
+	if (!state) {
+		const privateKey = runCapture("wg", ["genkey"]);
+		const publicKey = runCapture("wg", ["pubkey"], { input: `${privateKey}\n` });
+		state = {
+			private_key: privateKey,
+			public_key: publicKey,
+			listen_port: randomWireguardPort(),
+			network: "10.66.0.0/24",
+			server_ip: "10.66.0.1",
+			peers: [],
+		};
+		saveWireguardState(state);
+	}
+	writeFileMaybe(WIREGUARD_PRIVATE_KEY_FILE, `${state.private_key}\n`, 0o600);
+	writeFileMaybe(WIREGUARD_PUBLIC_KEY_FILE, `${state.public_key}\n`);
+	return state;
+}
+
+function wireguardPeerAllowedIp(state: WireguardState) {
+	const usedIps = new Set(state.peers.map(peer => peer.allowed_ip));
+	for (let i = 2; i <= 254; i++) {
+		const candidate = `${state.server_ip.split(".").slice(0, 3).join(".")}.${i}/32`;
+		if (!usedIps.has(candidate)) {
+			return candidate;
+		}
+	}
+	throw new Error("WireGuard client IP pool exhausted in subnet 10.66.0.0/24.");
+}
+
+function writeWireguardConfig(state: WireguardState) {
+	const peersSection = state.peers
+		.map(peer => `\n[Peer]\nPublicKey = ${peer.public_key}\nAllowedIPs = ${peer.allowed_ip}`)
+		.join("\n");
+	const content = `[Interface]
+Address = ${state.server_ip}/24
+ListenPort = ${state.listen_port}
+PrivateKey = ${state.private_key}
+PostUp = iptables -A FORWARD -i envsync-wg -j ACCEPT
+PostDown = iptables -D FORWARD -i envsync-wg -j ACCEPT
+PostUp = iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+PostDown = iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE
+${peersSection}
+`;
+	writeFileMaybe(WIREGUARD_CONFIG_FILE, content);
 }
 
 function emptyApiSlotState(): ApiSlotState {
@@ -644,6 +760,9 @@ function renderHelpBlock() {
 		"  validate-topology    Validate Enterprise edition topology rules",
 		"  upgrade [version]    Pin a target release and deploy it",
 		"  upgrade-deps         Refresh dependency images and redeploy",
+		"  vpn pubkey           Generate or print WireGuard server public key",
+		"  vpn whitelist <key>  Add a client public key to allowed peers",
+		"  vpn status           Show WireGuard server/peer status",
 		"  license issue-cert   Issue and install an Enterprise certificate bundle",
 		"  license renew-cert   Renew and install the Enterprise certificate bundle",
 		"  license validate-cert Validate the installed Enterprise certificate bundle files",
@@ -934,32 +1053,6 @@ function normalizeConfig(raw: Partial<DeployConfig>): DeployConfig {
 		} : raw.edition === "oss" ? undefined : {
 			install_fingerprint: deterministicInstallFingerprint(rootDomain, stackName),
 			certificate_validity_days: 1095,
-		},
-		access_proxy: {
-			enabled: raw.access_proxy?.enabled ?? false,
-			provider: "tsdproxy",
-			auth_token: raw.access_proxy?.auth_token ?? "",
-			domain: raw.access_proxy?.domain ?? `tsdproxy.${rootDomain}`,
-			service_scope: raw.access_proxy?.service_scope === "selected" ? "selected" : "all",
-			services: Array.isArray(raw.access_proxy?.services)
-				? raw.access_proxy.services.filter(s => typeof s === "string" && s.trim().length > 0)
-				: [
-					"api",
-					"web",
-					"landing",
-					"keycloak",
-					"openfga",
-					"postgre*",
-					"redis",
-					"rustfs",
-					"clickstack",
-					"obs",
-					"envsync_api_*",
-					"envsync_management-api",
-					"envsync-api",
-				],
-			advertise_routes: raw.access_proxy?.advertise_routes ?? false,
-			include_admin_services: raw.access_proxy?.include_admin_services ?? false,
 		},
 	};
 }
@@ -3352,7 +3445,19 @@ async function cmdPreinstall() {
 	ensureDir(TRAEFIK_STATE_ROOT);
 	run("bash", ["-lc", "command -v apt-get >/dev/null"]);
 	run("sudo", ["apt-get", "update"]);
-	run("sudo", ["apt-get", "install", "-y", "docker.io", "docker-compose-v2", "git", "curl", "jq", "openssl", "tar"]);
+	run("sudo", [
+		"apt-get",
+		"install",
+		"-y",
+		"docker.io",
+		"docker-compose-v2",
+		"git",
+		"curl",
+		"jq",
+		"openssl",
+		"tar",
+		"wireguard-tools",
+	]);
 	run("sudo", ["systemctl", "enable", "--now", "docker"]);
 	try {
 		run("docker", ["swarm", "init"]);
@@ -3386,24 +3491,6 @@ async function cmdSetup() {
 	const licenseKey = licenseServerUrl ? await ask("Enterprise license key", "") : "";
 	const certificateBundleFile = licenseServerUrl ? "" : await ask("Enterprise certificate bundle file (optional)", "");
 	const installFingerprint = deterministicInstallFingerprint(rootDomain, "envsync");
-	const enableAccessProxy = asBool(await ask("Enable private access proxy for container services (y/N)", "n"));
-	const accessProxyProvider = enableAccessProxy ? (await ask("Private access proxy provider", "tsdproxy")) : "tsdproxy";
-	const accessProxyAuthToken = enableAccessProxy
-		? await ask("Proxy auth token or API key", "")
-		: "";
-	const accessProxyDomain = enableAccessProxy ? await ask("Private access domain", `tsdproxy.${rootDomain}`) : `tsdproxy.${rootDomain}`;
-	const accessProxyExposeAll = enableAccessProxy
-		? asBool(await ask("Expose all services through proxy (Y/n)", "y"))
-		: true;
-	const accessProxyServices = !accessProxyExposeAll
-		? asStringList(await ask("Service hostnames to expose (comma-separated)", "postgres,api,web,landing,keycloak,minikms,openfga,rustfs,clickstack,obs,manage-api"))
-		: [];
-	const includeAdminServices = enableAccessProxy
-		? asBool(await ask("Expose admin/maintenance services (y/N)", "n"))
-		: false;
-	const accessProxyAdvertiseRoutes = enableAccessProxy
-		? asBool(await ask("Advertise overlay subnet routes through the proxy provider (y/N)", "n"))
-		: false;
 
 	const config: DeployConfig = {
 		edition: "enterprise",
@@ -3477,16 +3564,6 @@ async function cmdSetup() {
 			install_fingerprint: installFingerprint,
 			certificate_bundle_file: certificateBundleFile || undefined,
 			certificate_validity_days: 1095,
-		},
-		access_proxy: {
-			enabled: enableAccessProxy,
-			provider: accessProxyProvider as "tsdproxy",
-			auth_token: accessProxyAuthToken,
-			domain: accessProxyDomain,
-			service_scope: accessProxyExposeAll ? "all" : "selected",
-			services: accessProxyServices,
-			advertise_routes: accessProxyAdvertiseRoutes,
-			include_admin_services: includeAdminServices,
 		},
 	};
 
@@ -4408,6 +4485,98 @@ async function cmdRestore(archivePath: string, autoDeploy = false) {
 	logInfo("Next: envsync-deploy deploy");
 }
 
+async function cmdVpn(args: string[]) {
+	const action = args[0];
+	switch (action) {
+		case "pubkey":
+			await cmdVpnPubkey();
+			break;
+		case "whitelist":
+			await cmdVpnWhitelist(args[1]);
+			break;
+		case "status":
+			await cmdVpnStatus();
+			break;
+		default:
+			throw new Error("Usage: envsync-deploy vpn <pubkey|whitelist|status>");
+	}
+}
+
+async function cmdVpnPubkey() {
+	logSection("WireGuard VPN");
+	const state = ensureWireguardState();
+	writeWireguardConfig(state);
+	logInfo(`WireGuard interface: envsync-wg`);
+	logInfo(`Server config: ${WIREGUARD_CONFIG_FILE}`);
+	logInfo(`Private key: ${WIREGUARD_PRIVATE_KEY_FILE}`);
+	logInfo(`Public key: ${WIREGUARD_PUBLIC_KEY_FILE}`);
+	logInfo(`Server listen port: ${state.listen_port}`);
+	logInfo(`Network: ${state.network}`);
+	console.log("");
+	logSuccess(`Server public key: ${state.public_key}`);
+}
+
+async function cmdVpnWhitelist(clientPublicKeyArg?: string) {
+	if (!clientPublicKeyArg) {
+		throw new Error("usage: envsync-deploy vpn whitelist <client_public_key>");
+	}
+	const clientPublicKey = clientPublicKeyArg.trim();
+	if (!clientPublicKey) {
+		throw new Error("client public key cannot be empty");
+	}
+	const state = ensureWireguardState();
+	const existing = state.peers.find(peer => peer.public_key === clientPublicKey);
+	if (existing) {
+		logWarn(`Client key already whitelisted for ${existing.allowed_ip}`);
+		return;
+	}
+	const allowedIp = wireguardPeerAllowedIp(state);
+	state.peers.push({
+		public_key: clientPublicKey,
+		allowed_ip: allowedIp,
+		added_at: new Date().toISOString(),
+	});
+	state.peers.sort((a, b) => a.public_key.localeCompare(b.public_key));
+	saveWireguardState(state);
+	writeWireguardConfig(state);
+	logSuccess(`Whitelisted client ${clientPublicKey}`);
+	console.log(`AllowedIP: ${allowedIp}`);
+	console.log(`Append to client config:`);
+	console.log(`[Peer]`);
+	console.log(`PublicKey = ${clientPublicKey}`);
+	console.log(`AllowedIPs = ${allowedIp}`);
+}
+
+async function cmdVpnStatus() {
+	logSection("WireGuard VPN");
+	const state = loadWireguardState();
+	if (!state) {
+		logWarn("WireGuard state not initialized.");
+		logInfo("Run: envsync-deploy vpn pubkey");
+		return;
+	}
+	logInfo(`Config file: ${WIREGUARD_CONFIG_FILE}`);
+	logInfo(`State file: ${WIREGUARD_STATE_FILE}`);
+	logInfo(`Server endpoint: 0.0.0.0:${state.listen_port}`);
+	logInfo(`Network: ${state.network}`);
+	logInfo(`Server IP: ${state.server_ip}`);
+	if (state.peers.length === 0) {
+		logInfo("Peers: none");
+	} else {
+		logInfo("Peers:");
+		for (const peer of state.peers) {
+			console.log(`  ${peer.public_key} -> ${peer.allowed_ip}`);
+		}
+	}
+	try {
+		const ifaceStatus = runCapture("wg", ["show", "envsync-wg"]);
+		console.log("Runtime:");
+		console.log(ifaceStatus);
+	} catch {
+		logWarn("WireGuard interface is not running in kernel yet. Run wg-quick up on the generated config to activate.");
+	}
+}
+
 async function main() {
 	const argv = process.argv.slice(2);
 	const command = argv[0];
@@ -4454,6 +4623,9 @@ async function main() {
 			break;
 		case "upgrade-deps":
 			await cmdUpgradeDeps();
+			break;
+		case "vpn":
+			await cmdVpn(positionals);
 			break;
 		case "license":
 			await cmdLicense(positionals[0]);

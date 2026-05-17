@@ -79,16 +79,6 @@ export interface DeployConfig {
 		certificate_bundle_file?: string;
 		lease_ttl_seconds?: number;
 	};
-	access_proxy?: {
-		enabled: boolean;
-		provider: "tsdproxy";
-		auth_token: string;
-		domain: string;
-		service_scope: "all" | "selected";
-		services: string[];
-		advertise_routes: boolean;
-		include_admin_services: boolean;
-	};
 	release_channel?: string;
 }
 
@@ -227,7 +217,6 @@ export function buildRuntimeEnv(config: DeployConfig, generated: DeployGenerated
 	const oss = isOssConfig(config);
 	const enterprise = !oss;
 	const license = config.license ?? {};
-	const accessProxy = config.access_proxy;
 	return {
 		NODE_ENV: "production",
 		ENVSYNC_EDITION: oss ? "oss" : "enterprise",
@@ -256,13 +245,6 @@ export function buildRuntimeEnv(config: DeployConfig, generated: DeployGenerated
 		POSTGRES_USER: "postgres",
 		POSTGRES_PASSWORD: "envsync-postgres",
 		POSTGRES_DB: "envsync",
-		ENVSYNC_ACCESS_PROXY_ENABLED: `${accessProxy?.enabled ?? false}`,
-		ENVSYNC_ACCESS_PROXY_PROVIDER: accessProxy?.provider ?? "",
-		ENVSYNC_ACCESS_PROXY_DOMAIN: accessProxy?.domain ?? "",
-		ENVSYNC_ACCESS_PROXY_SERVICE_SCOPE: accessProxy?.service_scope ?? "all",
-		ENVSYNC_ACCESS_PROXY_SERVICES: Array.isArray(accessProxy?.services) ? accessProxy.services.join(",") : "",
-		ENVSYNC_ACCESS_PROXY_ADVERTISE_ROUTES: `${accessProxy?.advertise_routes ?? false}`,
-		ENVSYNC_ACCESS_PROXY_INCLUDE_ADMIN_SERVICES: `${accessProxy?.include_admin_services ?? false}`,
 		S3_BUCKET: bucketName,
 		S3_REGION: "us-east-1",
 		S3_ACCESS_KEY: "envsync-rustfs",
@@ -584,16 +566,11 @@ export function renderFrontendRuntimeConfig(config: DeployConfig, generated: Dep
 	const otelEndpoint = publicHttpsUrl(config, hosts.obs);
 	const managementApiEnabled = !isOssConfig(config);
 	const activeReleaseVersion = generated.deployment.slots[generated.deployment.active_slot].release_version || config.release.version;
-	const accessProxy = config.access_proxy;
 	const managementApiUrl = managementApiEnabled ? publicHttpsUrl(config, hosts.manage_api) : "";
 	return `window.__ENVSYNC_RUNTIME_CONFIG__ = ${JSON.stringify({
 		apiBaseUrl: publicHttpsUrl(config, hosts.api),
 		appBaseUrl: publicHttpsUrl(config, hosts.app),
 		authBaseUrl: publicHttpsUrl(config, hosts.auth),
-		accessProxyEnabled: accessProxy?.enabled ?? false,
-		accessProxyDomain: accessProxy?.domain ?? "",
-		accessProxyServiceScope: accessProxy?.service_scope ?? "all",
-		accessProxyServices: accessProxy?.services ?? [],
 		managementApiUrl,
 		keycloakRealm: config.auth.keycloak_realm,
 		webClientId: config.auth.web_client_id,
