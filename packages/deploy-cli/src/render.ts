@@ -79,6 +79,15 @@ export interface DeployConfig {
 		certificate_bundle_file?: string;
 		lease_ttl_seconds?: number;
 	};
+	netutils?: {
+		enabled?: boolean;
+		forwards?: Array<{
+			service: string;
+			service_port: number;
+			host_port: number;
+			protocol?: "tcp" | "udp";
+		}>;
+	};
 	release_channel?: string;
 }
 
@@ -585,6 +594,47 @@ export function renderFrontendRuntimeConfig(config: DeployConfig, generated: Dep
 	}, null, 2)};\n`;
 }
 
+function renderNetutilsService(config: DeployConfig) {
+	const netutils = config.netutils;
+	if (!netutils?.enabled) return "";
+	const forwards = Array.isArray(netutils.forwards) ? netutils.forwards : [];
+	if (forwards.length === 0) return "";
+
+	const commands = forwards
+		.map(forward => {
+			const protocol = forward.protocol ?? "tcp";
+			if (protocol === "udp") {
+				return `socat UDP-LISTEN:${forward.host_port},fork,reuseaddr UDP:${forward.service}:${forward.service_port} &`;
+			}
+			return `socat TCP-LISTEN:${forward.host_port},fork,reuseaddr TCP:${forward.service}:${forward.service_port} &`;
+		})
+		.join("\n          ");
+
+	const ports = forwards
+		.map(forward => {
+			const protocol = forward.protocol ?? "tcp";
+			return `      - target: ${forward.host_port}
+      published: ${forward.host_port}
+      protocol: ${protocol}
+      mode: ingress`;
+		})
+		.join("\n");
+
+	return `
+  netutils:
+    image: alpine/socat
+    command:
+      - sh
+      - -c
+      - |
+          set -eu
+          ${commands}
+          wait
+    ports:
+${ports}
+    networks: [envsync]`;
+}
+
 export function renderOtelAgentConfig(config: DeployConfig) {
 	return [
 		"receivers:",
@@ -649,6 +699,7 @@ export function renderStack(
 	const s3ServiceName = `${stackName}-s3-service`;
 	const s3ConsoleRouterName = `${stackName}-s3-console-router`;
 	const s3ConsoleServiceName = `${stackName}-s3-console-service`;
+	const netutilsService = renderNetutilsService(config);
 	const apiEnvironment = {
 		...runtimeEnv,
 		OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-agent:4318",
@@ -917,7 +968,7 @@ ${renderEnvList({
 ${apiLicenseVolume}
     networks: [envsync]
     deploy:
-      replicas: ${slotHasApiDeployment(deployment.slots.green) ? 1 : 0}` : ""}
+      replicas: ${slotHasApiDeployment(deployment.slots.green) ? 1 : 0}` : ""}${netutilsService}
 
 networks:
   envsync:

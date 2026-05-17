@@ -83,6 +83,15 @@ interface DeployConfig {
 		db_snapshot_on_api_upgrade: boolean;
 		keep_failed_upgrade_db_snapshot: boolean;
 	};
+	netutils?: {
+		enabled?: boolean;
+		forwards?: Array<{
+			service: string;
+			service_port: number;
+			host_port: number;
+			protocol?: "tcp" | "udp";
+		}>;
+	};
 	license?: {
 		server_url?: string;
 		key?: string;
@@ -139,6 +148,12 @@ type ApiSlotState = {
 type RuntimeEnv = Record<string, string>;
 type ServiceHealth = "healthy" | "missing" | "degraded";
 type CommandOptions = { dryRun: boolean; force: boolean };
+type NetutilsForward = {
+	service: string;
+	service_port: number;
+	host_port: number;
+	protocol: "tcp" | "udp";
+};
 type WireguardPeer = {
 	public_key: string;
 	allowed_ip: string;
@@ -525,6 +540,102 @@ function randomStrongPassword() {
 
 function randomWireguardPort() {
 	return randomInt(50000, 65535);
+}
+
+function parsePort(value: unknown, label: string) {
+	const numericValue = typeof value === "string" ? Number(value.trim()) : Number(value);
+	if (!Number.isInteger(numericValue) || numericValue < 1 || numericValue > 65535) {
+		throw new Error(`Invalid ${label}: expected an integer from 1 to 65535.`);
+	}
+	return numericValue;
+}
+
+function parseNetutilsForwardsFromInput(raw: string, stackName: string) {
+	const chunks = asStringList(raw);
+	if (chunks.length === 0) {
+		return [] as NetutilsForward[];
+	}
+	const candidates = chunks.map(chunk => {
+		const parts = chunk.split(":");
+		if (parts.length < 3 || parts.length > 4) {
+			throw new Error(
+				`Invalid netutils forward '${chunk}'. Expected format service:service_port:host_port[:protocol].`,
+			);
+		}
+		return {
+			service: parts[0].trim(),
+			service_port: parts[1].trim(),
+			host_port: parts[2].trim(),
+			protocol: parts[3] ?? "tcp",
+		};
+	});
+	return normalizeNetutilsForwards(candidates, stackName, true).forwards;
+}
+
+function normalizeNetutilsProtocol(raw: unknown) {
+	if (typeof raw === "string") {
+		const protocol = raw.toLowerCase();
+		if (protocol === "tcp" || protocol === "udp") return protocol;
+		throw new Error(`Invalid protocol '${raw}'. Supported values are tcp or udp.`);
+	}
+	return "tcp";
+}
+
+function normalizeNetutilsForwards(raw: unknown, stackName: string, enabled: boolean) {
+	if (!Array.isArray(raw)) {
+		return {
+			enabled,
+			forwards: [] as NetutilsForward[],
+		};
+	}
+	const usedHostPorts = new Set<string>();
+	const unique = new Set<string>();
+	const forwards: NetutilsForward[] = [];
+	for (const entry of raw) {
+		const candidate = (entry ?? {}) as {
+			service?: unknown;
+			service_port?: unknown;
+			host_port?: unknown;
+			protocol?: unknown;
+		};
+		const rawService = typeof candidate.service === "string" ? candidate.service.trim() : "";
+		if (!rawService) {
+			throw new Error("Invalid netutils forward: missing service");
+		}
+		const service = rawService.includes(".") || rawService.includes(":") || rawService.startsWith(`${stackName}_`)
+			? rawService
+			: rawService;
+		const servicePort = parsePort(candidate.service_port, "service_port");
+		const hostPort = parsePort(candidate.host_port, "host_port");
+		const protocol = normalizeNetutilsProtocol(candidate.protocol);
+		const mapKey = `${service}:${servicePort}:${hostPort}:${protocol}`;
+		if (unique.has(mapKey)) {
+			continue;
+		}
+		const hostKey = `${protocol}:${hostPort}`;
+		if (usedHostPorts.has(hostKey)) {
+			throw new Error(
+				`Duplicate netutils host port mapping detected for ${protocol.toUpperCase()} ${hostPort}. Use unique host ports per protocol.`,
+			);
+		}
+		unique.add(mapKey);
+		usedHostPorts.add(hostKey);
+		forwards.push({
+			service,
+			service_port: servicePort,
+			host_port: hostPort,
+			protocol,
+		});
+	}
+	forwards.sort((a, b) => {
+		if (a.protocol !== b.protocol) return a.protocol.localeCompare(b.protocol);
+		if (a.host_port !== b.host_port) return a.host_port - b.host_port;
+		return a.service.localeCompare(b.service);
+	});
+	return {
+		enabled,
+		forwards,
+	};
 }
 
 function loadWireguardState(): WireguardState | null {
@@ -1072,6 +1183,7 @@ function normalizeConfig(raw: Partial<DeployConfig>): DeployConfig {
 			db_snapshot_on_api_upgrade: raw.upgrade?.db_snapshot_on_api_upgrade ?? true,
 			keep_failed_upgrade_db_snapshot: raw.upgrade?.keep_failed_upgrade_db_snapshot ?? true,
 		},
+		netutils: normalizeNetutilsForwards(raw.netutils?.forwards, stackName, raw.netutils?.enabled ?? false),
 		license: raw.license ? {
 			server_url: raw.license.server_url,
 			key: raw.license.key,
@@ -3516,6 +3628,16 @@ async function cmdSetup() {
 	const publicAuth = (await ask("Expose auth.<domain> publicly (true/false)", "true")) === "true";
 	const publicObs = (await ask("Expose obs.<domain> publicly (true/false)", "true")) === "true";
 	const mailpitEnabled = (await ask("Enable mailpit (true/false)", "false")) === "true";
+	const netutilsEnabled = (await ask("Enable WireGuard jump host access (true/false)", "false")) === "true";
+	const netutilsForwards = netutilsEnabled
+		? parseNetutilsForwardsFromInput(
+			await ask(
+				"Netutils forwards (format service:service_port:host_port[:protocol], comma-separated)",
+				"postgres:5432:15432:tcp,keycloak:8080:18080:tcp",
+			),
+			"envsync",
+		  )
+		: [];
 	const licenseServerUrl = await ask("Enterprise license server URL", DEFAULT_ENTERPRISE_LICENSE_SERVER_URL);
 	const licenseKey = licenseServerUrl ? await ask("Enterprise license key", "") : "";
 	const certificateBundleFile = licenseServerUrl ? "" : await ask("Enterprise certificate bundle file (optional)", "");
@@ -3593,6 +3715,10 @@ async function cmdSetup() {
 			install_fingerprint: installFingerprint,
 			certificate_bundle_file: certificateBundleFile || undefined,
 			certificate_validity_days: 1095,
+		},
+		netutils: {
+			enabled: netutilsEnabled,
+			forwards: netutilsForwards,
 		},
 	};
 

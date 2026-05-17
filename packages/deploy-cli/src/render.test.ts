@@ -91,6 +91,21 @@ const config: DeployConfig = {
 		install_fingerprint: "envsync-b3bb411825372842f0fbdfacde54b5d8",
 		lease_ttl_seconds: 300,
 	},
+	netutils: {
+		enabled: false,
+		forwards: [],
+	},
+};
+
+const configWithNetutils: DeployConfig = {
+	...config,
+	netutils: {
+		enabled: true,
+		forwards: [
+			{ service: "postgres", service_port: 5432, host_port: 15432, protocol: "tcp" },
+			{ service: "keycloak", service_port: 8080, host_port: 18080, protocol: "tcp" },
+		],
+	},
 };
 
 const generated: DeployGeneratedState = {
@@ -151,7 +166,7 @@ describe("deploy render helpers", () => {
 	test("render enterprise runtime and stack artifacts with expected hostnames and mounted outputs", () => {
 		const runtimeEnv = buildRuntimeEnv(config, generated);
 		const stackBase = renderStack(config, runtimeEnv, generated, "base", paths);
-		const stackFull = renderStack(config, runtimeEnv, generated, "full", paths);
+		const stackFull = renderStack(configWithNetutils, runtimeEnv, generated, "full", paths);
 		const traefik = renderTraefikDynamicConfig(config, generated);
 		const keycloakRealm = renderKeycloakRealm(config, runtimeEnv);
 		const frontendRuntime = renderFrontendRuntimeConfig(config, generated);
@@ -183,6 +198,12 @@ describe("deploy render helpers", () => {
 		expect(stackFull).toContain("/opt/envsync/releases/landing/current:/srv/landing:ro");
 		expect(stackFull).toContain("/opt/envsync/deploy/keycloak-realm.envsync.json");
 		expect(stackFull).toContain("https://s3.enterprise.example.com/envsync-bucket");
+		expect(stackFull).toContain("  netutils:");
+		expect(stackFull).toContain("image: alpine/socat");
+		expect(stackFull).toContain("socat TCP-LISTEN:15432");
+		expect(stackFull).toContain("socat TCP-LISTEN:18080");
+		expect(stackFull).toContain("target: 15432");
+		expect(stackFull).toContain("target: 18080");
 
 		expect(traefik).toContain("Host(`app.enterprise.example.com`)");
 		expect(traefik).toContain("Host(`api.enterprise.example.com`)");
