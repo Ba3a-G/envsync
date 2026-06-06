@@ -197,6 +197,27 @@ services:
       - clickstack
     networks: [envsync_network]
 
+  netbird-client:
+      cap_add:
+          - NET_ADMIN
+          - SYS_ADMIN
+          - SYS_RESOURCE
+      network_mode: "service:nginx"
+      environment:
+          - NB_SETUP_KEY=${NB_SETUP_KEY}
+      volumes:
+          - netbird-client:/var/lib/netbird
+      image: netbirdio/netbird:latest
+  
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    restart: unless-stopped
+    networks: [envsync_network]
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+
 networks:
   envsync_network:
     driver: bridge
@@ -213,3 +234,4 @@ volumes:
   clickstack_ch_data:
   clickstack_ch_logs:
   clickstack_supervisor_data:
+  netbird-client:
